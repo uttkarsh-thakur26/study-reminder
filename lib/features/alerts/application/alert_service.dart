@@ -24,7 +24,8 @@ class AlertService {
     this.horizon = const Duration(days: 14),
     this.limit = 128,
     DateTime Function()? now,
-  }) : _reminders = ReminderRepository(db, clock),
+  }) : _db = db,
+       _reminders = ReminderRepository(db, clock),
        _subjects = SubjectRepository(db, clock),
        _now = now ?? DateTime.now;
 
@@ -38,6 +39,7 @@ class AlertService {
   /// Stays well under Android's 500 alarm cap and keeps each replan quick.
   final int limit;
 
+  final AppDatabase _db;
   final ReminderRepository _reminders;
   final SubjectRepository _subjects;
   final DateTime Function() _now;
@@ -46,30 +48,59 @@ class AlertService {
 
   /// Brings the queue up to date. Calls never overlap; each waits for the one
   /// before, so the last call always sees the latest data.
-  Future<AlertDiff> replan() {
-    final run = _last.then((_) => _replan());
+  ///
+  /// Android reports the queue from its own records, which outlive alarms
+  /// the system drops (force stop, some battery savers). [verify] queues the
+  /// next day again whatever the records say; it is meant for the first
+  /// replan after the app starts. When the records show alerts that never
+  /// rang, or the system's timing changed, everything is queued again.
+  Future<AlertDiff> replan({bool verify = false}) {
+    final run = _last.then((_) => _replan(verify: verify));
     _last = run.then((_) {}, onError: (Object _) {});
     return run;
   }
 
-  Future<AlertDiff> _replan() async {
+  static const _timingKey = 'alert_timing';
+  static const verifyWindow = Duration(days: 1);
+
+  Future<AlertDiff> _replan({required bool verify}) async {
     final reminders = await _reminders.watchAll().first;
     final states = await _reminders.watchOccurrences().first;
     final subjects = await _subjects.watchAll().first;
 
+    final now = _now();
     final desired = planAlerts(
       reminders: reminders,
       states: states,
-      now: _now(),
+      now: now,
       device: device,
       subjectNames: {for (final s in subjects) s.id: s.name},
       horizon: horizon,
       limit: limit,
     );
-    final diff = diffAlerts(
+    final scheduled = await scheduler.pending();
+    final timing = await scheduler.timing();
+    final retimed = timing != await _db.readSetting(_timingKey);
+
+    final everything = now.add(horizon * 2);
+    var diff = diffAlerts(
       desired: desired,
-      scheduled: await scheduler.pending(),
+      scheduled: scheduled,
+      now: now,
+      reissueBefore: retimed
+          ? everything
+          : verify
+          ? now.add(verifyWindow)
+          : null,
     );
+    if (diff.missed > 0 && !retimed) {
+      diff = diffAlerts(
+        desired: desired,
+        scheduled: scheduled,
+        now: now,
+        reissueBefore: everything,
+      );
+    }
 
     // One bad alert must not stop the rest from being queued.
     for (final id in diff.toCancel) {
@@ -78,6 +109,7 @@ class AlertService {
     for (final alert in diff.toSchedule) {
       await _guard(() => scheduler.schedule(alert));
     }
+    if (retimed) await _db.writeSetting(_timingKey, timing);
     return diff;
   }
 

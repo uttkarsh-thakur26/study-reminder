@@ -20,6 +20,9 @@ StampedWrite? stampLocalEdit({
   required HlcClock clock,
 }) {
   final current = FieldClock.decode(beforeClock);
+  // The background isolate stamps with its own clock; start after whatever
+  // is stored so this edit always sorts last.
+  if (current.stamps.isNotEmpty) clock.receive(current.latest);
   final next = FieldClock.stamp(
     before: before,
     after: after,

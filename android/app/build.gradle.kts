@@ -28,7 +28,8 @@ android {
 
     defaultConfig {
         applicationId = "com.uttkarsh.study_reminder"
-        minSdk = flutter.minSdkVersion
+        // 26: notification channels, so alarms ring on the alarm volume.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../reminders/domain/reminder.dart';
 import '../application/alert_providers.dart';
@@ -45,9 +46,17 @@ class AlertPermissionBanner extends ConsumerWidget {
 
 Future<void> _requestNotifications(WidgetRef ref) async {
   final android = ref.read(localNotificationsProvider)?.android;
-  final granted = await android?.requestNotificationsPermission();
-  // Once denied twice Android stops asking, so send the user to settings.
-  if (granted == false) await android?.openAppNotificationSettings();
+  if (android == null) return;
+  final db = ref.read(databaseProvider);
+  const askedKey = 'notifications_asked';
+  final askedBefore = await db.readSetting(askedKey) != null;
+  final granted = await android.requestNotificationsPermission();
+  await db.writeSetting(askedKey, '1');
+  // A "Don't allow" in the prompt is an answer. Only once Android has stopped
+  // showing the prompt (after two refusals) does the user need settings.
+  if (granted == false && askedBefore) {
+    await android.openAppNotificationSettings();
+  }
   ref.invalidate(alertHealthProvider);
 }
 

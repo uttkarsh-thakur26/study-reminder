@@ -73,12 +73,11 @@ class LocalNotificationsScheduler implements AlertScheduler {
       payload: AlertPayload.of(alert).encode(),
     );
 
+    // Not alarmClock, even for alarms: the plugin hands Android the ringing
+    // broadcast as the "next alarm" entry, so a tap on that entry in quick
+    // settings would ring the alarm there and then.
     try {
-      await queue(
-        alarm
-            ? AndroidScheduleMode.alarmClock
-            : AndroidScheduleMode.exactAllowWhileIdle,
-      );
+      await queue(AndroidScheduleMode.exactAllowWhileIdle);
     } on PlatformException catch (e) {
       // The exact alarm permission was revoked: ring late rather than never.
       if (e.code != 'exact_alarms_not_permitted') rethrow;
@@ -88,6 +87,12 @@ class LocalNotificationsScheduler implements AlertScheduler {
 
   @override
   Future<void> cancel(int id) => plugin.cancel(id: id);
+
+  @override
+  Future<String> timing() async =>
+      await android?.canScheduleExactNotifications() == false
+      ? 'inexact'
+      : 'exact';
 
   /// Shows a sample right away, so the user can check sound and style.
   Future<void> showTest({required ReminderStyle style}) {

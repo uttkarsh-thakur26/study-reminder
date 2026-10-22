@@ -19,13 +19,15 @@ class AlertPayload {
     required this.occurrenceAt,
     required this.style,
     required this.signature,
-  });
+    DateTime? ringsAt,
+  }) : ringsAt = ringsAt ?? occurrenceAt;
 
   factory AlertPayload.of(PlannedAlert alert) => AlertPayload(
     reminderId: alert.reminderId,
     occurrenceAt: alert.occurrenceAt,
     style: alert.style,
     signature: signatureOf(alert),
+    ringsAt: alert.at,
   );
 
   /// Marks the sample from Settings, which has no reminder behind it.
@@ -34,6 +36,9 @@ class AlertPayload {
   final String reminderId;
   final DateTime occurrenceAt;
   final ReminderStyle style;
+
+  /// When it rings: the occurrence time, or later after a snooze.
+  final DateTime ringsAt;
 
   bool get isTest => reminderId == testReminderId;
 
@@ -47,6 +52,7 @@ class AlertPayload {
     'o': occurrenceAt.toUtc().millisecondsSinceEpoch,
     's': style.name,
     'k': signature,
+    't': ringsAt.toUtc().millisecondsSinceEpoch,
   });
 
   /// Null for anything this app did not write, such as a test notification.
@@ -54,14 +60,15 @@ class AlertPayload {
     if (text == null || text.isEmpty) return null;
     try {
       final map = jsonDecode(text) as Map<String, Object?>;
+      DateTime? utc(Object? ms) => ms == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(ms as int, isUtc: true);
       return AlertPayload(
         reminderId: map['r']! as String,
-        occurrenceAt: DateTime.fromMillisecondsSinceEpoch(
-          map['o']! as int,
-          isUtc: true,
-        ),
+        occurrenceAt: utc(map['o'])!,
         style: ReminderStyle.values.byName(map['s']! as String),
         signature: map['k']! as String,
+        ringsAt: utc(map['t']),
       );
     } catch (_) {
       return null;
@@ -78,36 +85,64 @@ class ScheduledAlert {
 }
 
 class AlertDiff {
-  const AlertDiff({required this.toSchedule, required this.toCancel});
+  const AlertDiff({
+    required this.toSchedule,
+    required this.toCancel,
+    this.missed = 0,
+  });
 
   final List<PlannedAlert> toSchedule;
   final List<int> toCancel;
 
+  /// Queued alerts that should have rung long ago. The system dropped them,
+  /// which means it may have dropped the rest of the queue too.
+  final int missed;
+
   bool get isEmpty => toSchedule.isEmpty && toCancel.isEmpty;
 }
+
+/// How long after its time an alert may still arrive. Android can hold back
+/// an inexact alarm for up to an hour.
+const deliveryGrace = Duration(minutes: 70);
 
 /// The smallest set of calls that turns [scheduled] into [desired].
 ///
 /// Scheduling an id that is already queued replaces it, so a changed alert
-/// only needs a schedule call, never a cancel first.
+/// only needs a schedule call, never a cancel first. Alerts that ring before
+/// [reissueBefore] are queued again even when they look in step, for when the
+/// queue the system reports may not match what it will actually ring.
+///
+/// An alert whose time has passed is left for the system to deliver and
+/// clear, unless it is more than [deliveryGrace] overdue.
 AlertDiff diffAlerts({
   required List<PlannedAlert> desired,
   required List<ScheduledAlert> scheduled,
+  required DateTime now,
+  DateTime? reissueBefore,
 }) {
-  final queued = {for (final s in scheduled) s.id: s.payload?.signature};
+  final queued = {for (final s in scheduled) s.id: s.payload};
   final wanted = <int, PlannedAlert>{};
   for (final a in desired) {
     wanted.putIfAbsent(a.notificationId, () => a); // soonest wins a collision
   }
+  final overdue = [
+    for (final MapEntry(key: id, value: p) in queued.entries)
+      if (p != null && p.ringsAt.isBefore(now.subtract(deliveryGrace))) id,
+  ];
   return AlertDiff(
     toSchedule: [
       for (final a in wanted.values)
-        if (queued[a.notificationId] != signatureOf(a)) a,
+        if ((reissueBefore != null && a.at.isBefore(reissueBefore)) ||
+            queued[a.notificationId]?.signature != signatureOf(a))
+          a,
     ],
     toCancel: [
-      for (final id in queued.keys)
-        if (!wanted.containsKey(id)) id,
+      for (final MapEntry(key: id, value: p) in queued.entries)
+        if (!wanted.containsKey(id) &&
+            (p == null || p.ringsAt.isAfter(now) || overdue.contains(id)))
+          id,
     ],
+    missed: overdue.length,
   );
 }
 

@@ -8,6 +8,7 @@ import '../../reminders/application/reminder_providers.dart';
 import '../../reminders/domain/reminder.dart';
 import '../application/alert_providers.dart';
 import '../data/alert_scheduler.dart';
+import '../data/lock_screen.dart';
 import '../domain/alert_sync.dart';
 import 'alarm_screen.dart';
 
@@ -38,8 +39,12 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
     _taps = ref.read(localNotificationsProvider)?.taps.listen(_open);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final launch = ref.read(launchResponseProvider);
-      if (launch != null) _open(launch);
-      _replan();
+      if (launch != null) {
+        _open(launch);
+      } else {
+        unawaited(LockScreen.release());
+      }
+      _replan(verify: true);
     });
   }
 
@@ -61,22 +66,30 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
     _debounce = Timer(const Duration(milliseconds: 400), _replan);
   }
 
-  void _replan() {
+  void _replan({bool verify = false}) {
     // Nothing to keep in step where the platform has no alerts wired up.
     if (!mounted || ref.read(alertSchedulerProvider) is NoopAlertScheduler) {
       return;
     }
-    unawaited(ref.read(alertServiceProvider).replan());
+    unawaited(ref.read(alertServiceProvider).replan(verify: verify));
   }
 
   void _open(NotificationResponse response) {
+    if (!mounted) return;
     final payload = AlertPayload.decode(response.payload);
-    if (payload == null || !mounted) return;
-    if (response.actionId case final action?) {
-      unawaited(ref.read(alertServiceProvider).handleAction(action, payload));
+    final action = response.actionId;
+    final ringing =
+        payload != null &&
+        action == null &&
+        payload.style == ReminderStyle.alarm;
+    if (!ringing) {
+      if (!_alarmOpen) unawaited(LockScreen.release());
+      if (payload != null && action != null) {
+        unawaited(ref.read(alertServiceProvider).handleAction(action, payload));
+      }
       return;
     }
-    if (payload.style != ReminderStyle.alarm || _alarmOpen) return;
+    if (_alarmOpen) return;
     _alarmOpen = true;
     Navigator.of(context)
         .push(
@@ -85,7 +98,10 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
             builder: (_) => AlarmScreen(payload: payload),
           ),
         )
-        .whenComplete(() => _alarmOpen = false);
+        .whenComplete(() {
+          _alarmOpen = false;
+          unawaited(LockScreen.release());
+        });
   }
 
   @override
