@@ -36,26 +36,29 @@ class FocusPhase {
   int get hashCode => Object.hash(onBreak, round, rounds, startedAt, endsAt);
 }
 
-/// The rounds of a session from [start] to [end]: [work], a break of
-/// [rest], [work] again, and so on, the last round running to the end. With
-/// no work or rest length it is one round.
+/// The rounds of a session from [start] to [end]: [rounds] rounds of
+/// [work] with a break of [rest] after each but the last, which runs to the
+/// end. Time added to a session so goes to its last round, and an end
+/// before the plan's (a session stopped early) cuts it short. With no work
+/// or rest length, or one round, it is a single round.
 ///
-/// Only the start, the end and the two lengths are stored, so every device
-/// works out the same rounds, and time added to a session goes to its last
-/// round. The phone works this out in Kotlin as well (FocusState.phaseAt),
-/// for sessions it gets with the app closed; keep the two alike.
+/// Every device works out the same rounds from these values. The phone does
+/// it in Kotlin as well (FocusState.phaseAt), for sessions it gets with the
+/// app closed; keep the two alike.
 class FocusPlan {
   const FocusPlan({
     required this.start,
     required this.end,
     this.work = Duration.zero,
     this.rest = Duration.zero,
+    this._rounds = 1,
   });
 
   final DateTime start;
   final DateTime end;
   final Duration work;
   final Duration rest;
+  final int _rounds;
 
   /// The end of a session of [rounds] rounds of [work], with breaks of
   /// [rest] between them.
@@ -66,62 +69,79 @@ class FocusPlan {
     required int rounds,
   }) => start.add(work * rounds + rest * max(0, rounds - 1));
 
-  bool get hasBreaks => work > Duration.zero && rest > Duration.zero;
+  bool get hasBreaks =>
+      work > Duration.zero && rest > Duration.zero && _rounds > 1;
 
-  int get rounds {
-    if (!hasBreaks) return 1;
-    final total = end.difference(start).inMicroseconds;
-    final cycle = (work + rest).inMicroseconds;
-    return max(1, (total + rest.inMicroseconds) ~/ cycle);
-  }
+  int get rounds => hasBreaks ? _rounds : 1;
 
-  /// The rounds' working times, in order.
+  /// The rounds' working times up to [end], in order.
   List<({DateTime from, DateTime to})> get workSpans {
     final n = rounds;
-    if (n == 1) return [(from: start, to: end)];
+    if (n == 1) return end.isAfter(start) ? [(from: start, to: end)] : [];
     final cycle = work + rest;
-    return [
-      for (var k = 0; k < n - 1; k++)
-        (from: start.add(cycle * k), to: start.add(cycle * k + work)),
-      (from: start.add(cycle * (n - 1)), to: end),
-    ];
+    final out = <({DateTime from, DateTime to})>[];
+    for (var k = 0; k < n; k++) {
+      final from = start.add(cycle * k);
+      if (!from.isBefore(end)) break;
+      final planned = from.add(work);
+      final to = k == n - 1 || planned.isAfter(end) ? end : planned;
+      out.add((from: from, to: to));
+    }
+    return out;
   }
 
   /// The round or break at [now], which must be within the session; times
   /// before it count as its first round and after it as its last.
   FocusPhase phaseAt(DateTime now) {
-    final spans = workSpans;
-    final n = spans.length;
-    for (var k = 0; k < n; k++) {
-      final span = spans[k];
-      if (k == n - 1 || now.isBefore(span.to)) {
+    final n = rounds;
+    if (n == 1) {
+      return FocusPhase(
+        onBreak: false,
+        round: 1,
+        rounds: 1,
+        startedAt: start,
+        endsAt: end,
+      );
+    }
+    final cycle = work + rest;
+    for (var k = 0; k < n - 1; k++) {
+      final from = start.add(cycle * k);
+      final workEnd = from.add(work);
+      if (now.isBefore(workEnd)) {
         return FocusPhase(
           onBreak: false,
           round: k + 1,
           rounds: n,
-          startedAt: span.from,
-          endsAt: span.to,
+          startedAt: from,
+          endsAt: workEnd,
         );
       }
-      final next = spans[k + 1].from;
+      final next = from.add(cycle);
       if (now.isBefore(next)) {
         return FocusPhase(
           onBreak: true,
           round: k + 1,
           rounds: n,
-          startedAt: span.to,
+          startedAt: workEnd,
           endsAt: next,
         );
       }
     }
-    throw StateError('unreachable');
+    return FocusPhase(
+      onBreak: false,
+      round: n,
+      rounds: n,
+      startedAt: start.add(cycle * (n - 1)),
+      endsAt: end,
+    );
   }
 
   /// When the phase at [now] gives way to the next one, or the session
   /// ends. Null once it has.
   DateTime? nextChangeAfter(DateTime now) {
     if (!now.isBefore(end)) return null;
-    return phaseAt(now).endsAt;
+    final at = phaseAt(now).endsAt;
+    return at.isAfter(end) ? end : at;
   }
 
   /// The working time from the start until [until], not counting breaks.

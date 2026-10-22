@@ -17,7 +17,11 @@ class FocusReceiver : BroadcastReceiver() {
                 if (state.endsAt > System.currentTimeMillis() + 1000) return
                 FocusController.finish(context, done = true)
             }
-            FocusController.ACTION_PHASE -> FocusController.phaseChanged(context)
+            FocusController.ACTION_PHASE -> {
+                // Kept alive until Do Not Disturb has followed the new phase.
+                val pending = goAsync()
+                FocusController.phaseChanged(context) { pending.finish() }
+            }
             FocusController.ACTION_START -> {
                 val state = FocusState.load(context) ?: return
                 if (state.isOver()) {

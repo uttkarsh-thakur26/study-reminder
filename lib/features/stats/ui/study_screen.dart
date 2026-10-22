@@ -292,11 +292,16 @@ class _StreakCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final todayIndex = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).difference(stats.weekStart).inDays.clamp(0, 6);
+    // Rounded, as a week with a clock change has a 23 or 25 hour day.
+    final todayIndex =
+        (DateTime(
+                  now.year,
+                  now.month,
+                  now.day,
+                ).difference(stats.weekStart).inHours /
+                24)
+            .round()
+            .clamp(0, 6);
     final today = stats.days[todayIndex];
     final goal = stats.goal;
     final progress = goal == Duration.zero

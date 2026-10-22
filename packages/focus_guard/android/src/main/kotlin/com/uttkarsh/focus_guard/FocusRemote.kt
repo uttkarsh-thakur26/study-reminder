@@ -62,6 +62,7 @@ object FocusRemote {
             startedBy = focus.optString("started_by"),
             workMs = focus.optLong("work_minutes", 0L).coerceIn(0L, 600L) * 60_000L,
             breakMs = focus.optLong("break_minutes", 0L).coerceIn(0L, 600L) * 60_000L,
+            plannedRounds = focus.optInt("rounds", 1).coerceIn(1, 100),
         )
     }
 }

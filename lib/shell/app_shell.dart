@@ -45,6 +45,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
   final _quickAddFocus = FocusNode(debugLabel: 'quick-add');
+  final _pagesKey = GlobalKey();
 
   late final _pages = [
     TodayScreen(quickAddFocus: _quickAddFocus),
@@ -88,7 +89,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     ref.listen<NumberedShellRequest?>(shellRequestsProvider, _onRequest);
     final wide = isWide(context);
     final scheme = Theme.of(context).colorScheme;
-    final body = IndexedStack(index: _index, children: _pages);
+    // Keyed, so the pages keep their state when the layout changes with the
+    // window's width (the small timer on Windows, say).
+    final body = IndexedStack(key: _pagesKey, index: _index, children: _pages);
 
     final shortcuts = <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):

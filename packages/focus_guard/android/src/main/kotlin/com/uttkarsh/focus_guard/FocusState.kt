@@ -19,6 +19,8 @@ data class FocusState(
     /** The length of a round and of the break after it; 0 for one round. */
     val workMs: Long = 0L,
     val breakMs: Long = 0L,
+    /** How many rounds were planned; time added goes to the last one. */
+    val plannedRounds: Int = 1,
 ) {
     fun isOver(now: Long = System.currentTimeMillis()) = now >= endsAt
 
@@ -35,11 +37,7 @@ data class FocusState(
         get() = workMs > 0L && breakMs > 0L
 
     /** Rounds of [workMs] with breaks of [breakMs]; the last runs to the end. */
-    fun rounds(): Int {
-        if (!hasBreaks) return 1
-        val n = (endsAt - startedAt + breakMs) / (workMs + breakMs)
-        return n.coerceIn(1L, 1000L).toInt()
-    }
+    fun rounds(): Int = if (hasBreaks && plannedRounds > 1) plannedRounds else 1
 
     /**
      * The round or break at [now]. The app works this out the same way
@@ -61,7 +59,16 @@ data class FocusState(
     /** Working time in the whole session, without breaks. */
     fun focusedMs(): Long {
         val n = rounds()
-        return (endsAt - startedAt) - (n - 1) * breakMs
+        if (n == 1) return endsAt - startedAt
+        val cycle = workMs + breakMs
+        var total = 0L
+        for (k in 0 until n) {
+            val from = startedAt + k * cycle
+            if (from >= endsAt) break
+            val to = if (k == n - 1) endsAt else minOf(from + workMs, endsAt)
+            total += to - from
+        }
+        return total
     }
 
     companion object {
@@ -84,6 +91,7 @@ data class FocusState(
                 startedBy = p.getString("startedBy", "") ?: "",
                 workMs = p.getLong("workMs", 0L),
                 breakMs = p.getLong("breakMs", 0L),
+                plannedRounds = p.getInt("rounds", 1),
             )
         }
 
@@ -100,6 +108,7 @@ data class FocusState(
                 .putString("startedBy", state.startedBy)
                 .putLong("workMs", state.workMs)
                 .putLong("breakMs", state.breakMs)
+                .putInt("rounds", state.plannedRounds)
                 .apply()
         }
 

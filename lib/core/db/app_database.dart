@@ -1,9 +1,20 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../sync/field_clock.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
+
+/// Focus session fields added in schema 3.
+abstract final class FocusSessionKeys {
+  static const added = [
+    'rounds',
+    'work_minutes',
+    'break_minutes',
+    'subject_id',
+  ];
+}
 
 @DriftDatabase(
   tables: [
@@ -46,9 +57,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.createTable(focusSessions);
       } else if (from < 3) {
+        await m.addColumn(focusSessions, focusSessions.rounds);
         await m.addColumn(focusSessions, focusSessions.workMinutes);
         await m.addColumn(focusSessions, focusSessions.breakMinutes);
         await m.addColumn(focusSessions, focusSessions.subjectId);
+        await _forgetUnknownStamps('focus_sessions', FocusSessionKeys.added);
       }
       if (from < 3) {
         await m.createTable(studySessions);
@@ -59,6 +72,30 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// An older version kept the stamps of fields it did not know, but not
+  /// their values. Now that it stores them, those stamps would make the
+  /// empty columns look current, so they go, and the pull that follows an
+  /// update brings the values.
+  Future<void> _forgetUnknownStamps(String table, List<String> fields) async {
+    final rows = await customSelect(
+      'SELECT id, field_clock FROM $table',
+      readsFrom: const {},
+    ).get();
+    for (final row in rows) {
+      final raw = row.read<String>('field_clock');
+      final clock = FieldClock.decode(raw);
+      if (!fields.any(clock.stamps.containsKey)) continue;
+      final kept = FieldClock({
+        for (final e in clock.stamps.entries)
+          if (!fields.contains(e.key)) e.key: e.value,
+      });
+      await customUpdate(
+        'UPDATE $table SET field_clock = ? WHERE id = ?',
+        variables: [Variable(kept.encode()), Variable(row.read<String>('id'))],
+      );
+    }
+  }
 
   Future<void> _indexStudySessions() => customStatement(
     'CREATE INDEX study_sessions_started ON study_sessions (started_at)',

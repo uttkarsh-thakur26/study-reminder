@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/sync/field_clock.dart';
 import '../../../core/sync/hlc.dart';
 import '../../../core/sync/stamped_write.dart';
 import '../../reminders/domain/reminder.dart';
@@ -50,13 +51,18 @@ class FocusRepository {
     required bool quiet,
     required bool strict,
     required String startedBy,
+    int rounds = 1,
     Duration work = Duration.zero,
     Duration rest = Duration.zero,
     String? subjectId,
     DateTime? now,
   }) {
-    final at = (now ?? DateTime.now()).toUtc();
-    final rounds = work > Duration.zero && rest > Duration.zero;
+    // Whole milliseconds, as stored, so the session read back matches.
+    final at = DateTime.fromMillisecondsSinceEpoch(
+      (now ?? DateTime.now()).millisecondsSinceEpoch,
+      isUtc: true,
+    );
+    final breaks = rounds > 1 && work > Duration.zero && rest > Duration.zero;
     // Stamps every field: a new session replaces the old one whole, so two
     // starts made at once never merge into a mix of both.
     return _update(
@@ -74,8 +80,9 @@ class FocusRepository {
               quiet: quiet,
               strict: strict,
               startedBy: startedBy,
-              workMinutes: rounds ? work.inMinutes : 0,
-              breakMinutes: rounds ? rest.inMinutes : 0,
+              rounds: breaks ? rounds : 1,
+              workMinutes: breaks ? work.inMinutes : 0,
+              breakMinutes: breaks ? rest.inMinutes : 0,
               subjectId: subjectId,
             ),
     );
@@ -90,6 +97,7 @@ class FocusRepository {
   }) => start(
     on: on,
     length: prefs.length,
+    rounds: prefs.rounds,
     work: prefs.work,
     rest: prefs.rest,
     subjectId: prefs.subjectId,
@@ -176,7 +184,7 @@ class FocusRepository {
     required DateTime at,
     bool whole = false,
   }) => _db.transaction(() async {
-    final touched = <DateTime>{};
+    final studied = <int, List<_Change>>{};
     for (final kind in on) {
       final id = FocusSession.idFor(kind);
       final existing = await (_db.select(
@@ -185,64 +193,71 @@ class FocusRepository {
       final current = existing == null ? null : focusSessionFromRow(existing);
       final changed = change(kind, current ?? FocusSession.idle);
       if (changed == null) continue;
-      final started = changed.startedAt;
-      if (started != null) touched.add(started);
-      final after = changed.toFields();
       final write = stampLocalEdit(
         before: whole ? null : current?.toFields(),
         beforeClock: existing?.fieldClock ?? '',
-        after: after,
+        after: changed.toFields(),
         clock: _clock,
       );
       if (write == null) continue;
       await _db
           .into(_db.focusSessions)
           .insertOnConflictUpdate(focusSessionCompanion(id, write));
+      final started = changed.startedAt;
+      if (started == null || changed.endsAt == null) continue;
+      studied.putIfAbsent(started.millisecondsSinceEpoch, () => []).add((
+        kind: kind,
+        before: current,
+        after: changed,
+      ));
     }
-    for (final started in touched) {
-      await _recordStudy(started, at);
+    for (final changes in studied.values) {
+      await _recordStudy(changes, at);
     }
   });
 
-  /// Brings the study session of the focus sessions started at [started]
-  /// up to date: planned end, subject, and when it stopped, once every
-  /// device it ran on has stopped early.
-  Future<void> _recordStudy(DateTime started, DateTime at) async {
-    final all = await current();
-    final group = [
-      for (final s in [all.phone, all.laptop])
-        if (s.startedAt == started && s.endsAt != null) s,
-    ];
-    if (group.isEmpty) return;
+  /// Carries [changes] to focus sessions started together over to their
+  /// study session: each device's end, and the subject and rounds when they
+  /// changed. Only what changed is written, so a change made meanwhile on
+  /// the other device is kept.
+  Future<void> _recordStudy(List<_Change> changes, DateTime at) async {
+    final started = changes.first.after.startedAt!;
     final id = StudySession.idFor(started);
     final existing = await (_db.select(
       _db.studySessions,
     )..where((s) => s.id.equals(id))).getSingleOrNull();
-    final before = existing == null ? null : studySessionFromRow(existing);
-    final running = group.any((s) => s.runningAt(at));
-    final stoppedEarly = !running && group.every((s) => !s.active);
-    final endsAt = group
-        .map((s) => s.endsAt!)
-        .reduce((a, b) => a.isAfter(b) ? a : b);
-    final first = group.first;
-    final after = StudySession(
-      id: id,
-      startedAt: started,
-      endsAt: endsAt,
-      stoppedAt: running
-          ? null
-          : stoppedEarly
-          ? (before?.stoppedAt ?? (at.isBefore(endsAt) ? at : endsAt))
-          : before?.stoppedAt,
-      subjectId: first.subjectId,
-      workMinutes: first.workMinutes,
-      breakMinutes: first.breakMinutes,
-      deleted: before?.deleted ?? false,
-    );
+    final current = existing == null
+        ? null
+        : studySessionFromRow(existing).toFields();
+    final after = {
+      ...current ?? StudySession(id: id, startedAt: started).toFields(),
+    };
+    for (final c in changes) {
+      final s = c.after;
+      final endsAt = s.endsAt!;
+      final same = c.before?.startedAt == s.startedAt ? c.before : null;
+      // Its planned end while it runs; stopped, when it stopped.
+      final until = s.active
+          ? endsAt
+          : same != null && same.active
+          ? (at.isBefore(endsAt) ? at : endsAt)
+          : null;
+      if (until != null) {
+        after[StudySession.untilField(c.kind)] = until.millisecondsSinceEpoch;
+      }
+      if (current == null || same == null) {
+        after['subject_id'] = s.subjectId;
+        after['rounds'] = s.rounds;
+        after['work_minutes'] = s.workMinutes;
+        after['break_minutes'] = s.breakMinutes;
+      } else if (same.subjectId != s.subjectId) {
+        after['subject_id'] = s.subjectId;
+      }
+    }
     final write = stampLocalEdit(
-      before: before?.toFields(),
+      before: current,
       beforeClock: existing?.fieldClock ?? '',
-      after: after.toFields(),
+      after: after,
       clock: _clock,
     );
     if (write == null) return;
@@ -261,9 +276,23 @@ class FocusRepository {
       _db.writeSetting(FocusPrefs.key, prefs.encode());
 }
 
+/// A change [_update] made to one device's session.
+typedef _Change = ({DeviceKind kind, FocusSession? before, FocusSession after});
+
 FocusSession focusSessionFromRow(FocusSessionRow row) {
   DateTime? time(int? ms) =>
       ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  // A start from an older version leaves the fields it does not know as the
+  // last session had them; stamped before the start, they are not this one's.
+  FieldClock clock;
+  try {
+    clock = FieldClock.decode(row.fieldClock);
+  } on FormatException {
+    clock = FieldClock.empty;
+  }
+  final startedStamp = clock.of('started_at');
+  bool fresh(String field) => !(clock.of(field) < startedStamp);
+  final ofThisStart = FocusSession.startFields.every(fresh);
   return FocusSession(
     active: row.active,
     startedAt: time(row.startedAt),
@@ -273,9 +302,10 @@ FocusSession focusSessionFromRow(FocusSessionRow row) {
     quiet: row.quiet,
     strict: row.strict,
     startedBy: row.startedBy,
-    workMinutes: row.workMinutes,
-    breakMinutes: row.breakMinutes,
-    subjectId: row.subjectId,
+    rounds: ofThisStart ? row.rounds : 1,
+    workMinutes: ofThisStart ? row.workMinutes : 0,
+    breakMinutes: ofThisStart ? row.breakMinutes : 0,
+    subjectId: fresh('subject_id') ? row.subjectId : null,
     version: row.hlc,
   );
 }
@@ -296,6 +326,7 @@ FocusSessionsCompanion focusSessionCompanion(
     quiet: Value(s.quiet),
     strict: Value(s.strict),
     startedBy: Value(s.startedBy),
+    rounds: Value(s.rounds),
     workMinutes: Value(s.workMinutes),
     breakMinutes: Value(s.breakMinutes),
     subjectId: Value(s.subjectId),

@@ -13,6 +13,7 @@ class FocusGuardSession {
     required this.blockGames,
     required this.packages,
     required this.startedBy,
+    this.rounds = 1,
     this.workMinutes = 0,
     this.breakMinutes = 0,
   });
@@ -32,9 +33,10 @@ class FocusGuardSession {
   /// The device the session was started on, for the notification.
   final String startedBy;
 
-  /// Rounds of [workMinutes] with breaks of [breakMinutes] between them,
-  /// the last round running to [endsAt]; zero for one round. Nothing is
-  /// blocked during a break.
+  /// [rounds] rounds of [workMinutes] with breaks of [breakMinutes] between
+  /// them, the last round running to [endsAt]; zero for one round. Nothing
+  /// is blocked during a break.
+  final int rounds;
   final int workMinutes;
   final int breakMinutes;
 
@@ -47,6 +49,7 @@ class FocusGuardSession {
     'blockGames': blockGames,
     'packages': packages.toList()..sort(),
     'startedBy': startedBy,
+    'rounds': rounds,
     'workMinutes': workMinutes,
     'breakMinutes': breakMinutes,
   };

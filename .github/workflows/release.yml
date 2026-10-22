@@ -45,6 +45,15 @@ jobs:
             echo "::error::pubspec.yaml says $pubspec. Set it to $version and tag that commit."
             exit 1
           fi
+          # A run from the Actions tab must not publish under a tag that
+          # already names another commit: the release would point there.
+          # The commit of an annotated tag is on its peeled ("^{}") line.
+          tagged=$(git ls-remote --tags origin | awk -v t="refs/tags/v$version" \
+            '$2 == t "^{}" { peeled = $1 } $2 == t { plain = $1 } END { print (peeled != "" ? peeled : plain) }')
+          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag v$version is on $tagged, not on $GITHUB_SHA. Delete the tag first (see RELEASING.md)."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   test:

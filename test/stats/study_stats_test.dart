@@ -13,13 +13,14 @@ void main() {
     String? subject,
     int work = 0,
     int rest = 0,
+    int rounds = 1,
     DateTime? stoppedAt,
   }) => StudySession(
     id: StudySession.idFor(start),
     startedAt: start.toUtc(),
-    endsAt: start.add(Duration(minutes: minutes)).toUtc(),
-    stoppedAt: stoppedAt?.toUtc(),
+    phoneUntil: (stoppedAt ?? start.add(Duration(minutes: minutes))).toUtc(),
     subjectId: subject,
+    rounds: rounds,
     workMinutes: work,
     breakMinutes: rest,
   );
@@ -28,7 +29,14 @@ void main() {
     final stats = StudyStats.compute(
       [
         // Monday: 2 rounds of 25 with a 5 minute break.
-        session(DateTime(2026, 10, 19, 9), 55, subject: 'p', work: 25, rest: 5),
+        session(
+          DateTime(2026, 10, 19, 9),
+          55,
+          subject: 'p',
+          work: 25,
+          rest: 5,
+          rounds: 2,
+        ),
         // Thursday.
         session(DateTime(2026, 10, 22, 18), 30, subject: 'm'),
         // Last week.
@@ -63,6 +71,23 @@ void main() {
       goal: goal,
     );
     expect(stats.days[3], const Duration(minutes: 100));
+  });
+
+  test('a session on both devices counts until the later end', () {
+    final start = DateTime(2026, 10, 22, 9);
+    final stats = StudyStats.compute(
+      [
+        StudySession(
+          id: StudySession.idFor(start),
+          startedAt: start.toUtc(),
+          phoneUntil: start.add(const Duration(minutes: 10)).toUtc(),
+          laptopUntil: start.add(const Duration(minutes: 40)).toUtc(),
+        ),
+      ],
+      now: now,
+      goal: goal,
+    );
+    expect(stats.days[3], const Duration(minutes: 40));
   });
 
   test('a session still running counts until now', () {
@@ -113,7 +138,7 @@ void main() {
         StudySession(
           id: 'x',
           startedAt: DateTime(2026, 10, 19, 8).toUtc(),
-          endsAt: DateTime(2026, 10, 19, 9).toUtc(),
+          phoneUntil: DateTime(2026, 10, 19, 9).toUtc(),
           deleted: true,
         ),
       ],

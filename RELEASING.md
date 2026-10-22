@@ -22,9 +22,27 @@ and zip, built and published by `.github/workflows/release.yml`.
    builds both apps and publishes the release.
 
 A tag that does not match `pubspec.yaml` stops the run before anything is
-built. Delete the tag (`git push --delete origin v1.2.0`), fix the version
-and tag again. Re-running a failed run replaces the files of a release it
-already made.
+built. Delete the tag on GitHub and here, fix the version, merge that, then
+tag the new commit:
+
+```sh
+git push --delete origin v1.2.0
+git tag -d v1.2.0
+# fix pubspec.yaml, merge to main, then:
+git checkout main && git pull
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+A run from the Actions tab also stops if the tag already exists on another
+commit. Re-running a failed run replaces the files of a release it already
+made.
+
+**Server first.** When a release changes `supabase/schema.sql`, run the new
+SQL in the Supabase SQL editor before installing it on any device. Until
+then, the new version's sync uploads are refused (for example the study
+sessions the Study tab keeps), and they go through on their own once the SQL
+has run.
 
 ## Where the files appear
 

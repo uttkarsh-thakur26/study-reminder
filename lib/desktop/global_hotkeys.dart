@@ -7,8 +7,8 @@ import '../features/alerts/application/alert_providers.dart';
 import '../features/focus/application/focus_providers.dart';
 import '../features/sync/application/sync_providers.dart';
 import '../shell/shell_requests.dart';
-import 'desktop_window.dart';
 import 'focus_hotkey.dart';
+import 'mini_timer.dart';
 
 /// The Windows app's system-wide shortcuts. They work from any app, also
 /// while the window is closed to the tray. The runner registers them, see
@@ -118,7 +118,9 @@ final hotkeyActionsProvider = Provider<HotkeyActions>(HotkeyActions.new);
 
 class HotkeyActions {
   HotkeyActions(this._ref, {Future<void> Function()? showWindow})
-    : _showWindow = showWindow ?? showDesktopWindow;
+    : _showWindow =
+          showWindow ??
+          (() => showFullWindow(_ref.read(miniTimerProvider.notifier)));
 
   final Ref _ref;
   final Future<void> Function() _showWindow;

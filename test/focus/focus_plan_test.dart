@@ -15,6 +15,7 @@ void main() {
     ).add(Duration(minutes: extra)),
     work: const Duration(minutes: 25),
     rest: const Duration(minutes: 5),
+    rounds: rounds,
   );
 
   test('four rounds of 25 with 5 minute breaks', () {
@@ -48,14 +49,34 @@ void main() {
     final one = plan(rounds: 1, extra: 5);
     expect(one.rounds, 1);
     expect(one.phaseAt(at(27)).onBreak, isFalse);
-    // A whole round more makes a fifth.
-    expect(plan(extra: 30).rounds, 5);
+    // Even a whole round more stays in the last round.
+    final longer = plan(extra: 30);
+    expect(longer.rounds, 4);
+    expect(longer.workSpans.last, (from: at(90), to: at(145)));
+    expect(longer.phaseAt(at(130)).isLastRound, isTrue);
   });
 
   test('breaks do not count as focus', () {
     final p = plan();
     expect(p.focusedUntil(at(27)), const Duration(minutes: 25));
     expect(p.focusedUntil(at(40)), const Duration(minutes: 35));
+  });
+
+  test('a stop before the end cuts the rounds short', () {
+    final p = FocusPlan(
+      start: start,
+      end: at(40),
+      work: const Duration(minutes: 25),
+      rest: const Duration(minutes: 5),
+      rounds: 4,
+    );
+    expect(p.rounds, 4);
+    expect(p.workSpans, [
+      (from: start, to: at(25)),
+      (from: at(30), to: at(40)),
+    ]);
+    expect(p.focused, const Duration(minutes: 35));
+    expect(p.nextChangeAfter(at(35)), at(40));
   });
 
   test('without lengths it is one round', () {

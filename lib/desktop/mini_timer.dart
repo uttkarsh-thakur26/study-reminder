@@ -19,12 +19,17 @@ class MiniTimer extends Notifier<bool> {
   static const size = Size(280, 128);
 
   Rect? _bounds;
+  bool _wasMaximized = false;
 
   @override
   bool build() => false;
 
   Future<void> enter() async {
     if (state || !isWindowsApp) return;
+    // A maximized window keeps its maximized layout through a resize, which
+    // leaves the small window blank, so it is restored first.
+    _wasMaximized = await windowManager.isMaximized();
+    if (_wasMaximized) await windowManager.unmaximize();
     _bounds = await windowManager.getBounds();
     state = true;
     await windowManager.setTitleBarStyle(
@@ -51,7 +56,15 @@ class MiniTimer extends Notifier<bool> {
       await windowManager.setSize(desktopDefaultSize);
       await windowManager.center();
     }
+    if (_wasMaximized) await windowManager.maximize();
   }
+}
+
+/// Brings the window back from the tray as the whole app, out of the small
+/// timer, for anything that needs more room than the timer has.
+Future<void> showFullWindow(MiniTimer mini) async {
+  await mini.leave();
+  await showDesktopWindow();
 }
 
 /// The laptop's session as a small timer: what is left of the round or
@@ -157,10 +170,14 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
                   ),
                   if (phase != null)
                     IconButton(
-                      onPressed: () => ref.read(focusRepositoryProvider).extend(
-                        {here},
-                        const Duration(minutes: 5),
-                      ),
+                      // Every device in this session, so they still end
+                      // together.
+                      onPressed: () => ref
+                          .read(focusRepositoryProvider)
+                          .extend(
+                            sessions.sharing(here, now),
+                            const Duration(minutes: 5),
+                          ),
                       icon: const Icon(Icons.more_time_rounded, size: 20),
                       tooltip: '5 minutes more',
                     ),

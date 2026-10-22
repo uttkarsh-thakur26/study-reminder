@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.text.format.DateFormat
@@ -31,6 +32,13 @@ object StudyWidgetRenderer {
     private const val TAG = "StudyWidget"
 
     const val ACTION_REFRESH = "com.uttkarsh.study_widget.REFRESH"
+
+    /**
+     * On [ACTION_REFRESH]: when the phone's focus session now ends, in epoch
+     * milliseconds, 0 for none. Sent by the focus plugin when a session
+     * starts or ends with the app closed, so the widget need not wait for it.
+     */
+    const val EXTRA_FOCUS_UNTIL = "focusUntil"
 
     /** Extras on the app's launch intent from the "+" button. */
     const val EXTRA_REQUEST = "study_widget_request"
@@ -237,7 +245,14 @@ object StudyWidgetRenderer {
         if (data.focusUntil > now && data.focusUntil < next) next = data.focusUntil
         val alarms: AlarmManager = context.getSystemService(AlarmManager::class.java) ?: return
         // A second late, so the reminder counts as passed when it redraws.
-        alarms.setWindow(AlarmManager.RTC, next + 1000L, WINDOW_MS, refreshIntent(context))
+        // On time when the app may set exact alarms (it does for reminders);
+        // otherwise within a minute.
+        val at = next + 1000L
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms.canScheduleExactAlarms()) {
+            alarms.setExact(AlarmManager.RTC, at, refreshIntent(context))
+        } else {
+            alarms.setWindow(AlarmManager.RTC, at, WINDOW_MS, refreshIntent(context))
+        }
     }
 
     fun cancelRefresh(context: Context) {

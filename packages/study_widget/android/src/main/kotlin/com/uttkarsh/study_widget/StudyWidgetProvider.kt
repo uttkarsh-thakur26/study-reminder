@@ -14,7 +14,15 @@ import android.os.Bundle
 class StudyWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            StudyWidgetRenderer.ACTION_REFRESH,
+            StudyWidgetRenderer.ACTION_REFRESH -> {
+                if (intent.hasExtra(StudyWidgetRenderer.EXTRA_FOCUS_UNTIL)) {
+                    StudyWidgetStore.saveFocusUntil(
+                        context,
+                        intent.getLongExtra(StudyWidgetRenderer.EXTRA_FOCUS_UNTIL, 0L),
+                    )
+                }
+                StudyWidgetRenderer.renderAll(context)
+            }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,

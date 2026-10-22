@@ -10,6 +10,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.util.Date
 
@@ -32,6 +34,11 @@ object FocusController {
     const val LEFT_NOTIFICATION = 7304
     private const val PHASE_NOTIFICATION = 7305
 
+    /** How long "Back to focus" may sound before Do Not Disturb comes on. */
+    private const val QUIET_AFTER_ALERT_MS = 1500L
+
+    private val main = Handler(Looper.getMainLooper())
+
     /** A phase alarm this late (after a reboot, say) changes things quietly. */
     private const val PHASE_ALERT_WITHIN_MS = 2 * 60 * 1000L
 
@@ -41,6 +48,9 @@ object FocusController {
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
     const val ACTION_PHASE = "com.uttkarsh.focus_guard.PHASE"
+
+    private const val WIDGET_REFRESH = "com.uttkarsh.study_widget.REFRESH"
+    private const val WIDGET_PROVIDER = "com.uttkarsh.study_widget.StudyWidgetProvider"
 
     /** When the session service was last asked to start; 0 once it has. */
     @Volatile
@@ -92,6 +102,7 @@ object FocusController {
         scheduleAlarm(context, ACTION_END, state.endsAt)
         schedulePhase(context, state, phase)
         startService(context, state, retry = true)
+        tellWidget(context, state.endsAt)
     }
 
     /**
@@ -99,18 +110,43 @@ object FocusController {
      * notification shows the new phase, and the user hears about it.
      */
     @Synchronized
-    fun phaseChanged(context: Context) {
-        val state = FocusState.load(context) ?: return
+    fun phaseChanged(context: Context, done: () -> Unit = {}) {
+        val state = FocusState.load(context)
+        if (state == null) {
+            done()
+            return
+        }
         val now = System.currentTimeMillis()
         if (state.isOver(now)) {
             finish(context, done = true)
+            done()
             return
         }
         val phase = state.phaseAt(now)
-        applyQuiet(context, state.quiet && !phase.onBreak)
+        val quiet = state.quiet && !phase.onBreak
+        val alert = now - phase.startsAt < PHASE_ALERT_WITHIN_MS
         schedulePhase(context, state, phase)
-        notifications(context).notify(SESSION_NOTIFICATION, sessionNotification(context, state))
-        if (now - phase.startsAt < PHASE_ALERT_WITHIN_MS) postPhase(context, phase)
+        // The service redraws its notification for the new phase, and is
+        // started again if Android stopped it.
+        startService(context, state, retry = false)
+        if (!quiet || !alert) {
+            applyQuiet(context, quiet)
+            if (alert) postPhase(context, phase)
+            done()
+            return
+        }
+        // Do Not Disturb would silence "Back to focus", so it comes back on
+        // once that has sounded, if the session still wants it then.
+        postPhase(context, phase)
+        main.postDelayed({
+            synchronized(this) {
+                val current = FocusState.load(context)
+                if (current != null && !current.isOver() && !current.phaseAt().onBreak) {
+                    applyQuiet(context, current.quiet)
+                }
+            }
+            done()
+        }, QUIET_AFTER_ALERT_MS)
     }
 
     /** The alarm for the next round or break, if one comes before the end. */
@@ -144,6 +180,7 @@ object FocusController {
         val starting = System.currentTimeMillis() - serviceRequestedAt < 10_000
         if (!starting) context.stopService(Intent(context, FocusService::class.java))
         notifications(context).cancel(SESSION_NOTIFICATION)
+        if (state != null) tellWidget(context, 0L)
         if (done && state != null) postDone(context, state)
     }
 
@@ -167,6 +204,22 @@ object FocusController {
             } else {
                 notifications(context).notify(SESSION_NOTIFICATION, waitingNotification(context, state))
             }
+        }
+    }
+
+    /**
+     * The home screen widget shows when the phone's session ends. It lives
+     * in another plugin of the same app, so it is told by name; an app
+     * without it just drops the broadcast.
+     */
+    private fun tellWidget(context: Context, focusUntil: Long) {
+        val intent = Intent(WIDGET_REFRESH)
+            .setClassName(context.packageName, WIDGET_PROVIDER)
+            .putExtra("focusUntil", focusUntil)
+        try {
+            context.sendBroadcast(intent)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Widget not told about the session", e)
         }
     }
 

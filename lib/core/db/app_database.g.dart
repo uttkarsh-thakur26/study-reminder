@@ -2298,6 +2298,16 @@ class $FocusSessionsTable extends FocusSessions
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _roundsMeta = const VerificationMeta('rounds');
+  @override
+  late final GeneratedColumn<int> rounds = GeneratedColumn<int>(
+    'rounds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _workMinutesMeta = const VerificationMeta(
     'workMinutes',
   );
@@ -2348,6 +2358,7 @@ class $FocusSessionsTable extends FocusSessions
     quiet,
     strict,
     startedBy,
+    rounds,
     workMinutes,
     breakMinutes,
     subjectId,
@@ -2443,6 +2454,12 @@ class $FocusSessionsTable extends FocusSessions
         startedBy.isAcceptableOrUnknown(data['started_by']!, _startedByMeta),
       );
     }
+    if (data.containsKey('rounds')) {
+      context.handle(
+        _roundsMeta,
+        rounds.isAcceptableOrUnknown(data['rounds']!, _roundsMeta),
+      );
+    }
     if (data.containsKey('work_minutes')) {
       context.handle(
         _workMinutesMeta,
@@ -2528,6 +2545,10 @@ class $FocusSessionsTable extends FocusSessions
         DriftSqlType.string,
         data['${effectivePrefix}started_by'],
       )!,
+      rounds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rounds'],
+      )!,
       workMinutes: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}work_minutes'],
@@ -2568,6 +2589,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
   final bool quiet;
   final bool strict;
   final String startedBy;
+  final int rounds;
   final int workMinutes;
   final int breakMinutes;
   final String? subjectId;
@@ -2585,6 +2607,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     required this.quiet,
     required this.strict,
     required this.startedBy,
+    required this.rounds,
     required this.workMinutes,
     required this.breakMinutes,
     this.subjectId,
@@ -2609,6 +2632,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     map['quiet'] = Variable<bool>(quiet);
     map['strict'] = Variable<bool>(strict);
     map['started_by'] = Variable<String>(startedBy);
+    map['rounds'] = Variable<int>(rounds);
     map['work_minutes'] = Variable<int>(workMinutes);
     map['break_minutes'] = Variable<int>(breakMinutes);
     if (!nullToAbsent || subjectId != null) {
@@ -2636,6 +2660,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: Value(quiet),
       strict: Value(strict),
       startedBy: Value(startedBy),
+      rounds: Value(rounds),
       workMinutes: Value(workMinutes),
       breakMinutes: Value(breakMinutes),
       subjectId: subjectId == null && nullToAbsent
@@ -2663,6 +2688,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: serializer.fromJson<bool>(json['quiet']),
       strict: serializer.fromJson<bool>(json['strict']),
       startedBy: serializer.fromJson<String>(json['startedBy']),
+      rounds: serializer.fromJson<int>(json['rounds']),
       workMinutes: serializer.fromJson<int>(json['workMinutes']),
       breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
       subjectId: serializer.fromJson<String?>(json['subjectId']),
@@ -2685,6 +2711,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       'quiet': serializer.toJson<bool>(quiet),
       'strict': serializer.toJson<bool>(strict),
       'startedBy': serializer.toJson<String>(startedBy),
+      'rounds': serializer.toJson<int>(rounds),
       'workMinutes': serializer.toJson<int>(workMinutes),
       'breakMinutes': serializer.toJson<int>(breakMinutes),
       'subjectId': serializer.toJson<String?>(subjectId),
@@ -2705,6 +2732,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     bool? quiet,
     bool? strict,
     String? startedBy,
+    int? rounds,
     int? workMinutes,
     int? breakMinutes,
     Value<String?> subjectId = const Value.absent(),
@@ -2722,6 +2750,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     quiet: quiet ?? this.quiet,
     strict: strict ?? this.strict,
     startedBy: startedBy ?? this.startedBy,
+    rounds: rounds ?? this.rounds,
     workMinutes: workMinutes ?? this.workMinutes,
     breakMinutes: breakMinutes ?? this.breakMinutes,
     subjectId: subjectId.present ? subjectId.value : this.subjectId,
@@ -2743,6 +2772,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: data.quiet.present ? data.quiet.value : this.quiet,
       strict: data.strict.present ? data.strict.value : this.strict,
       startedBy: data.startedBy.present ? data.startedBy.value : this.startedBy,
+      rounds: data.rounds.present ? data.rounds.value : this.rounds,
       workMinutes: data.workMinutes.present
           ? data.workMinutes.value
           : this.workMinutes,
@@ -2769,6 +2799,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           ..write('quiet: $quiet, ')
           ..write('strict: $strict, ')
           ..write('startedBy: $startedBy, ')
+          ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
           ..write('subjectId: $subjectId')
@@ -2791,6 +2822,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     quiet,
     strict,
     startedBy,
+    rounds,
     workMinutes,
     breakMinutes,
     subjectId,
@@ -2812,6 +2844,7 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           other.quiet == this.quiet &&
           other.strict == this.strict &&
           other.startedBy == this.startedBy &&
+          other.rounds == this.rounds &&
           other.workMinutes == this.workMinutes &&
           other.breakMinutes == this.breakMinutes &&
           other.subjectId == this.subjectId);
@@ -2831,6 +2864,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
   final Value<bool> quiet;
   final Value<bool> strict;
   final Value<String> startedBy;
+  final Value<int> rounds;
   final Value<int> workMinutes;
   final Value<int> breakMinutes;
   final Value<String?> subjectId;
@@ -2849,6 +2883,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.quiet = const Value.absent(),
     this.strict = const Value.absent(),
     this.startedBy = const Value.absent(),
+    this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.subjectId = const Value.absent(),
@@ -2868,6 +2903,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.quiet = const Value.absent(),
     this.strict = const Value.absent(),
     this.startedBy = const Value.absent(),
+    this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.subjectId = const Value.absent(),
@@ -2888,6 +2924,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Expression<bool>? quiet,
     Expression<bool>? strict,
     Expression<String>? startedBy,
+    Expression<int>? rounds,
     Expression<int>? workMinutes,
     Expression<int>? breakMinutes,
     Expression<String>? subjectId,
@@ -2907,6 +2944,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       if (quiet != null) 'quiet': quiet,
       if (strict != null) 'strict': strict,
       if (startedBy != null) 'started_by': startedBy,
+      if (rounds != null) 'rounds': rounds,
       if (workMinutes != null) 'work_minutes': workMinutes,
       if (breakMinutes != null) 'break_minutes': breakMinutes,
       if (subjectId != null) 'subject_id': subjectId,
@@ -2928,6 +2966,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Value<bool>? quiet,
     Value<bool>? strict,
     Value<String>? startedBy,
+    Value<int>? rounds,
     Value<int>? workMinutes,
     Value<int>? breakMinutes,
     Value<String?>? subjectId,
@@ -2947,6 +2986,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       quiet: quiet ?? this.quiet,
       strict: strict ?? this.strict,
       startedBy: startedBy ?? this.startedBy,
+      rounds: rounds ?? this.rounds,
       workMinutes: workMinutes ?? this.workMinutes,
       breakMinutes: breakMinutes ?? this.breakMinutes,
       subjectId: subjectId ?? this.subjectId,
@@ -2996,6 +3036,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     if (startedBy.present) {
       map['started_by'] = Variable<String>(startedBy.value);
     }
+    if (rounds.present) {
+      map['rounds'] = Variable<int>(rounds.value);
+    }
     if (workMinutes.present) {
       map['work_minutes'] = Variable<int>(workMinutes.value);
     }
@@ -3027,6 +3070,7 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
           ..write('quiet: $quiet, ')
           ..write('strict: $strict, ')
           ..write('startedBy: $startedBy, ')
+          ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
           ..write('subjectId: $subjectId, ')
@@ -3122,25 +3166,37 @@ class $StudySessionsTable extends StudySessions
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _endsAtMeta = const VerificationMeta('endsAt');
-  @override
-  late final GeneratedColumn<int> endsAt = GeneratedColumn<int>(
-    'ends_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _stoppedAtMeta = const VerificationMeta(
-    'stoppedAt',
+  static const VerificationMeta _phoneUntilMeta = const VerificationMeta(
+    'phoneUntil',
   );
   @override
-  late final GeneratedColumn<int> stoppedAt = GeneratedColumn<int>(
-    'stopped_at',
+  late final GeneratedColumn<int> phoneUntil = GeneratedColumn<int>(
+    'phone_until',
     aliasedName,
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _laptopUntilMeta = const VerificationMeta(
+    'laptopUntil',
+  );
+  @override
+  late final GeneratedColumn<int> laptopUntil = GeneratedColumn<int>(
+    'laptop_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _roundsMeta = const VerificationMeta('rounds');
+  @override
+  late final GeneratedColumn<int> rounds = GeneratedColumn<int>(
+    'rounds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
   static const VerificationMeta _workMinutesMeta = const VerificationMeta(
     'workMinutes',
@@ -3175,8 +3231,9 @@ class $StudySessionsTable extends StudySessions
     id,
     subjectId,
     startedAt,
-    endsAt,
-    stoppedAt,
+    phoneUntil,
+    laptopUntil,
+    rounds,
     workMinutes,
     breakMinutes,
   ];
@@ -3237,18 +3294,25 @@ class $StudySessionsTable extends StudySessions
     } else if (isInserting) {
       context.missing(_startedAtMeta);
     }
-    if (data.containsKey('ends_at')) {
+    if (data.containsKey('phone_until')) {
       context.handle(
-        _endsAtMeta,
-        endsAt.isAcceptableOrUnknown(data['ends_at']!, _endsAtMeta),
+        _phoneUntilMeta,
+        phoneUntil.isAcceptableOrUnknown(data['phone_until']!, _phoneUntilMeta),
       );
-    } else if (isInserting) {
-      context.missing(_endsAtMeta);
     }
-    if (data.containsKey('stopped_at')) {
+    if (data.containsKey('laptop_until')) {
       context.handle(
-        _stoppedAtMeta,
-        stoppedAt.isAcceptableOrUnknown(data['stopped_at']!, _stoppedAtMeta),
+        _laptopUntilMeta,
+        laptopUntil.isAcceptableOrUnknown(
+          data['laptop_until']!,
+          _laptopUntilMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rounds')) {
+      context.handle(
+        _roundsMeta,
+        rounds.isAcceptableOrUnknown(data['rounds']!, _roundsMeta),
       );
     }
     if (data.containsKey('work_minutes')) {
@@ -3306,14 +3370,18 @@ class $StudySessionsTable extends StudySessions
         DriftSqlType.int,
         data['${effectivePrefix}started_at'],
       )!,
-      endsAt: attachedDatabase.typeMapping.read(
+      phoneUntil: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}ends_at'],
-      )!,
-      stoppedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}stopped_at'],
+        data['${effectivePrefix}phone_until'],
       ),
+      laptopUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}laptop_until'],
+      ),
+      rounds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rounds'],
+      )!,
       workMinutes: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}work_minutes'],
@@ -3344,8 +3412,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
   final String id;
   final String? subjectId;
   final int startedAt;
-  final int endsAt;
-  final int? stoppedAt;
+  final int? phoneUntil;
+  final int? laptopUntil;
+  final int rounds;
   final int workMinutes;
   final int breakMinutes;
   const StudySessionRow({
@@ -3356,8 +3425,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     required this.id,
     this.subjectId,
     required this.startedAt,
-    required this.endsAt,
-    this.stoppedAt,
+    this.phoneUntil,
+    this.laptopUntil,
+    required this.rounds,
     required this.workMinutes,
     required this.breakMinutes,
   });
@@ -3373,10 +3443,13 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       map['subject_id'] = Variable<String>(subjectId);
     }
     map['started_at'] = Variable<int>(startedAt);
-    map['ends_at'] = Variable<int>(endsAt);
-    if (!nullToAbsent || stoppedAt != null) {
-      map['stopped_at'] = Variable<int>(stoppedAt);
+    if (!nullToAbsent || phoneUntil != null) {
+      map['phone_until'] = Variable<int>(phoneUntil);
     }
+    if (!nullToAbsent || laptopUntil != null) {
+      map['laptop_until'] = Variable<int>(laptopUntil);
+    }
+    map['rounds'] = Variable<int>(rounds);
     map['work_minutes'] = Variable<int>(workMinutes);
     map['break_minutes'] = Variable<int>(breakMinutes);
     return map;
@@ -3393,10 +3466,13 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
           ? const Value.absent()
           : Value(subjectId),
       startedAt: Value(startedAt),
-      endsAt: Value(endsAt),
-      stoppedAt: stoppedAt == null && nullToAbsent
+      phoneUntil: phoneUntil == null && nullToAbsent
           ? const Value.absent()
-          : Value(stoppedAt),
+          : Value(phoneUntil),
+      laptopUntil: laptopUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(laptopUntil),
+      rounds: Value(rounds),
       workMinutes: Value(workMinutes),
       breakMinutes: Value(breakMinutes),
     );
@@ -3415,8 +3491,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       id: serializer.fromJson<String>(json['id']),
       subjectId: serializer.fromJson<String?>(json['subjectId']),
       startedAt: serializer.fromJson<int>(json['startedAt']),
-      endsAt: serializer.fromJson<int>(json['endsAt']),
-      stoppedAt: serializer.fromJson<int?>(json['stoppedAt']),
+      phoneUntil: serializer.fromJson<int?>(json['phoneUntil']),
+      laptopUntil: serializer.fromJson<int?>(json['laptopUntil']),
+      rounds: serializer.fromJson<int>(json['rounds']),
       workMinutes: serializer.fromJson<int>(json['workMinutes']),
       breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
     );
@@ -3432,8 +3509,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       'id': serializer.toJson<String>(id),
       'subjectId': serializer.toJson<String?>(subjectId),
       'startedAt': serializer.toJson<int>(startedAt),
-      'endsAt': serializer.toJson<int>(endsAt),
-      'stoppedAt': serializer.toJson<int?>(stoppedAt),
+      'phoneUntil': serializer.toJson<int?>(phoneUntil),
+      'laptopUntil': serializer.toJson<int?>(laptopUntil),
+      'rounds': serializer.toJson<int>(rounds),
       'workMinutes': serializer.toJson<int>(workMinutes),
       'breakMinutes': serializer.toJson<int>(breakMinutes),
     };
@@ -3447,8 +3525,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     String? id,
     Value<String?> subjectId = const Value.absent(),
     int? startedAt,
-    int? endsAt,
-    Value<int?> stoppedAt = const Value.absent(),
+    Value<int?> phoneUntil = const Value.absent(),
+    Value<int?> laptopUntil = const Value.absent(),
+    int? rounds,
     int? workMinutes,
     int? breakMinutes,
   }) => StudySessionRow(
@@ -3459,8 +3538,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     id: id ?? this.id,
     subjectId: subjectId.present ? subjectId.value : this.subjectId,
     startedAt: startedAt ?? this.startedAt,
-    endsAt: endsAt ?? this.endsAt,
-    stoppedAt: stoppedAt.present ? stoppedAt.value : this.stoppedAt,
+    phoneUntil: phoneUntil.present ? phoneUntil.value : this.phoneUntil,
+    laptopUntil: laptopUntil.present ? laptopUntil.value : this.laptopUntil,
+    rounds: rounds ?? this.rounds,
     workMinutes: workMinutes ?? this.workMinutes,
     breakMinutes: breakMinutes ?? this.breakMinutes,
   );
@@ -3475,8 +3555,13 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       id: data.id.present ? data.id.value : this.id,
       subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
-      endsAt: data.endsAt.present ? data.endsAt.value : this.endsAt,
-      stoppedAt: data.stoppedAt.present ? data.stoppedAt.value : this.stoppedAt,
+      phoneUntil: data.phoneUntil.present
+          ? data.phoneUntil.value
+          : this.phoneUntil,
+      laptopUntil: data.laptopUntil.present
+          ? data.laptopUntil.value
+          : this.laptopUntil,
+      rounds: data.rounds.present ? data.rounds.value : this.rounds,
       workMinutes: data.workMinutes.present
           ? data.workMinutes.value
           : this.workMinutes,
@@ -3496,8 +3581,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
           ..write('id: $id, ')
           ..write('subjectId: $subjectId, ')
           ..write('startedAt: $startedAt, ')
-          ..write('endsAt: $endsAt, ')
-          ..write('stoppedAt: $stoppedAt, ')
+          ..write('phoneUntil: $phoneUntil, ')
+          ..write('laptopUntil: $laptopUntil, ')
+          ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes')
           ..write(')'))
@@ -3513,8 +3599,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     id,
     subjectId,
     startedAt,
-    endsAt,
-    stoppedAt,
+    phoneUntil,
+    laptopUntil,
+    rounds,
     workMinutes,
     breakMinutes,
   );
@@ -3529,8 +3616,9 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
           other.id == this.id &&
           other.subjectId == this.subjectId &&
           other.startedAt == this.startedAt &&
-          other.endsAt == this.endsAt &&
-          other.stoppedAt == this.stoppedAt &&
+          other.phoneUntil == this.phoneUntil &&
+          other.laptopUntil == this.laptopUntil &&
+          other.rounds == this.rounds &&
           other.workMinutes == this.workMinutes &&
           other.breakMinutes == this.breakMinutes);
 }
@@ -3543,8 +3631,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
   final Value<String> id;
   final Value<String?> subjectId;
   final Value<int> startedAt;
-  final Value<int> endsAt;
-  final Value<int?> stoppedAt;
+  final Value<int?> phoneUntil;
+  final Value<int?> laptopUntil;
+  final Value<int> rounds;
   final Value<int> workMinutes;
   final Value<int> breakMinutes;
   final Value<int> rowid;
@@ -3556,8 +3645,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     this.id = const Value.absent(),
     this.subjectId = const Value.absent(),
     this.startedAt = const Value.absent(),
-    this.endsAt = const Value.absent(),
-    this.stoppedAt = const Value.absent(),
+    this.phoneUntil = const Value.absent(),
+    this.laptopUntil = const Value.absent(),
+    this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3570,15 +3660,15 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     required String id,
     this.subjectId = const Value.absent(),
     required int startedAt,
-    required int endsAt,
-    this.stoppedAt = const Value.absent(),
+    this.phoneUntil = const Value.absent(),
+    this.laptopUntil = const Value.absent(),
+    this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : hlc = Value(hlc),
        id = Value(id),
-       startedAt = Value(startedAt),
-       endsAt = Value(endsAt);
+       startedAt = Value(startedAt);
   static Insertable<StudySessionRow> custom({
     Expression<String>? hlc,
     Expression<String>? fieldClock,
@@ -3587,8 +3677,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     Expression<String>? id,
     Expression<String>? subjectId,
     Expression<int>? startedAt,
-    Expression<int>? endsAt,
-    Expression<int>? stoppedAt,
+    Expression<int>? phoneUntil,
+    Expression<int>? laptopUntil,
+    Expression<int>? rounds,
     Expression<int>? workMinutes,
     Expression<int>? breakMinutes,
     Expression<int>? rowid,
@@ -3601,8 +3692,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
       if (id != null) 'id': id,
       if (subjectId != null) 'subject_id': subjectId,
       if (startedAt != null) 'started_at': startedAt,
-      if (endsAt != null) 'ends_at': endsAt,
-      if (stoppedAt != null) 'stopped_at': stoppedAt,
+      if (phoneUntil != null) 'phone_until': phoneUntil,
+      if (laptopUntil != null) 'laptop_until': laptopUntil,
+      if (rounds != null) 'rounds': rounds,
       if (workMinutes != null) 'work_minutes': workMinutes,
       if (breakMinutes != null) 'break_minutes': breakMinutes,
       if (rowid != null) 'rowid': rowid,
@@ -3617,8 +3709,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     Value<String>? id,
     Value<String?>? subjectId,
     Value<int>? startedAt,
-    Value<int>? endsAt,
-    Value<int?>? stoppedAt,
+    Value<int?>? phoneUntil,
+    Value<int?>? laptopUntil,
+    Value<int>? rounds,
     Value<int>? workMinutes,
     Value<int>? breakMinutes,
     Value<int>? rowid,
@@ -3631,8 +3724,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
       id: id ?? this.id,
       subjectId: subjectId ?? this.subjectId,
       startedAt: startedAt ?? this.startedAt,
-      endsAt: endsAt ?? this.endsAt,
-      stoppedAt: stoppedAt ?? this.stoppedAt,
+      phoneUntil: phoneUntil ?? this.phoneUntil,
+      laptopUntil: laptopUntil ?? this.laptopUntil,
+      rounds: rounds ?? this.rounds,
       workMinutes: workMinutes ?? this.workMinutes,
       breakMinutes: breakMinutes ?? this.breakMinutes,
       rowid: rowid ?? this.rowid,
@@ -3663,11 +3757,14 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     if (startedAt.present) {
       map['started_at'] = Variable<int>(startedAt.value);
     }
-    if (endsAt.present) {
-      map['ends_at'] = Variable<int>(endsAt.value);
+    if (phoneUntil.present) {
+      map['phone_until'] = Variable<int>(phoneUntil.value);
     }
-    if (stoppedAt.present) {
-      map['stopped_at'] = Variable<int>(stoppedAt.value);
+    if (laptopUntil.present) {
+      map['laptop_until'] = Variable<int>(laptopUntil.value);
+    }
+    if (rounds.present) {
+      map['rounds'] = Variable<int>(rounds.value);
     }
     if (workMinutes.present) {
       map['work_minutes'] = Variable<int>(workMinutes.value);
@@ -3691,8 +3788,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
           ..write('id: $id, ')
           ..write('subjectId: $subjectId, ')
           ..write('startedAt: $startedAt, ')
-          ..write('endsAt: $endsAt, ')
-          ..write('stoppedAt: $stoppedAt, ')
+          ..write('phoneUntil: $phoneUntil, ')
+          ..write('laptopUntil: $laptopUntil, ')
+          ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
           ..write('rowid: $rowid')
@@ -4990,6 +5088,7 @@ typedef $$FocusSessionsTableCreateCompanionBuilder =
       Value<bool> quiet,
       Value<bool> strict,
       Value<String> startedBy,
+      Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<String?> subjectId,
@@ -5010,6 +5109,7 @@ typedef $$FocusSessionsTableUpdateCompanionBuilder =
       Value<bool> quiet,
       Value<bool> strict,
       Value<String> startedBy,
+      Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<String?> subjectId,
@@ -5087,6 +5187,11 @@ class $$FocusSessionsTableFilterComposer
 
   ColumnFilters<String> get startedBy => $composableBuilder(
     column: $table.startedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rounds => $composableBuilder(
+    column: $table.rounds,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5180,6 +5285,11 @@ class $$FocusSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get rounds => $composableBuilder(
+    column: $table.rounds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get workMinutes => $composableBuilder(
     column: $table.workMinutes,
     builder: (column) => ColumnOrderings(column),
@@ -5246,6 +5356,9 @@ class $$FocusSessionsTableAnnotationComposer
   GeneratedColumn<String> get startedBy =>
       $composableBuilder(column: $table.startedBy, builder: (column) => column);
 
+  GeneratedColumn<int> get rounds =>
+      $composableBuilder(column: $table.rounds, builder: (column) => column);
+
   GeneratedColumn<int> get workMinutes => $composableBuilder(
     column: $table.workMinutes,
     builder: (column) => column,
@@ -5304,6 +5417,7 @@ class $$FocusSessionsTableTableManager
                 Value<bool> quiet = const Value.absent(),
                 Value<bool> strict = const Value.absent(),
                 Value<String> startedBy = const Value.absent(),
+                Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<String?> subjectId = const Value.absent(),
@@ -5322,6 +5436,7 @@ class $$FocusSessionsTableTableManager
                 quiet: quiet,
                 strict: strict,
                 startedBy: startedBy,
+                rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 subjectId: subjectId,
@@ -5342,6 +5457,7 @@ class $$FocusSessionsTableTableManager
                 Value<bool> quiet = const Value.absent(),
                 Value<bool> strict = const Value.absent(),
                 Value<String> startedBy = const Value.absent(),
+                Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<String?> subjectId = const Value.absent(),
@@ -5360,6 +5476,7 @@ class $$FocusSessionsTableTableManager
                 quiet: quiet,
                 strict: strict,
                 startedBy: startedBy,
+                rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 subjectId: subjectId,
@@ -5408,8 +5525,9 @@ typedef $$StudySessionsTableCreateCompanionBuilder =
       required String id,
       Value<String?> subjectId,
       required int startedAt,
-      required int endsAt,
-      Value<int?> stoppedAt,
+      Value<int?> phoneUntil,
+      Value<int?> laptopUntil,
+      Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<int> rowid,
@@ -5423,8 +5541,9 @@ typedef $$StudySessionsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String?> subjectId,
       Value<int> startedAt,
-      Value<int> endsAt,
-      Value<int?> stoppedAt,
+      Value<int?> phoneUntil,
+      Value<int?> laptopUntil,
+      Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<int> rowid,
@@ -5474,13 +5593,18 @@ class $$StudySessionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get endsAt => $composableBuilder(
-    column: $table.endsAt,
+  ColumnFilters<int> get phoneUntil => $composableBuilder(
+    column: $table.phoneUntil,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get stoppedAt => $composableBuilder(
-    column: $table.stoppedAt,
+  ColumnFilters<int> get laptopUntil => $composableBuilder(
+    column: $table.laptopUntil,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rounds => $composableBuilder(
+    column: $table.rounds,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5539,13 +5663,18 @@ class $$StudySessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get endsAt => $composableBuilder(
-    column: $table.endsAt,
+  ColumnOrderings<int> get phoneUntil => $composableBuilder(
+    column: $table.phoneUntil,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get stoppedAt => $composableBuilder(
-    column: $table.stoppedAt,
+  ColumnOrderings<int> get laptopUntil => $composableBuilder(
+    column: $table.laptopUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rounds => $composableBuilder(
+    column: $table.rounds,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5592,11 +5721,18 @@ class $$StudySessionsTableAnnotationComposer
   GeneratedColumn<int> get startedAt =>
       $composableBuilder(column: $table.startedAt, builder: (column) => column);
 
-  GeneratedColumn<int> get endsAt =>
-      $composableBuilder(column: $table.endsAt, builder: (column) => column);
+  GeneratedColumn<int> get phoneUntil => $composableBuilder(
+    column: $table.phoneUntil,
+    builder: (column) => column,
+  );
 
-  GeneratedColumn<int> get stoppedAt =>
-      $composableBuilder(column: $table.stoppedAt, builder: (column) => column);
+  GeneratedColumn<int> get laptopUntil => $composableBuilder(
+    column: $table.laptopUntil,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get rounds =>
+      $composableBuilder(column: $table.rounds, builder: (column) => column);
 
   GeneratedColumn<int> get workMinutes => $composableBuilder(
     column: $table.workMinutes,
@@ -5647,8 +5783,9 @@ class $$StudySessionsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String?> subjectId = const Value.absent(),
                 Value<int> startedAt = const Value.absent(),
-                Value<int> endsAt = const Value.absent(),
-                Value<int?> stoppedAt = const Value.absent(),
+                Value<int?> phoneUntil = const Value.absent(),
+                Value<int?> laptopUntil = const Value.absent(),
+                Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5660,8 +5797,9 @@ class $$StudySessionsTableTableManager
                 id: id,
                 subjectId: subjectId,
                 startedAt: startedAt,
-                endsAt: endsAt,
-                stoppedAt: stoppedAt,
+                phoneUntil: phoneUntil,
+                laptopUntil: laptopUntil,
+                rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 rowid: rowid,
@@ -5675,8 +5813,9 @@ class $$StudySessionsTableTableManager
                 required String id,
                 Value<String?> subjectId = const Value.absent(),
                 required int startedAt,
-                required int endsAt,
-                Value<int?> stoppedAt = const Value.absent(),
+                Value<int?> phoneUntil = const Value.absent(),
+                Value<int?> laptopUntil = const Value.absent(),
+                Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5688,8 +5827,9 @@ class $$StudySessionsTableTableManager
                 id: id,
                 subjectId: subjectId,
                 startedAt: startedAt,
-                endsAt: endsAt,
-                stoppedAt: stoppedAt,
+                phoneUntil: phoneUntil,
+                laptopUntil: laptopUntil,
+                rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 rowid: rowid,

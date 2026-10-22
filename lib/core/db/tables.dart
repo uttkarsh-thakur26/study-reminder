@@ -73,6 +73,7 @@ class FocusSessions extends Table with SyncColumns {
   BoolColumn get quiet => boolean().withDefault(const Constant(true))();
   BoolColumn get strict => boolean().withDefault(const Constant(false))();
   TextColumn get startedBy => text().withDefault(const Constant(''))();
+  IntColumn get rounds => integer().withDefault(const Constant(1))();
   IntColumn get workMinutes => integer().withDefault(const Constant(0))();
   IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
   TextColumn get subjectId => text().nullable()();
@@ -89,8 +90,9 @@ class StudySessions extends Table with SyncColumns {
   TextColumn get id => text()();
   TextColumn get subjectId => text().nullable()();
   IntColumn get startedAt => integer()();
-  IntColumn get endsAt => integer()();
-  IntColumn get stoppedAt => integer().nullable()();
+  IntColumn get phoneUntil => integer().nullable()();
+  IntColumn get laptopUntil => integer().nullable()();
+  IntColumn get rounds => integer().withDefault(const Constant(1))();
   IntColumn get workMinutes => integer().withDefault(const Constant(0))();
   IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
 

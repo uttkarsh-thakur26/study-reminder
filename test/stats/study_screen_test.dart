@@ -21,7 +21,7 @@ void main() {
         StudySession(
           id: StudySession.idFor(start),
           startedAt: start.toUtc(),
-          endsAt: start.add(Duration(minutes: minutes)).toUtc(),
+          laptopUntil: start.add(Duration(minutes: minutes)).toUtc(),
           subjectId: subject,
         );
     final sessions = [

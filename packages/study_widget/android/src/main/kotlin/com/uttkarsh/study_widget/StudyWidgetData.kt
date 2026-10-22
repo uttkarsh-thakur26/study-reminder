@@ -68,6 +68,18 @@ object StudyWidgetStore {
         prefs(context).edit().putString(KEY_DATA, json).commit()
     }
 
+    /** Changes only the focus line, keeping the reminders the app sent. */
+    fun saveFocusUntil(context: Context, until: Long) {
+        val raw = prefs(context).getString(KEY_DATA, null)
+        val root = try {
+            if (raw.isNullOrEmpty()) JSONObject() else JSONObject(raw)
+        } catch (e: JSONException) {
+            JSONObject()
+        }
+        if (until > 0L) root.put("focusUntil", until) else root.remove("focusUntil")
+        save(context, root.toString())
+    }
+
     /**
      * The token the "+" button hands the app. Each tap is taken once: taking
      * it moves the token on, so Android handing the same intent back later

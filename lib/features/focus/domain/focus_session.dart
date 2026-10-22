@@ -35,6 +35,7 @@ class FocusSession {
     this.quiet = true,
     this.strict = false,
     this.startedBy = '',
+    this.rounds = 1,
     this.workMinutes = 0,
     this.breakMinutes = 0,
     this.subjectId,
@@ -67,8 +68,9 @@ class FocusSession {
   /// The name of the device it was started on.
   final String startedBy;
 
-  /// The length of a round and of the break after it. Zero: one round, no
-  /// breaks. See [FocusPlan].
+  /// Rounds of [workMinutes] with breaks of [breakMinutes] between them,
+  /// planned at the start; time added goes to the last. See [FocusPlan].
+  final int rounds;
   final int workMinutes;
   final int breakMinutes;
 
@@ -87,6 +89,7 @@ class FocusSession {
       blockApps == other.blockApps &&
       quiet == other.quiet &&
       strict == other.strict &&
+      rounds == other.rounds &&
       workMinutes == other.workMinutes &&
       breakMinutes == other.breakMinutes &&
       subjectId == other.subjectId;
@@ -110,6 +113,7 @@ class FocusSession {
     end: endsAt!,
     work: Duration(minutes: workMinutes),
     rest: Duration(minutes: breakMinutes),
+    rounds: rounds,
   );
 
   /// The round or break at [now], while it runs.
@@ -146,6 +150,7 @@ class FocusSession {
     quiet: quiet ?? this.quiet,
     strict: strict ?? this.strict,
     startedBy: startedBy ?? this.startedBy,
+    rounds: rounds,
     workMinutes: workMinutes,
     breakMinutes: breakMinutes,
     subjectId: subjectId,
@@ -160,6 +165,7 @@ class FocusSession {
     quiet: quiet,
     strict: strict,
     startedBy: startedBy,
+    rounds: rounds,
     workMinutes: workMinutes,
     breakMinutes: breakMinutes,
     subjectId: id,
@@ -174,10 +180,20 @@ class FocusSession {
     'quiet': quiet,
     'strict': strict,
     'started_by': startedBy,
+    'rounds': rounds,
     'work_minutes': workMinutes,
     'break_minutes': breakMinutes,
     'subject_id': subjectId,
   };
+
+  /// The fields a start sets that older versions of the app do not know.
+  /// A start made there leaves the previous session's values in place.
+  static const startFields = [
+    'rounds',
+    'work_minutes',
+    'break_minutes',
+    'subject_id',
+  ];
 
   factory FocusSession.fromFields(Map<String, Object?> f) {
     DateTime? time(Object? ms) => ms is num
@@ -192,6 +208,9 @@ class FocusSession {
       quiet: f['quiet'] as bool? ?? true,
       strict: f['strict'] as bool? ?? false,
       startedBy: f['started_by'] as String? ?? '',
+      rounds: f['rounds'] is num
+          ? (f['rounds']! as num).toInt().clamp(1, 100)
+          : 1,
       workMinutes: _minutes(f['work_minutes']),
       breakMinutes: _minutes(f['break_minutes']),
       subjectId: f['subject_id'] as String?,
@@ -214,6 +233,18 @@ class FocusSessions {
   final FocusSession laptop;
 
   FocusSession of(DeviceKind kind) => kind == DeviceKind.phone ? phone : laptop;
+
+  /// [kind], and the other device when it runs the same session: what a
+  /// change to [kind]'s session applies to, so the two stay alike.
+  Set<DeviceKind> sharing(DeviceKind kind, DateTime now) {
+    final other = kind == DeviceKind.phone
+        ? DeviceKind.laptop
+        : DeviceKind.phone;
+    return {
+      kind,
+      if (of(other).runningAt(now) && of(other).sameAs(of(kind))) other,
+    };
+  }
 
   /// The devices with a session running.
   Set<DeviceKind> busyAt(DateTime now) => {
