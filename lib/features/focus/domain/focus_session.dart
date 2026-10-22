@@ -113,7 +113,8 @@ class FocusSession {
   );
 
   /// The round or break at [now], while it runs.
-  FocusPhase? phaseAt(DateTime now) => runningAt(now) ? plan.phaseAt(now) : null;
+  FocusPhase? phaseAt(DateTime now) =>
+      runningAt(now) ? plan.phaseAt(now) : null;
 
   bool onBreakAt(DateTime now) => phaseAt(now)?.onBreak ?? false;
 
@@ -197,8 +198,7 @@ class FocusSession {
     );
   }
 
-  static int _minutes(Object? v) =>
-      v is num ? v.toInt().clamp(0, 600) : 0;
+  static int _minutes(Object? v) => v is num ? v.toInt().clamp(0, 600) : 0;
 }
 
 /// The phone's and the laptop's sessions.

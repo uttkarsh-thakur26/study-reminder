@@ -167,6 +167,25 @@ do $$ begin
   end;
 end $$;
 
+-- Study sessions sync; kinds the server does not know are refused.
+do $$ begin
+  perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
+    {"kind":"study","id":"1700000000000","fields":{"started_at":1700000000000,"ends_at":1700001500000},
+     "clock":{"started_at":"000000000000330-0000-l","ends_at":"000000000000330-0000-l"}}]');
+  if not exists (
+    select 1 from public.pull_records('phone-secret-0123456789abcdef01234567890', 0)
+    where kind = 'study' and id = '1700000000000'
+  ) then
+    raise exception 'study record did not sync';
+  end if;
+  begin
+    perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
+      {"kind":"bogus","id":"x","fields":{},"clock":{}}]');
+    raise exception 'unknown kind accepted';
+  exception when check_violation then null;
+  end;
+end $$;
+
 reset role;
 grant usage on schema public to service_role;
 set role service_role;

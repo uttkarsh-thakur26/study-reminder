@@ -8,9 +8,12 @@ import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
+import '../../reminders/application/reminder_providers.dart';
 import '../../reminders/domain/reminder.dart';
+import '../../subjects/domain/subject.dart';
 import '../../sync/application/sync_providers.dart';
 import '../application/focus_providers.dart';
+import '../domain/focus_plan.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import 'focus_setup.dart';
@@ -197,26 +200,35 @@ class _RunningSession extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final left = session.remainingAt(now);
-    final total = session.length.inMilliseconds;
-    final progress = total <= 0 ? 0.0 : left.inMilliseconds / total;
+    final phase = session.phaseAt(now) ?? session.plan.phaseAt(now);
+    final rounds = phase.rounds > 1;
+    // With rounds, the clock and the ring follow the round or break.
+    final left = rounds
+        ? phase.endsAt.difference(now)
+        : session.remainingAt(now);
+    final total = (rounds ? phase.length : session.length).inMilliseconds;
+    final progress = total <= 0
+        ? 0.0
+        : (left.inMilliseconds / total).clamp(0.0, 1.0);
     final repo = ref.read(focusRepositoryProvider);
     final here = ref.watch(deviceKindProvider);
     final until = formatTime(context, session.endsAt!.toLocal());
+    final phaseEnd = formatTime(context, phase.endsAt.toLocal());
     final where = _devices(on, here);
+    final subject = ref.watch(subjectsByIdProvider)[session.subjectId];
     Widget ring(double size, Widget child) => SizedBox.square(
       dimension: size,
       child: CustomPaint(
         painter: _RingPainter(
           progress: progress,
           track: scheme.surfaceContainerHighest,
-          color: scheme.primary,
+          color: phase.onBreak ? scheme.tertiary : scheme.primary,
           stroke: size / 18,
         ),
         child: Center(child: child),
       ),
     );
-    final clock = _clock(left);
+    final clock = _clock(left.isNegative ? Duration.zero : left);
 
     if (compact) {
       return Card(
@@ -240,7 +252,12 @@ class _RunningSession extends ConsumerWidget {
                     ),
                     Text(
                       [
-                        '$clock left',
+                        if (phase.onBreak)
+                          'break, $clock left'
+                        else
+                          '$clock left',
+                        if (rounds) 'round ${phase.round} of ${phase.rounds}',
+                        if (subject != null) subject.name,
                         'until $until',
                         if (session.strict) 'strict',
                       ].join(' · '),
@@ -287,7 +304,11 @@ class _RunningSession extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    'left',
+                    !rounds
+                        ? 'left'
+                        : phase.onBreak
+                        ? 'break'
+                        : 'round ${phase.round} of ${phase.rounds}',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -295,21 +316,38 @@ class _RunningSession extends ConsumerWidget {
                 ],
               ),
             ),
+            if (rounds) ...[
+              const SizedBox(height: Gap.m),
+              _RoundDots(phase: phase),
+            ],
             const SizedBox(height: Gap.l),
-            Text('Until $until', style: theme.textTheme.titleMedium),
+            Text(
+              !rounds || phase.isLastRound && !phase.onBreak
+                  ? 'Until $until'
+                  : phase.onBreak
+                  ? 'Back to focus at $phaseEnd'
+                  : 'Break at $phaseEnd',
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: Gap.xs),
             Text(
               [
                 'On $where',
                 if (session.startedBy.isNotEmpty)
                   'started on ${session.startedBy}',
+                if (rounds && !phase.isLastRound) 'ends $until',
               ].join(', '),
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: Gap.l),
+            const SizedBox(height: Gap.m),
+            _SubjectButton(
+              subject: subject,
+              onPick: (id) => repo.setSubject(on, id),
+            ),
+            const SizedBox(height: Gap.m),
             Wrap(
               alignment: WrapAlignment.center,
               spacing: Gap.m,
@@ -482,6 +520,8 @@ class _StartForm extends ConsumerWidget {
     final on = wanted.isEmpty ? free : wanted;
     void save(FocusPrefs p) => repo.savePrefs(p);
     void setMinutes(int m) => save(prefs.copyWith(minutes: m.clamp(5, 240)));
+    final subjects = ref.watch(subjectsProvider).value ?? const <Subject>[];
+    final rounds = prefs.rounds;
 
     final form = Padding(
       padding: flat ? EdgeInsets.zero : const EdgeInsets.all(Gap.l),
@@ -511,7 +551,7 @@ class _StartForm extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      'minutes',
+                      rounds > 1 ? 'minutes a round' : 'minutes',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -541,6 +581,18 @@ class _StartForm extends ConsumerWidget {
                 ),
             ],
           ),
+          const SizedBox(height: Gap.m),
+          _RoundsPicker(prefs: prefs, onChanged: save),
+          if (subjects.isNotEmpty) ...[
+            const SizedBox(height: Gap.s),
+            _SubjectChips(
+              subjects: subjects,
+              selected: subjects.any((s) => s.id == prefs.subjectId)
+                  ? prefs.subjectId
+                  : null,
+              onSelected: (id) => save(prefs.withSubject(id)),
+            ),
+          ],
           if (free.length > 1) ...[
             const SizedBox(height: Gap.l),
             SegmentedButton<FocusTarget>(
@@ -604,12 +656,12 @@ class _StartForm extends ConsumerWidget {
               minimumSize: const Size.fromHeight(52),
             ),
             onPressed: () async {
-              await repo.start(
+              final subjectGone =
+                  prefs.subjectId != null &&
+                  !subjects.any((s) => s.id == prefs.subjectId);
+              await repo.startWith(
+                subjectGone ? prefs.withSubject(null) : prefs,
                 on: on,
-                length: Duration(minutes: prefs.minutes),
-                blockApps: prefs.blockApps,
-                quiet: prefs.quiet,
-                strict: prefs.strict,
                 startedBy: ref.read(deviceNameProvider),
               );
               onStarted?.call();
@@ -621,5 +673,250 @@ class _StartForm extends ConsumerWidget {
       ),
     );
     return flat ? form : Card(child: form);
+  }
+}
+
+/// Rounds per session and the break between two.
+class _RoundsPicker extends StatelessWidget {
+  const _RoundsPicker({required this.prefs, required this.onChanged});
+
+  final FocusPrefs prefs;
+  final ValueChanged<FocusPrefs> onChanged;
+
+  static const _breaks = [5, 10, 15];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final rounds = prefs.rounds;
+    final end = formatTime(context, DateTime.now().add(prefs.length));
+    return Container(
+      padding: const EdgeInsets.fromLTRB(Gap.m, Gap.s, Gap.s, Gap.s),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(Radii.m),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.repeat_rounded, size: 20, color: scheme.primary),
+              const SizedBox(width: Gap.s),
+              Expanded(
+                child: Text('Rounds', style: theme.textTheme.titleSmall),
+              ),
+              IconButton(
+                onPressed: rounds > 1
+                    ? () => onChanged(prefs.copyWith(rounds: rounds - 1))
+                    : null,
+                icon: const Icon(Icons.remove_rounded),
+                tooltip: 'One round less',
+              ),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '$rounds',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: rounds < FocusPrefs.maxRounds
+                    ? () => onChanged(prefs.copyWith(rounds: rounds + 1))
+                    : null,
+                icon: const Icon(Icons.add_rounded),
+                tooltip: 'One round more',
+              ),
+            ],
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topCenter,
+            child: rounds < 2
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: Gap.xs),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.local_cafe_outlined,
+                              size: 20,
+                              color: scheme.tertiary,
+                            ),
+                            const SizedBox(width: Gap.s),
+                            Expanded(
+                              child: Text(
+                                'Breaks',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                            ),
+                            for (final m in _breaks)
+                              Padding(
+                                padding: const EdgeInsets.only(left: Gap.xs),
+                                child: ChoiceChip(
+                                  label: Text('$m min'),
+                                  selected: prefs.breakMinutes == m,
+                                  onSelected: (_) => onChanged(
+                                    prefs.copyWith(breakMinutes: m),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: Gap.s),
+                        Text(
+                          '$rounds rounds of ${prefs.minutes} min with '
+                          '${prefs.breakMinutes} min breaks, until $end. '
+                          'Nothing is blocked during a break.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What a session is for, picked from the subjects.
+class _SubjectChips extends StatelessWidget {
+  const _SubjectChips({
+    required this.subjects,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<Subject> subjects;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: Gap.s,
+      runSpacing: Gap.xs,
+      children: [
+        ChoiceChip(
+          label: const Text('No subject'),
+          selected: selected == null,
+          onSelected: (_) => onSelected(null),
+        ),
+        for (final s in subjects)
+          ChoiceChip(
+            avatar: _Dot(Color(s.color)),
+            label: Text(s.name),
+            selected: selected == s.id,
+            onSelected: (_) => onSelected(s.id),
+          ),
+      ],
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot(this.color);
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 10,
+    height: 10,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
+}
+
+/// The running session's subject, tap to change it.
+class _SubjectButton extends ConsumerWidget {
+  const _SubjectButton({required this.subject, required this.onPick});
+
+  final Subject? subject;
+  final ValueChanged<String?> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subjects = ref.watch(subjectsProvider).value ?? const <Subject>[];
+    if (subjects.isEmpty) return const SizedBox.shrink();
+    final current = subject;
+    return ActionChip(
+      avatar: current == null
+          ? const Icon(Icons.menu_book_outlined, size: 18)
+          : _Dot(Color(current.color)),
+      label: Text(current?.name ?? 'Add a subject'),
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'What are you studying?',
+                style: Theme.of(sheet).textTheme.titleMedium,
+              ),
+              const SizedBox(height: Gap.m),
+              _SubjectChips(
+                subjects: subjects,
+                selected: current?.id,
+                onSelected: (id) {
+                  onPick(id);
+                  Navigator.of(sheet).pop();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One dot per round: done, running and still to come.
+class _RoundDots extends StatelessWidget {
+  const _RoundDots({required this.phase});
+
+  final FocusPhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: phase.onBreak
+          ? 'Break after round ${phase.round} of ${phase.rounds}'
+          : 'Round ${phase.round} of ${phase.rounds}',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 1; i <= phase.rounds; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == phase.round && !phase.onBreak ? 22 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: i < phase.round || (i == phase.round && phase.onBreak)
+                    ? scheme.primary
+                    : i == phase.round
+                    ? scheme.primary.withValues(alpha: 0.6)
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

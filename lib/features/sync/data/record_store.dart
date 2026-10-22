@@ -7,6 +7,7 @@ import '../../../core/sync/stamped_write.dart';
 import '../../focus/data/focus_repository.dart';
 import '../../focus/domain/focus_session.dart';
 import '../../reminders/data/reminder_repository.dart';
+import '../../stats/data/study_repository.dart';
 import '../../subjects/data/subject_repository.dart';
 import '../domain/sync_record.dart';
 
@@ -122,6 +123,34 @@ class RecordStore {
                 focusSessionCompanion(id, w, dirty: dirty),
               );
         },
+      ),
+      _Kind(
+        name: RecordKinds.study,
+        table: 'study_sessions',
+        dirty: (limit) async => [
+          for (final r
+              in await (_db.select(_db.studySessions)
+                    ..where((t) => t.dirty.equals(true))
+                    ..limit(limit))
+                  .get())
+            _Row(r.id, studySessionFromRow(r).toFields(), r.fieldClock, r.hlc),
+        ],
+        byId: (id) async {
+          final r = await (_db.select(
+            _db.studySessions,
+          )..where((t) => t.id.equals(id))).getSingleOrNull();
+          return r == null
+              ? null
+              : _Row(
+                  r.id,
+                  studySessionFromRow(r).toFields(),
+                  r.fieldClock,
+                  r.hlc,
+                );
+        },
+        write: (id, w, dirty) => _db
+            .into(_db.studySessions)
+            .insertOnConflictUpdate(studySessionCompanion(id, w, dirty: dirty)),
       ),
     ];
   }
@@ -246,6 +275,7 @@ class RecordStore {
     RecordKinds.subject => _db.subjects,
     RecordKinds.reminder => _db.reminders,
     RecordKinds.focus => _db.focusSessions,
+    RecordKinds.study => _db.studySessions,
     _ => _db.occurrences,
   };
 }

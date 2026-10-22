@@ -9,7 +9,9 @@ import 'package:study_reminder/features/focus/data/focus_repository.dart';
 import 'package:study_reminder/features/focus/domain/focus_prefs.dart';
 import 'package:study_reminder/features/focus/domain/focus_session.dart';
 import 'package:study_reminder/features/focus/ui/focus_screen.dart';
+import 'package:study_reminder/features/reminders/application/reminder_providers.dart';
 import 'package:study_reminder/features/reminders/domain/reminder.dart';
+import 'package:study_reminder/features/subjects/domain/subject.dart';
 import 'package:study_reminder/features/sync/application/sync_providers.dart';
 
 import '../sync/fake_sync_api.dart';
@@ -51,6 +53,10 @@ void main() {
           deviceKindProvider.overrideWithValue(DeviceKind.phone),
           deviceNameProvider.overrideWithValue('Pixel'),
           if (paired) syncApiProvider.overrideWithValue(FakeSyncApi()),
+          // Drift streams never settle under the test clock.
+          subjectsProvider.overrideWith(
+            (ref) => Stream.value(const <Subject>[]),
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(

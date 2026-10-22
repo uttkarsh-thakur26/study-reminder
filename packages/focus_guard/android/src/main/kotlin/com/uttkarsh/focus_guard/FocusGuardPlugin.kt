@@ -161,6 +161,8 @@ class FocusGuardPlugin :
         blockGames = m["blockGames"] == true,
         packages = (m["packages"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
         startedBy = m["startedBy"] as? String ?: "",
+        workMs = ((m["workMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
+        breakMs = ((m["breakMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
     )
 
     /** This phone's Firebase token, or null when there is none to be had. */

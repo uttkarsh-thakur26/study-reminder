@@ -5,7 +5,10 @@ import 'package:study_reminder/core/db/app_database.dart';
 import 'package:study_reminder/core/sync/hlc.dart';
 import 'package:study_reminder/features/focus/data/focus_repository.dart';
 import 'package:study_reminder/features/focus/domain/focus_session.dart';
+import 'package:study_reminder/features/focus/domain/focus_prefs.dart';
 import 'package:study_reminder/features/reminders/domain/reminder.dart';
+import 'package:study_reminder/features/stats/data/study_repository.dart';
+import 'package:study_reminder/features/stats/domain/study_session.dart';
 
 void main() {
   late AppDatabase db;
@@ -27,6 +30,60 @@ void main() {
     startedBy: 'Pixel',
     now: now,
   );
+
+  Future<List<StudySession>> studied() async => [
+    for (final r in await db.select(db.studySessions).get())
+      studySessionFromRow(r),
+  ];
+
+  test('a session on both devices is one study session', () async {
+    await repo.startWith(
+      const FocusPrefs(rounds: 2, subjectId: 's1'),
+      on: {DeviceKind.phone, DeviceKind.laptop},
+      startedBy: 'Pixel',
+      now: now,
+    );
+    final sessions = await repo.current();
+    expect(sessions.phone.workMinutes, 25);
+    expect(sessions.phone.breakMinutes, 5);
+    expect(sessions.phone.endsAt, now.add(const Duration(minutes: 55)));
+    var log = (await studied()).single;
+    expect(log.id, StudySession.idFor(now));
+    expect(log.subjectId, 's1');
+    expect(log.endsAt, now.add(const Duration(minutes: 55)));
+
+    await repo.extend(
+      {DeviceKind.laptop},
+      const Duration(minutes: 5),
+      now: now,
+    );
+    log = (await studied()).single;
+    expect(log.endsAt, now.add(const Duration(minutes: 60)));
+
+    final later = now.add(const Duration(minutes: 10));
+    await repo.stop({DeviceKind.phone}, now: later);
+    expect(
+      (await studied()).single.stoppedAt,
+      isNull,
+      reason: 'the laptop still focuses',
+    );
+    await repo.stop({DeviceKind.laptop}, now: later);
+    expect((await studied()).single.stoppedAt, later);
+
+    await repo.setSubject({DeviceKind.phone}, 's2', now: later);
+    expect(
+      (await studied()).single.subjectId,
+      's1',
+      reason: 'only a running session changes subject',
+    );
+  });
+
+  test('changing the subject of a running session updates its stats', () async {
+    await start({DeviceKind.phone});
+    await repo.setSubject({DeviceKind.phone}, 's2', now: now);
+    expect((await repo.current()).phone.subjectId, 's2');
+    expect((await studied()).single.subjectId, 's2');
+  });
 
   test('a start leaves a session that already runs alone', () async {
     await start({DeviceKind.laptop}, strict: true);

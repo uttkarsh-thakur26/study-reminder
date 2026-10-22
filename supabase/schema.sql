@@ -53,7 +53,7 @@ create sequence if not exists public.record_seq;
 
 create table if not exists public.records (
   space_id uuid not null references public.spaces (id) on delete cascade,
-  kind text not null check (kind in ('subject', 'reminder', 'occurrence', 'focus')),
+  kind text not null check (kind in ('subject', 'reminder', 'occurrence', 'focus', 'study')),
   id text not null,
   fields jsonb not null,
   clock jsonb not null,
@@ -64,6 +64,12 @@ create table if not exists public.records (
   primary key (space_id, kind, id)
 );
 create index if not exists records_space_seq on public.records (space_id, seq);
+
+-- The kinds of record, again for a table made by an older version of this
+-- file. 'study': the focus sessions kept for the stats.
+alter table public.records drop constraint if exists records_kind_check;
+alter table public.records add constraint records_kind_check
+  check (kind in ('subject', 'reminder', 'occurrence', 'focus', 'study'));
 
 alter table public.spaces enable row level security;
 alter table public.devices enable row level security;

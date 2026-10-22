@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/** The end-of-session alarm, the retry alarm, and restoring after a reboot. */
+/**
+ * The end-of-session alarm, the alarm between rounds and breaks, the retry
+ * alarm, and restoring after a reboot.
+ */
 class FocusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
@@ -14,6 +17,7 @@ class FocusReceiver : BroadcastReceiver() {
                 if (state.endsAt > System.currentTimeMillis() + 1000) return
                 FocusController.finish(context, done = true)
             }
+            FocusController.ACTION_PHASE -> FocusController.phaseChanged(context)
             FocusController.ACTION_START -> {
                 val state = FocusState.load(context) ?: return
                 if (state.isOver()) {
