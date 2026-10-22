@@ -247,19 +247,20 @@ class _TabSweep {
     }
   });
 
-  /// Presses the close button of [tab]: the button named so, or else its
-  /// last button, which is where Chromium puts it. False when there is none
-  /// or pressing failed.
+  /// Presses the close button of [tab]: the button named so, or else the
+  /// last of two or more buttons, which is where Chromium puts it. A lone
+  /// unnamed button may be the sound button of a pinned tab, so it is left
+  /// alone. False when there is none or pressing failed.
   bool _pressClose(IUIAutomationElement tab) => using((arena) {
     final buttons = [
       for (final child in _children(arena, tab, _maxTabParts))
         if (_controlType(child) == UIA_ButtonControlTypeId) child,
     ];
-    if (buttons.isEmpty) return false;
-    final button = buttons.firstWhere(
-      (b) => _name(b).toLowerCase().contains('close'),
-      orElse: () => buttons.last,
-    );
+    final named = buttons
+        .where((b) => _name(b).toLowerCase().contains('close'))
+        .firstOrNull;
+    final button = named ?? (buttons.length >= 2 ? buttons.last : null);
+    if (button == null) return false;
     final iid = convertToIID(IID_IUIAutomationInvokePattern, allocator: arena);
     final invoke = _take(
       arena,
