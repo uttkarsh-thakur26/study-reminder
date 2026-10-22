@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/sync/hlc.dart';
+import '../../focus/domain/focus_session.dart';
+import '../../reminders/domain/reminder.dart';
 import '../data/record_store.dart';
 import '../data/sync_api.dart';
 import '../domain/sync_record.dart';
@@ -173,8 +175,13 @@ class SyncService {
     return received;
   }
 
-  static bool _hasFocus(List<PendingPush> batch) =>
-      batch.any((p) => p.record.kind == RecordKinds.focus);
+  /// The phone's session: only the phone can be woken, and its app may be
+  /// closed.
+  static bool _hasFocus(List<PendingPush> batch) => batch.any(
+    (p) =>
+        p.record.kind == RecordKinds.focus &&
+        p.record.id == FocusSession.idFor(DeviceKind.phone),
+  );
 
   /// A phone with the app closed only hears about a focus session this way;
   /// the next regular sync catches up if it fails.
@@ -183,6 +190,22 @@ class SyncService {
       await api.wakeOtherDevices(secret);
     } on SyncUnavailable catch (e) {
       debugPrint('Could not wake the other devices: $e');
+    }
+  }
+
+  /// Hands [notice] to the other devices right away, for the phone to show.
+  /// Does not wait for a sync in progress, and gives up after [timeout]:
+  /// used while the app quits.
+  Future<void> tellOthers(
+    Map<String, Object?> notice, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final secret = await _db.readSetting(SyncKeys.secret);
+    if (secret == null || await spaceId() == null) return;
+    try {
+      await api.wakeOtherDevices(secret, notice: notice).timeout(timeout);
+    } on Object catch (e) {
+      debugPrint('Could not tell the other devices: $e');
     }
   }
 

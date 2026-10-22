@@ -90,11 +90,25 @@ const reply = (status: number, body: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+// Something for the phone to tell the user, such as the laptop app quitting
+// during a strict session. Only the known shape is passed on.
+type Notice = { kind: 'left'; device: string; endsAt: number };
+
+function readNotice(raw: unknown): Notice | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  const { kind, device, endsAt } = raw as Record<string, unknown>;
+  if (kind !== 'left' || typeof device !== 'string' || typeof endsAt !== 'number') return null;
+  return { kind, device: device.slice(0, 100), endsAt };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'Use POST' });
   let secret: unknown;
+  let notice: Notice | null = null;
   try {
-    secret = (await req.json()).secret;
+    const body = await req.json();
+    secret = body.secret;
+    notice = readNotice(body.notice);
   } catch {
     // Checked below.
   }
@@ -124,14 +138,19 @@ Deno.serve(async (req) => {
     focus: unknown;
     version: string | null;
   };
-  if (focus == null || tokens.length === 0) return reply(200, { sent: 0 });
+  if ((focus == null && notice == null) || tokens.length === 0) return reply(200, { sent: 0 });
 
   try {
     const sa = serviceAccount();
     const auth = await accessToken(sa);
     const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
     // The version lets the phone ignore news older than what it has.
-    const data = { type: 'focus', focus: JSON.stringify(focus), version: version ?? '' };
+    const data: Record<string, string> = {
+      type: 'focus',
+      focus: focus == null ? '' : JSON.stringify(focus),
+      version: version ?? '',
+    };
+    if (notice != null) data.notice = JSON.stringify(notice);
     const sent = await Promise.all(tokens.map(async (token) => {
       const res = await fetch(url, {
         method: 'POST',
@@ -140,8 +159,13 @@ Deno.serve(async (req) => {
           message: {
             token,
             data,
-            // Only the newest focus message matters if the phone was offline.
-            android: { priority: 'HIGH', ttl: '600s', collapse_key: 'focus' },
+            // Only the newest focus message matters if the phone was offline,
+            // but a notice must not be folded into a later message.
+            android: {
+              priority: 'HIGH',
+              ttl: '600s',
+              ...(notice == null ? { collapse_key: 'focus' } : {}),
+            },
           },
         }),
       });

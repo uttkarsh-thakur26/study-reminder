@@ -45,7 +45,14 @@ class FakeSyncApi implements SyncApi {
   int get spaceCount => _spaces.length;
 
   /// Every wake: the push tokens it reached and the focus session it sent.
-  final wakes = <(List<String> tokens, Map<String, Object?>? focus)>[];
+  final wakes =
+      <
+        (
+          List<String> tokens,
+          Map<String, Object?>? focus,
+          Map<String, Object?>? notice,
+        )
+      >[];
 
   /// The push token the server has for [secret]'s device.
   String? pushTokenOf(String secret) => _devices[secret]?.pushToken;
@@ -245,7 +252,10 @@ class FakeSyncApi implements SyncApi {
   }
 
   @override
-  Future<void> wakeOtherDevices(String secret) async {
+  Future<void> wakeOtherDevices(
+    String secret, {
+    Map<String, Object?>? notice,
+  }) async {
     final me = _device(secret);
     wakes.add((
       [
@@ -253,7 +263,8 @@ class FakeSyncApi implements SyncApi {
           if (d.space == me.space && d != me && d.pushToken != null)
             d.pushToken!,
       ],
-      _spaces[me.space]?['focus/current']?.fields,
+      _spaces[me.space]?['focus/phone']?.fields,
+      notice,
     ));
   }
 

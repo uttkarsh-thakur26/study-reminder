@@ -436,8 +436,9 @@ end;
 $$;
 
 -- For the focus-push function only (it runs with the project's secret key):
--- the push tokens of the other devices in the caller's space, and the focus
--- session as the server has it, with its version (the newest field stamp).
+-- the push tokens of the other devices in the caller's space, and the phone's
+-- focus session as the server has it, with its version (the newest field
+-- stamp). Only phones have push tokens, so only the phone's session goes out.
 -- Tokens never reach the apps. At most 30 calls in 10 minutes per device.
 create or replace function public.focus_push_targets(p_secret text)
 returns jsonb
@@ -471,7 +472,7 @@ begin
   where x.space_id = d.space_id and x.id <> d.id and x.push_token is not null;
   select * into v_focus
   from public.records r
-  where r.space_id = d.space_id and r.kind = 'focus' and r.id = 'current';
+  where r.space_id = d.space_id and r.kind = 'focus' and r.id = 'phone';
   return jsonb_build_object(
     'tokens', v_tokens,
     'focus', v_focus.fields,

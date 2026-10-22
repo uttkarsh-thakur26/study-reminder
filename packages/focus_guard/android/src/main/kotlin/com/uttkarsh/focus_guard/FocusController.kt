@@ -8,6 +8,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.util.Log
 import java.util.Date
@@ -21,9 +22,14 @@ object FocusController {
     private const val TAG = "FocusGuard"
     private const val SESSION_CHANNEL = "focus_guard_session"
     private const val DONE_CHANNEL = "focus_guard_done"
+    private const val ALERT_CHANNEL = "focus_guard_alert"
     const val SESSION_NOTIFICATION = 7301
     private const val DONE_NOTIFICATION = 7302
     private const val STOPPED_NOTIFICATION = 7303
+    const val LEFT_NOTIFICATION = 7304
+
+    /** Extras on the app's launch intent: start a session on this phone. */
+    const val EXTRA_FOCUS_UNTIL = "focus_guard_focus_until"
 
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
@@ -193,6 +199,10 @@ object FocusController {
             NotificationChannel(DONE_CHANNEL, "Focus finished", NotificationManager.IMPORTANCE_DEFAULT)
                 .apply { description = "When a focus session ends" },
         )
+        nm.createNotificationChannel(
+            NotificationChannel(ALERT_CHANNEL, "Focus alerts", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "When your other device stops a strict session early" },
+        )
     }
 
     private fun openApp(context: Context): PendingIntent? {
@@ -256,6 +266,50 @@ object FocusController {
             .setContentIntent(openApp(context))
             .build()
         notifications(context).notify(DONE_NOTIFICATION, notification)
+    }
+
+    /**
+     * Tells the user that Focus mode quit on [device] while its strict
+     * session still had until [endsAt] to run, with a button to focus on
+     * this phone until then instead.
+     */
+    fun postLeft(context: Context, device: String, endsAt: Long) {
+        val now = System.currentTimeMillis()
+        if (endsAt <= now) return
+        ensureChannels(context)
+        val left = ((endsAt - now) / 60000 + 1).coerceAtLeast(1)
+        val until = clock(context, endsAt)
+        val name = device.ifBlank { "your laptop" }
+        val focusHere = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+            // Delivered to the app even when it is open already.
+            it.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            )
+            it.putExtra(EXTRA_FOCUS_UNTIL, endsAt)
+            PendingIntent.getActivity(
+                context,
+                4,
+                it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+        val text = "Its strict session had $left min left, until $until."
+        val builder = Notification.Builder(context, ALERT_CHANNEL)
+            .setSmallIcon(R.drawable.focus_guard_stat)
+            .setContentTitle("Focus was quit on $name")
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText("$text Keep going on this phone?"))
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setTimeoutAfter(endsAt - now)
+            .setContentIntent(openApp(context))
+        if (focusHere != null) {
+            builder.addAction(
+                Notification.Action.Builder(null as Icon?, "Focus here until $until", focusHere).build(),
+            )
+        }
+        notifications(context).notify(LEFT_NOTIFICATION, builder.build())
     }
 
     /** A short note that another device ended the session, gone after 10 s. */

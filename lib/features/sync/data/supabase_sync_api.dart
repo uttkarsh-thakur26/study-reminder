@@ -138,7 +138,10 @@ class SupabaseSyncApi implements SyncApi {
       _call('set_push_token', {'p_secret': secret, 'p_token': token ?? ''});
 
   @override
-  Future<void> wakeOtherDevices(String secret) async {
+  Future<void> wakeOtherDevices(
+    String secret, {
+    Map<String, Object?>? notice,
+  }) async {
     final http.Response res;
     try {
       res = await _http
@@ -149,7 +152,7 @@ class SupabaseSyncApi implements SyncApi {
               'Authorization': 'Bearer $_publicKey',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({'secret': secret}),
+            body: jsonEncode({'secret': secret, 'notice': ?notice}),
           )
           .timeout(const Duration(seconds: 15));
     } on Object catch (e) {

@@ -4,16 +4,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
+import '../../reminders/domain/reminder.dart';
 import '../../sync/application/sync_providers.dart';
 import '../application/focus_providers.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 
-/// Keeps this device following the shared focus session while the app runs:
+/// Keeps this device following its focus session while the app runs:
 /// applies it whenever it or the block lists change (also when another
 /// device started it), again when it ends and when the app comes back, and
 /// starts one when the phone is put down screen first, if the user turned
-/// that on.
+/// that on, or when they asked for one from the note that the laptop quit a
+/// strict session.
 class FocusCoordinator extends ConsumerStatefulWidget {
   const FocusCoordinator({super.key, required this.child});
 
@@ -25,21 +28,25 @@ class FocusCoordinator extends ConsumerStatefulWidget {
 
 class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
   late final AppLifecycleListener _lifecycle;
-  StreamSubscription<FocusSession>? _sessions;
+  StreamSubscription<FocusSessions>? _sessions;
   StreamSubscription<FocusPrefs>? _prefsSub;
   StreamSubscription<void>? _flips;
   FocusSession? _session;
+  FocusSessions? _all;
   FocusPrefs? _prefs;
   Timer? _end;
   bool _foreground = true;
+  bool _askedAtStart = false;
   Future<void> _applying = Future.value();
 
   @override
   void initState() {
     super.initState();
     final repo = ref.read(focusRepositoryProvider);
+    final here = ref.read(deviceKindProvider);
     _sessions = repo.watch().listen((s) {
-      _session = s;
+      _all = s;
+      _session = s.of(here);
       _apply();
     });
     _prefsSub = repo.watchPrefs().listen((p) {
@@ -50,12 +57,22 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       onResume: () {
         _foreground = true;
         _apply();
+        unawaited(_takeRequest());
       },
       onHide: () {
         _foreground = false;
         _updateFlip();
       },
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_askedAtStart) {
+      _askedAtStart = true;
+      unawaited(_takeRequest());
+    }
   }
 
   @override
@@ -118,18 +135,57 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
 
   Future<void> _startFromFlip() async {
     final prefs = _prefs;
-    if (prefs == null || (_session?.runningAt(DateTime.now()) ?? false)) return;
+    final now = DateTime.now();
+    if (prefs == null || (_session?.runningAt(now) ?? false)) return;
+    final on = (_all ?? FocusSessions.idle).startable(
+      prefs.target,
+      here: ref.read(deviceKindProvider),
+      paired: ref.read(syncApiProvider) != null,
+      now: now,
+    );
+    if (on.isEmpty) return;
     await HapticFeedback.heavyImpact();
     await ref
         .read(focusRepositoryProvider)
         .start(
+          on: on,
           length: Duration(minutes: prefs.minutes),
-          target: prefs.target,
           blockApps: prefs.blockApps,
           quiet: prefs.quiet,
           strict: prefs.strict,
           startedBy: ref.read(deviceNameProvider),
         );
+  }
+
+  /// "Focus here" on the note that the laptop quit its strict session:
+  /// focus on this phone until that session would have ended, with the
+  /// user's own Focus settings.
+  Future<void> _takeRequest() async {
+    final guard = ref.read(focusGuardProvider);
+    if (guard == null) return;
+    final DateTime? until;
+    try {
+      until = await guard.takeFocusRequest();
+    } on Object catch (e) {
+      debugPrint('focus: could not read the request: $e');
+      return;
+    }
+    if (until == null) return;
+    final now = DateTime.now();
+    final repo = ref.read(focusRepositoryProvider);
+    final length = until.difference(now);
+    if (length < const Duration(minutes: 1)) return;
+    if ((await repo.current()).phone.runningAt(now)) return;
+    final prefs = await repo.prefs();
+    await repo.start(
+      on: {DeviceKind.phone},
+      length: length,
+      blockApps: prefs.blockApps,
+      quiet: prefs.quiet,
+      strict: prefs.strict,
+      startedBy: ref.read(deviceNameProvider),
+      now: now,
+    );
   }
 
   @override

@@ -7,8 +7,11 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/providers.dart';
+import '../core/ui/formatters.dart';
 import '../features/alerts/application/alert_providers.dart';
 import '../features/alerts/domain/alert_sync.dart';
+import '../features/focus/application/focus_providers.dart';
+import '../features/sync/application/sync_providers.dart';
 import '../features/reminders/ui/reminder_editor.dart';
 import 'desktop_window.dart';
 
@@ -126,8 +129,10 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
 
   /// Quitting stops reminders on this laptop until the app opens again.
   /// Queued toasts are withdrawn, since their buttons need the app running;
-  /// the next start queues them again.
+  /// the next start queues them again. During a strict focus session the
+  /// user is asked first, and the phone is told.
   Future<void> _quit() async {
+    if (!await _mayQuitDuringFocus()) return;
     try {
       await ref.read(localNotificationsProvider)?.plugin.cancelAll();
     } on Object catch (e) {
@@ -136,6 +141,42 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
     await trayManager.destroy();
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
+  }
+
+  Future<bool> _mayQuitDuringFocus() async {
+    final session = (await ref.read(focusRepositoryProvider).current()).laptop;
+    if (!session.strict || !session.runningAt(DateTime.now())) return true;
+    await showDesktopWindow();
+    if (!mounted) return false;
+    final until = formatTime(context, session.endsAt!.toLocal());
+    final quit = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        icon: const Icon(Icons.timer_rounded),
+        title: const Text('Strict focus is on'),
+        content: Text(
+          'It runs until $until. If you quit, this laptop stops blocking '
+          'distractions and your phone is told.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: const Text('Quit anyway'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: const Text('Keep focusing'),
+          ),
+        ],
+      ),
+    );
+    if (quit != true) return false;
+    await ref.read(syncServiceProvider)?.tellOthers({
+      'kind': 'left',
+      'device': ref.read(deviceNameProvider),
+      'endsAt': session.endsAt!.millisecondsSinceEpoch,
+    });
+    return true;
   }
 
   @override

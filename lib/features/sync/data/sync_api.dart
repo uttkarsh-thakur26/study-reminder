@@ -30,9 +30,10 @@ abstract interface class SyncApi {
   /// Saves this phone's push token, or clears it with null.
   Future<void> setPushToken(String secret, String? token);
 
-  /// Asks the server to wake the other devices about the focus session it
-  /// now has. Best effort: may do nothing when push is not set up.
-  Future<void> wakeOtherDevices(String secret);
+  /// Asks the server to wake the other devices about the phone's focus
+  /// session it now has, and to hand them [notice] to show. Best effort: may
+  /// do nothing when push is not set up.
+  Future<void> wakeOtherDevices(String secret, {Map<String, Object?>? notice});
 
   /// Fires when another device changes something in [spaceId]. May never
   /// fire (no connection); the app also syncs on its own schedule.

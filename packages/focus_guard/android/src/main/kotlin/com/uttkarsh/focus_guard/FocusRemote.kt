@@ -3,7 +3,9 @@ package com.uttkarsh.focus_guard
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.google.firebase.FirebaseApp
+import org.json.JSONException
 import org.json.JSONObject
 
 /**
@@ -26,6 +28,19 @@ object FocusRemote {
         val app = context.applicationContext
         val state = sessionForPhone(app, focus, System.currentTimeMillis())
         main.post { FocusController.apply(app, version, state, pushed = true) }
+    }
+
+    /** Shows [raw], something another device asked this phone to tell the user. */
+    fun notice(context: Context, raw: String) {
+        val notice = try {
+            JSONObject(raw)
+        } catch (e: JSONException) {
+            Log.w("FocusGuard", "Unreadable notice", e)
+            return
+        }
+        if (notice.optString("kind") != "left") return
+        val app = context.applicationContext
+        main.post { FocusController.postLeft(app, notice.optString("device"), notice.optLong("endsAt")) }
     }
 
     /** The session to enforce here, or null when it does not run on the phone. */

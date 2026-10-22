@@ -22,6 +22,7 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.PluginRegistry
 import java.io.ByteArrayOutputStream
 
 /**
@@ -29,11 +30,19 @@ import java.io.ByteArrayOutputStream
  * background sync task's, so a session started on another device can be
  * enforced without the app open.
  */
-class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+class FocusGuardPlugin :
+    FlutterPlugin,
+    MethodChannel.MethodCallHandler,
+    ActivityAware,
+    PluginRegistry.NewIntentListener {
     private lateinit var context: Context
     private lateinit var channel: MethodChannel
     private lateinit var flips: EventChannel
     private var activity: Activity? = null
+    private var binding: ActivityPluginBinding? = null
+
+    // A session the user asked for from a notification, until Dart takes it.
+    private var focusUntil = 0L
     private var flipDetector: FlipDetector? = null
     private val main = Handler(Looper.getMainLooper())
 
@@ -65,19 +74,40 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        activity = binding.activity
+        attach(binding)
+        read(binding.activity.intent)
     }
 
-    override fun onDetachedFromActivityForConfigChanges() {
+    override fun onDetachedFromActivityForConfigChanges() = detach()
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = attach(binding)
+
+    override fun onDetachedFromActivity() = detach()
+
+    override fun onNewIntent(intent: Intent): Boolean {
+        read(intent)
+        return false
+    }
+
+    private fun attach(binding: ActivityPluginBinding) {
+        this.binding = binding
+        activity = binding.activity
+        binding.addOnNewIntentListener(this)
+    }
+
+    private fun detach() {
+        binding?.removeOnNewIntentListener(this)
+        binding = null
         activity = null
     }
 
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        activity = binding.activity
-    }
-
-    override fun onDetachedFromActivity() {
-        activity = null
+    /** Keeps a request from the notification, once: the intent may be seen again. */
+    private fun read(intent: Intent?) {
+        val until = intent?.getLongExtra(FocusController.EXTRA_FOCUS_UNTIL, 0L) ?: 0L
+        if (until == 0L) return
+        intent?.removeExtra(FocusController.EXTRA_FOCUS_UNTIL)
+        focusUntil = until
+        FocusController.notifications(context).cancel(FocusController.LEFT_NOTIFICATION)
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -102,6 +132,11 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
                 result.success(null)
             }
             "pushToken" -> pushToken(result)
+            "takeFocusRequest" -> {
+                val until = focusUntil
+                focusUntil = 0L
+                result.success(if (until == 0L) null else until)
+            }
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }

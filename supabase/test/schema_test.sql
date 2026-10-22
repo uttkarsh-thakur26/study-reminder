@@ -156,8 +156,10 @@ end $$;
 do $$ begin
   perform public.set_push_token('phone-secret-0123456789abcdef01234567890', 'token-1');
   perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
-    {"kind":"focus","id":"current","fields":{"active":true,"ends_at":5000},
-     "clock":{"active":"000000000000300-0000-l","ends_at":"000000000000310-0000-l"}}]');
+    {"kind":"focus","id":"phone","fields":{"active":true,"ends_at":5000},
+     "clock":{"active":"000000000000300-0000-l","ends_at":"000000000000310-0000-l"}},
+    {"kind":"focus","id":"laptop","fields":{"active":false},
+     "clock":{"active":"000000000000320-0000-l"}}]');
   begin
     perform public.focus_push_targets('laptop-secret-0123456789abcdef0123456789');
     raise exception 'anon could read push tokens';

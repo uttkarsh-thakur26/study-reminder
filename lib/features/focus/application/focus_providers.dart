@@ -20,7 +20,7 @@ final focusRepositoryProvider = Provider<FocusRepository>(
       FocusRepository(ref.watch(databaseProvider), ref.watch(hlcClockProvider)),
 );
 
-final focusSessionProvider = StreamProvider<FocusSession>(
+final focusSessionsProvider = StreamProvider<FocusSessions>(
   (ref) => ref.watch(focusRepositoryProvider).watch(),
 );
 

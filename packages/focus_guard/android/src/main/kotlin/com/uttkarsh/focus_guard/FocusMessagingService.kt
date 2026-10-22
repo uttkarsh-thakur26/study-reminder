@@ -10,8 +10,11 @@ import org.json.JSONObject
 class FocusMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         if (message.data["type"] != "focus") return
+        message.data["notice"]?.let { FocusRemote.notice(this, it) }
+        val raw = message.data["focus"]
+        if (raw.isNullOrEmpty()) return
         val focus = try {
-            JSONObject(message.data["focus"] ?: return)
+            JSONObject(raw)
         } catch (e: JSONException) {
             Log.w("FocusGuard", "Unreadable focus message", e)
             return

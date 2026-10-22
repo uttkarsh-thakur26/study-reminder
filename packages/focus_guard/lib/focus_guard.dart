@@ -137,6 +137,14 @@ class FocusGuard {
         'blockGames': blockGames,
       });
 
+  /// When the user tapped "Focus here" on the note that the laptop quit a
+  /// strict session: the end of the session they want on this phone. Null
+  /// otherwise. Given once.
+  Future<DateTime?> takeFocusRequest() async {
+    final ms = await _channel.invokeMethod<int>('takeFocusRequest');
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
   /// This phone's push token, so other devices can wake it. Null when the app
   /// was built without Firebase or the phone has no Google Play services.
   Future<String?> pushToken() => _channel.invokeMethod<String>('pushToken');

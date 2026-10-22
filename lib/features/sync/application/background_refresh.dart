@@ -68,7 +68,7 @@ void backgroundRefresh() {
       try {
         final focus = FocusRepository(core.db, core.clock);
         await AndroidFocusEnforcer().apply(
-          await focus.current(),
+          (await focus.current()).phone,
           await focus.prefs(),
         );
       } on Object catch (e) {

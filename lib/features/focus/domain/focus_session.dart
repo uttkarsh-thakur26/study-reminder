@@ -9,12 +9,21 @@ enum FocusTarget {
   bool includes(DeviceKind kind) =>
       this == both || (this == phone) == (kind == DeviceKind.phone);
 
+  Set<DeviceKind> get kinds => {
+    for (final k in DeviceKind.values)
+      if (includes(k)) k,
+  };
+
+  static FocusTarget only(DeviceKind kind) =>
+      kind == DeviceKind.phone ? phone : laptop;
+
   static FocusTarget parse(String? name) =>
       values.where((t) => t.name == name).firstOrNull ?? both;
 }
 
-/// The one focus session shared by the paired devices. Starting it on either
-/// device starts it on every device its [target] includes.
+/// The focus session of one device, the phone or the laptop. Each has its
+/// own, so both can focus separately, and either device can start, extend or
+/// stop the other's. Starting on both gives each the same session.
 class FocusSession {
   const FocusSession({
     this.active = false,
@@ -28,8 +37,10 @@ class FocusSession {
     this.version = '',
   });
 
-  /// Its record id. There is only ever one session.
-  static const id = 'current';
+  /// The record id of [kind]'s session.
+  static String idFor(DeviceKind kind) => kind.name;
+
+  static final ids = {for (final k in DeviceKind.values) idFor(k)};
 
   static const idle = FocusSession();
 
@@ -56,6 +67,14 @@ class FocusSession {
   /// text in the order the edits were made on every device. Empty for a
   /// session never saved here. Not a synced field.
   final String version;
+
+  /// Started together with [other], on both devices, and still alike.
+  bool sameAs(FocusSession other) =>
+      startedAt == other.startedAt &&
+      endsAt == other.endsAt &&
+      blockApps == other.blockApps &&
+      quiet == other.quiet &&
+      strict == other.strict;
 
   bool runningAt(DateTime now) =>
       active && endsAt != null && now.isBefore(endsAt!);
@@ -115,5 +134,41 @@ class FocusSession {
       strict: f['strict'] as bool? ?? false,
       startedBy: f['started_by'] as String? ?? '',
     );
+  }
+}
+
+/// The phone's and the laptop's sessions.
+class FocusSessions {
+  const FocusSessions({
+    this.phone = FocusSession.idle,
+    this.laptop = FocusSession.idle,
+  });
+
+  static const idle = FocusSessions();
+
+  final FocusSession phone;
+  final FocusSession laptop;
+
+  FocusSession of(DeviceKind kind) => kind == DeviceKind.phone ? phone : laptop;
+
+  /// The devices with a session running.
+  Set<DeviceKind> busyAt(DateTime now) => {
+    for (final k in DeviceKind.values)
+      if (of(k).runningAt(now)) k,
+  };
+
+  /// Where a session the user wants on [wanted] can start: the devices among
+  /// those with none running. With no paired device, only [here].
+  Set<DeviceKind> startable(
+    FocusTarget wanted, {
+    required DeviceKind here,
+    required bool paired,
+    required DateTime now,
+  }) {
+    final free = (paired ? DeviceKind.values.toSet() : {here}).difference(
+      busyAt(now),
+    );
+    final both = wanted.kinds.intersection(free);
+    return both.isNotEmpty ? both : free;
   }
 }

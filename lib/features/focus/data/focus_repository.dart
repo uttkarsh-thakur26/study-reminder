@@ -3,32 +3,44 @@ import 'package:drift/drift.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/sync/hlc.dart';
 import '../../../core/sync/stamped_write.dart';
+import '../../reminders/domain/reminder.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 
-/// The shared focus session, and this device's Focus settings.
+/// The phone's and the laptop's focus sessions, and this device's Focus
+/// settings.
 class FocusRepository {
   FocusRepository(this._db, this._clock);
 
   final AppDatabase _db;
   final HlcClock _clock;
 
-  Stream<FocusSession> watch() => _query().watchSingleOrNull().map(
-    (row) => row == null ? FocusSession.idle : focusSessionFromRow(row),
-  );
+  Stream<FocusSessions> watch() => _query().watch().map(_sessions);
 
-  Future<FocusSession> current() async {
-    final row = await _query().getSingleOrNull();
-    return row == null ? FocusSession.idle : focusSessionFromRow(row);
-  }
+  Future<FocusSessions> current() async => _sessions(await _query().get());
 
   SimpleSelectStatement<$FocusSessionsTable, FocusSessionRow> _query() =>
-      _db.select(_db.focusSessions)..where((f) => f.id.equals(FocusSession.id));
+      _db.select(_db.focusSessions)..where((f) => f.id.isIn(FocusSession.ids));
 
-  /// Starts a session of [length] from [now], replacing any other.
+  static FocusSessions _sessions(List<FocusSessionRow> rows) {
+    FocusSession of(DeviceKind kind) {
+      final row = rows
+          .where((r) => r.id == FocusSession.idFor(kind))
+          .firstOrNull;
+      return row == null ? FocusSession.idle : focusSessionFromRow(row);
+    }
+
+    return FocusSessions(
+      phone: of(DeviceKind.phone),
+      laptop: of(DeviceKind.laptop),
+    );
+  }
+
+  /// Starts a session of [length] from [now] on each of [on], replacing
+  /// what runs there. Devices started together get the same session.
   Future<void> start({
+    required Set<DeviceKind> on,
     required Duration length,
-    required FocusTarget target,
     required bool blockApps,
     required bool quiet,
     required bool strict,
@@ -39,12 +51,13 @@ class FocusRepository {
     // Stamps every field: a new session replaces the old one whole, so two
     // starts made at once never merge into a mix of both.
     return _update(
+      on,
       whole: true,
-      (_) => FocusSession(
+      (kind, _) => FocusSession(
         active: true,
         startedAt: at,
         endsAt: at.add(length),
-        target: target,
+        target: FocusTarget.only(kind),
         blockApps: blockApps,
         quiet: quiet,
         strict: strict,
@@ -53,32 +66,40 @@ class FocusRepository {
     );
   }
 
-  Future<void> stop() => _update((s) => s.copyWith(active: false));
+  Future<void> stop(Set<DeviceKind> on) =>
+      _update(on, (_, s) => s.copyWith(active: false));
 
-  /// Moves the end of a running session by [by].
-  Future<void> extend(Duration by, {DateTime? now}) => _update((s) {
-    final at = (now ?? DateTime.now()).toUtc();
-    if (!s.runningAt(at)) return s;
-    return s.copyWith(endsAt: s.endsAt!.add(by));
-  });
+  /// Moves the end of the sessions running on [on] by [by].
+  Future<void> extend(Set<DeviceKind> on, Duration by, {DateTime? now}) =>
+      _update(on, (_, s) {
+        final at = (now ?? DateTime.now()).toUtc();
+        if (!s.runningAt(at)) return s;
+        return s.copyWith(endsAt: s.endsAt!.add(by));
+      });
 
   Future<void> _update(
-    FocusSession Function(FocusSession current) change, {
+    Set<DeviceKind> on,
+    FocusSession Function(DeviceKind kind, FocusSession current) change, {
     bool whole = false,
   }) => _db.transaction(() async {
-    final existing = await _query().getSingleOrNull();
-    final current = existing == null ? null : focusSessionFromRow(existing);
-    final after = change(current ?? FocusSession.idle).toFields();
-    final write = stampLocalEdit(
-      before: whole ? null : current?.toFields(),
-      beforeClock: existing?.fieldClock ?? '',
-      after: after,
-      clock: _clock,
-    );
-    if (write == null) return;
-    await _db
-        .into(_db.focusSessions)
-        .insertOnConflictUpdate(focusSessionCompanion(FocusSession.id, write));
+    for (final kind in on) {
+      final id = FocusSession.idFor(kind);
+      final existing = await (_db.select(
+        _db.focusSessions,
+      )..where((f) => f.id.equals(id))).getSingleOrNull();
+      final current = existing == null ? null : focusSessionFromRow(existing);
+      final after = change(kind, current ?? FocusSession.idle).toFields();
+      final write = stampLocalEdit(
+        before: whole ? null : current?.toFields(),
+        beforeClock: existing?.fieldClock ?? '',
+        after: after,
+        clock: _clock,
+      );
+      if (write == null) continue;
+      await _db
+          .into(_db.focusSessions)
+          .insertOnConflictUpdate(focusSessionCompanion(id, write));
+    }
   });
 
   Stream<FocusPrefs> watchPrefs() =>

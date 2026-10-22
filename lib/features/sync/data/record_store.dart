@@ -113,9 +113,9 @@ class RecordStore {
                   r.hlc,
                 );
         },
-        // Only the one shared session is stored.
+        // Only the phone's and the laptop's sessions are stored.
         write: (id, w, dirty) async {
-          if (id != FocusSession.id) return;
+          if (!FocusSession.ids.contains(id)) return;
           await _db
               .into(_db.focusSessions)
               .insertOnConflictUpdate(
