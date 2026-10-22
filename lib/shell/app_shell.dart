@@ -7,7 +7,7 @@ import '../features/reminders/ui/reminder_editor.dart';
 import '../features/reminders/ui/today_screen.dart';
 import '../features/reminders/ui/upcoming_screen.dart';
 import '../features/settings/ui/settings_screen.dart';
-import '../features/subjects/ui/subjects_screen.dart';
+import '../features/stats/ui/study_screen.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -24,7 +24,7 @@ const _destinations = [
     Icons.calendar_month_rounded,
   ),
   _Destination('Focus', Icons.timer_outlined, Icons.timer_rounded),
-  _Destination('Subjects', Icons.menu_book_outlined, Icons.menu_book_rounded),
+  _Destination('Study', Icons.insights_outlined, Icons.insights_rounded),
   _Destination('Settings', Icons.settings_outlined, Icons.settings_rounded),
 ];
 
@@ -46,7 +46,7 @@ class _AppShellState extends State<AppShell> {
     TodayScreen(quickAddFocus: _quickAddFocus),
     const UpcomingScreen(),
     const FocusScreen(),
-    const SubjectsScreen(),
+    const StudyScreen(),
     const SettingsScreen(),
   ];
 

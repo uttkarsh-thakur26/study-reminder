@@ -7,12 +7,16 @@ import '../../reminders/application/reminder_providers.dart';
 import '../domain/subject.dart';
 import 'subject_editor.dart';
 
-class SubjectsScreen extends ConsumerWidget {
-  const SubjectsScreen({super.key});
+/// The subjects, each with its study time this week and its reminders.
+/// Part of the Study page.
+class SubjectsSection extends ConsumerWidget {
+  const SubjectsSection({super.key, this.studied = const {}});
+
+  /// Study time this week per subject id.
+  final Map<String?, Duration> studied;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final subjects = ref.watch(subjectsProvider);
     final reminders = ref.watch(remindersProvider).value ?? const [];
     final counts = <String, int>{};
@@ -20,76 +24,65 @@ class SubjectsScreen extends ConsumerWidget {
       final id = r.subjectId;
       if (id != null) counts[id] = (counts[id] ?? 0) + 1;
     }
+    final most = studied.values.fold(Duration.zero, (a, b) => a > b ? a : b);
 
-    return SafeArea(
-      bottom: false,
-      child: PageBody(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(Gap.l, Gap.xl, Gap.l, 96),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Subjects',
-                    style: theme.textTheme.headlineMedium,
-                  ),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: () => showSubjectEditor(context),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add'),
-                ),
-              ],
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              'Colour-code reminders by subject. Type #name in quick add to tag one.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+    return subjects.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => Text('$e'),
+      data: (list) => list.isEmpty
+          ? EmptyState(
+              icon: Icons.menu_book_rounded,
+              title: 'No subjects yet',
+              message:
+                  'Add the subjects you are studying, like Physics or History. '
+                  'Type #name in quick add to tag a reminder.',
+              action: FilledButton(
+                onPressed: () => showSubjectEditor(context),
+                child: const Text('Add a subject'),
+              ),
+            )
+          : Card(
+              child: Column(
+                children: [
+                  for (final (i, s) in list.indexed) ...[
+                    if (i > 0) const Divider(indent: 64),
+                    _SubjectRow(
+                      subject: s,
+                      count: counts[s.id] ?? 0,
+                      studied: studied[s.id] ?? Duration.zero,
+                      most: most,
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: Gap.l),
-            ...subjects.when(
-              loading: () => const [],
-              error: (e, _) => [Text('$e')],
-              data: (list) => list.isEmpty
-                  ? [
-                      EmptyState(
-                        icon: Icons.menu_book_rounded,
-                        title: 'No subjects yet',
-                        message: 'Add the subjects you are studying, like Physics or History.',
-                        action: FilledButton(
-                          onPressed: () => showSubjectEditor(context),
-                          child: const Text('Add a subject'),
-                        ),
-                      ),
-                    ]
-                  : [
-                      Card(
-                        child: Column(
-                          children: [
-                            for (final (i, s) in list.indexed) ...[
-                              if (i > 0) const Divider(indent: 64),
-                              _SubjectRow(subject: s, count: counts[s.id] ?? 0),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
+/// "1 h 20 min", "45 min".
+String formatStudyTime(Duration d) {
+  final minutes = d.inMinutes;
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h == 0) return '$m min';
+  return m == 0 ? '$h h' : '$h h $m min';
+}
+
 class _SubjectRow extends ConsumerWidget {
-  const _SubjectRow({required this.subject, required this.count});
+  const _SubjectRow({
+    required this.subject,
+    required this.count,
+    required this.studied,
+    required this.most,
+  });
 
   final Subject subject;
   final int count;
+  final Duration studied;
+
+  /// The most any subject was studied this week, for the bar.
+  final Duration most;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,7 +100,30 @@ class _SubjectRow extends ConsumerWidget {
         ),
       ),
       title: Text(subject.name),
-      subtitle: Text(count == 1 ? '1 reminder' : '$count reminders'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            [
+              if (studied > Duration.zero)
+                '${formatStudyTime(studied)} this week',
+              count == 1 ? '1 reminder' : '$count reminders',
+            ].join(' · '),
+          ),
+          if (studied > Duration.zero && most > Duration.zero) ...[
+            const SizedBox(height: Gap.xs),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: studied.inSeconds / most.inSeconds,
+                minHeight: 5,
+                color: Color(subject.color),
+                backgroundColor: Color(subject.color).withValues(alpha: 0.15),
+              ),
+            ),
+          ],
+        ],
+      ),
       onTap: () => showSubjectEditor(context, existing: subject),
       trailing: IconButton(
         tooltip: 'Delete subject',

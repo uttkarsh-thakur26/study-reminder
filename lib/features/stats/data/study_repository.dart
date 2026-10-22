@@ -27,23 +27,29 @@ class StudyRepository {
   }
 
   /// Removes a session from the stats on every device.
-  Future<void> delete(String id) => _db.transaction(() async {
-    final existing = await (_db.select(
-      _db.studySessions,
-    )..where((s) => s.id.equals(id))).getSingleOrNull();
-    if (existing == null) return;
-    final current = studySessionFromRow(existing).toFields();
-    final write = stampLocalEdit(
-      before: current,
-      beforeClock: existing.fieldClock,
-      after: {...current, 'deleted': true},
-      clock: _clock,
-    );
-    if (write == null) return;
-    await _db
-        .into(_db.studySessions)
-        .insertOnConflictUpdate(studySessionCompanion(id, write));
-  });
+  Future<void> delete(String id) => _setDeleted(id, true);
+
+  /// Puts back a session removed with [delete].
+  Future<void> restore(String id) => _setDeleted(id, false);
+
+  Future<void> _setDeleted(String id, bool deleted) =>
+      _db.transaction(() async {
+        final existing = await (_db.select(
+          _db.studySessions,
+        )..where((s) => s.id.equals(id))).getSingleOrNull();
+        if (existing == null) return;
+        final current = studySessionFromRow(existing).toFields();
+        final write = stampLocalEdit(
+          before: current,
+          beforeClock: existing.fieldClock,
+          after: {...current, 'deleted': deleted},
+          clock: _clock,
+        );
+        if (write == null) return;
+        await _db
+            .into(_db.studySessions)
+            .insertOnConflictUpdate(studySessionCompanion(id, write));
+      });
 
   /// Minutes of study a day needs to count towards the streak.
   Stream<int> watchGoalMinutes() => _db.watchSetting(goalKey).map(_goal);
