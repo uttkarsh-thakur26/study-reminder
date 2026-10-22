@@ -1,0 +1,166 @@
+name: Release
+
+# Push a tag like v1.2.0 to publish a release. See RELEASING.md.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, like 1.2.0. Its tag is made on the chosen branch if it does not exist yet.
+        required: true
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.47.7
+
+jobs:
+  version:
+    name: Check the version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then raw=$INPUT_VERSION; else raw=$REF_NAME; fi
+          version=${raw#v}
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Releases are numbered like 1.2.0, not '$raw'."
+            exit 1
+          fi
+          pubspec=$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml)
+          if [ "$pubspec" != "$version" ]; then
+            echo "::error::pubspec.yaml says $pubspec. Set it to $version and tag that commit."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Analyze and test
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    name: Android APK
+    needs: [version, test]
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/android-signing
+        with:
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          required: true
+      # The run number grows with every release, and so the versionCode,
+      # which Android needs to install an update.
+      - run: >-
+          flutter build apk --release
+          "--build-name=$VERSION" "--build-number=$GITHUB_RUN_NUMBER"
+          "--dart-define=APP_VERSION=$VERSION"
+      - run: mv build/app/outputs/flutter-apk/app-release.apk "StudyReminder-$VERSION.apk"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-android
+          path: StudyReminder-${{ env.VERSION }}.apk
+          retention-days: 7
+
+  windows:
+    name: Windows app
+    needs: [version, test]
+    runs-on: windows-2025
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - shell: pwsh
+        run: >-
+          flutter build windows --release
+          "--build-name=$env:VERSION" "--build-number=$env:GITHUB_RUN_NUMBER"
+          "--dart-define=APP_VERSION=$env:VERSION"
+      - id: package
+        uses: ./.github/actions/windows-package
+        with:
+          version: ${{ env.VERSION }}
+          zip-name: StudyReminder-${{ env.VERSION }}-windows.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: |
+            StudyReminder-${{ env.VERSION }}-windows.zip
+            ${{ steps.package.outputs.installer }}
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    needs: [version, android, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          files=(
+            "dist/StudyReminder-$VERSION.apk"
+            "dist/StudyReminder-Setup-$VERSION.exe"
+            "dist/StudyReminder-$VERSION-windows.zip"
+          )
+          ls -l "${files[@]}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            # A re-run: replace the files of the release made before.
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" \
+              --title "Study Reminder $VERSION" \
+              --generate-notes \
+              --target "$GITHUB_SHA"
+          fi
