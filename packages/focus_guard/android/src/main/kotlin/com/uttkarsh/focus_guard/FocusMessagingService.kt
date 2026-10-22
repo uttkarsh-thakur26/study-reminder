@@ -16,7 +16,7 @@ class FocusMessagingService : FirebaseMessagingService() {
             Log.w("FocusGuard", "Unreadable focus message", e)
             return
         }
-        FocusRemote.apply(this, focus)
+        FocusRemote.apply(this, focus, message.data["version"] ?: "")
     }
 
     // The app asks Firebase for the token itself and sends it on its next

@@ -36,7 +36,10 @@ class FocusRepository {
     DateTime? now,
   }) {
     final at = (now ?? DateTime.now()).toUtc();
+    // Stamps every field: a new session replaces the old one whole, so two
+    // starts made at once never merge into a mix of both.
     return _update(
+      whole: true,
       (_) => FocusSession(
         active: true,
         startedAt: at,
@@ -59,24 +62,24 @@ class FocusRepository {
     return s.copyWith(endsAt: s.endsAt!.add(by));
   });
 
-  Future<void> _update(FocusSession Function(FocusSession current) change) =>
-      _db.transaction(() async {
-        final existing = await _query().getSingleOrNull();
-        final current = existing == null ? null : focusSessionFromRow(existing);
-        final after = change(current ?? FocusSession.idle).toFields();
-        final write = stampLocalEdit(
-          before: current?.toFields(),
-          beforeClock: existing?.fieldClock ?? '',
-          after: after,
-          clock: _clock,
-        );
-        if (write == null) return;
-        await _db
-            .into(_db.focusSessions)
-            .insertOnConflictUpdate(
-              focusSessionCompanion(FocusSession.id, write),
-            );
-      });
+  Future<void> _update(
+    FocusSession Function(FocusSession current) change, {
+    bool whole = false,
+  }) => _db.transaction(() async {
+    final existing = await _query().getSingleOrNull();
+    final current = existing == null ? null : focusSessionFromRow(existing);
+    final after = change(current ?? FocusSession.idle).toFields();
+    final write = stampLocalEdit(
+      before: whole ? null : current?.toFields(),
+      beforeClock: existing?.fieldClock ?? '',
+      after: after,
+      clock: _clock,
+    );
+    if (write == null) return;
+    await _db
+        .into(_db.focusSessions)
+        .insertOnConflictUpdate(focusSessionCompanion(FocusSession.id, write));
+  });
 
   Stream<FocusPrefs> watchPrefs() =>
       _db.watchSetting(FocusPrefs.key).map(FocusPrefs.decode);
@@ -100,6 +103,7 @@ FocusSession focusSessionFromRow(FocusSessionRow row) {
     quiet: row.quiet,
     strict: row.strict,
     startedBy: row.startedBy,
+    version: row.hlc,
   );
 }
 

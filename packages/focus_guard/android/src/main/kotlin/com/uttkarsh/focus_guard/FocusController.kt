@@ -28,7 +28,45 @@ object FocusController {
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
 
+    /** When the session service was last asked to start; 0 once it has. */
+    @Volatile
+    var serviceRequestedAt = 0L
+
+    /**
+     * Applies the shared session at [version], whether the app or a push
+     * brought it. Every change to the session has a newer version, so news
+     * older than what this phone last acted on is ignored, whatever order it
+     * arrives in. [state] is null when the session does not run on this
+     * phone: stopped, or only for the laptop.
+     */
+    @Synchronized
+    fun apply(context: Context, version: String, state: FocusState?, pushed: Boolean) {
+        if (version.isEmpty()) return
+        val last = FocusState.lastVersion(context)
+        val running = FocusState.load(context)
+        if (last != null && version < last) return
+        if (version == last) {
+            // The same news again; only this phone's block list can differ.
+            if (state != null && running != null &&
+                (running.packages != state.packages || running.blockGames != state.blockGames)
+            ) {
+                val updated = running.copy(packages = state.packages, blockGames = state.blockGames)
+                FocusState.save(context, updated)
+                startService(context, updated, retry = true)
+            }
+            return
+        }
+        FocusState.setLastVersion(context, version)
+        if (state != null && !state.isOver()) {
+            start(context, state)
+        } else if (running != null) {
+            finish(context, done = false)
+            if (pushed) postStopped(context)
+        }
+    }
+
     /** Saves [state] and enforces it. Safe to call again with the same state. */
+    @Synchronized
     fun start(context: Context, state: FocusState) {
         if (state.isOver()) {
             finish(context, done = false)
@@ -41,19 +79,24 @@ object FocusController {
     }
 
     /** Enforces the saved session again, after a reboot or an app update. */
+    @Synchronized
     fun restore(context: Context) {
         val state = FocusState.load(context) ?: return
         if (state.isOver()) finish(context, done = true) else start(context, state)
     }
 
     /** Ends the session. [done] posts "Focus done", for a session that ran out. */
+    @Synchronized
     fun finish(context: Context, done: Boolean) {
         val state = FocusState.load(context)
         FocusState.clear(context)
         applyQuiet(context, false)
         cancelAlarm(context, ACTION_END)
         cancelAlarm(context, ACTION_START)
-        context.stopService(Intent(context, FocusService::class.java))
+        // Stopping a service Android is still starting crashes the app; the
+        // service stops itself instead once it starts and finds no session.
+        val starting = System.currentTimeMillis() - serviceRequestedAt < 10_000
+        if (!starting) context.stopService(Intent(context, FocusService::class.java))
         notifications(context).cancel(SESSION_NOTIFICATION)
         if (done && state != null) postDone(context, state)
     }
@@ -68,6 +111,7 @@ object FocusController {
     fun startService(context: Context, state: FocusState, retry: Boolean) {
         try {
             context.startForegroundService(Intent(context, FocusService::class.java))
+            serviceRequestedAt = System.currentTimeMillis()
             cancelAlarm(context, ACTION_START)
         } catch (e: Exception) {
             if (!isStartNotAllowed(e)) throw e

@@ -25,6 +25,7 @@ class FocusSession {
     this.quiet = true,
     this.strict = false,
     this.startedBy = '',
+    this.version = '',
   });
 
   /// Its record id. There is only ever one session.
@@ -50,6 +51,11 @@ class FocusSession {
 
   /// The name of the device it was started on.
   final String startedBy;
+
+  /// Which edit of the session this is: its newest field stamp. Sorts as
+  /// text in the order the edits were made on every device. Empty for a
+  /// session never saved here. Not a synced field.
+  final String version;
 
   bool runningAt(DateTime now) =>
       active && endsAt != null && now.isBefore(endsAt!);

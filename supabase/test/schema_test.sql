@@ -152,24 +152,43 @@ begin
   end if;
 end $$;
 
--- Push tokens: the laptop gets the phone's token and the focus session.
+-- Push tokens: only the focus-push function can read them.
+do $$ begin
+  perform public.set_push_token('phone-secret-0123456789abcdef01234567890', 'token-1');
+  perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
+    {"kind":"focus","id":"current","fields":{"active":true,"ends_at":5000},
+     "clock":{"active":"000000000000300-0000-l","ends_at":"000000000000310-0000-l"}}]');
+  begin
+    perform public.focus_push_targets('laptop-secret-0123456789abcdef0123456789');
+    raise exception 'anon could read push tokens';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+grant usage on schema public to service_role;
+set role service_role;
 do $$
 declare
   res jsonb;
 begin
-  perform public.set_push_token('phone-secret-0123456789abcdef01234567890', 'token-1');
-  perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
-    {"kind":"focus","id":"current","fields":{"active":true,"ends_at":5000},
-     "clock":{"active":"000000000000300-0000-l","ends_at":"000000000000300-0000-l"}}]');
   res := public.focus_push_targets('laptop-secret-0123456789abcdef0123456789');
   if res->'tokens' <> '["token-1"]'::jsonb then raise exception 'tokens %', res->'tokens'; end if;
   if (res->'focus'->>'active')::boolean is not true then raise exception 'focus %', res->'focus'; end if;
+  if res->>'version' <> '000000000000310-0000-l' then raise exception 'version %', res->>'version'; end if;
   -- A device never gets its own token.
   if public.focus_push_targets('phone-secret-0123456789abcdef01234567890')->'tokens' <> '[]'::jsonb then
     raise exception 'phone was sent its own token';
   end if;
-  -- Clearing the token stops the pushes.
-  perform public.set_push_token('phone-secret-0123456789abcdef01234567890', '');
+end $$;
+
+-- Clearing the token stops the pushes.
+reset role;
+set role anon;
+select public.set_push_token('phone-secret-0123456789abcdef01234567890', '');
+reset role;
+set role service_role;
+do $$ begin
   if public.focus_push_targets('laptop-secret-0123456789abcdef0123456789')->'tokens' <> '[]'::jsonb then
     raise exception 'cleared token still sent';
   end if;
@@ -182,6 +201,8 @@ begin
   exception when sqlstate 'SR429' then null;
   end;
 end $$;
+reset role;
+set role anon;
 
 -- Leaving takes the phone to a fresh, empty space.
 do $$

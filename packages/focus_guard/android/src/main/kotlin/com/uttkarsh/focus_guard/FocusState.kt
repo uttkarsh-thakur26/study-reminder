@@ -75,6 +75,16 @@ data class FocusState(
                 .apply()
         }
 
+        /**
+         * The version of the shared session this phone last acted on, kept
+         * after the session ends so older news cannot bring it back.
+         */
+        fun lastVersion(context: Context): String? = prefs(context).getString("version", null)
+
+        fun setLastVersion(context: Context, version: String) {
+            prefs(context).edit().putString("version", version).apply()
+        }
+
         /** Whether this app turned Do Not Disturb on, so only then it turns it off. */
         fun quietedByUs(context: Context) = prefs(context).getBoolean("quietedByUs", false)
 

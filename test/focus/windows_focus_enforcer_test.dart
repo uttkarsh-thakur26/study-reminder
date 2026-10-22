@@ -18,8 +18,14 @@ class _FakeWindows implements DesktopWindows {
   @override
   void close(int handle) => actions.add('close $handle');
 
+  /// False acts out a modifier key held by the user.
+  bool tabsClose = true;
+
   @override
-  void closeTab(int handle) => actions.add('tab $handle');
+  bool closeTab(int handle) {
+    if (tabsClose) actions.add('tab $handle');
+    return tabsClose;
+  }
 
   @override
   List<String> openPrograms() => const [];
@@ -114,5 +120,21 @@ void main() {
     enforcer.check();
     expect(windows.actions, isEmpty);
     expect(enforcer.watching, isFalse);
+  });
+
+  test('a tab it could not close is tried again without a notice', () async {
+    await enforcer.apply(session(), prefs);
+    windows.front = const DesktopWindow(
+      1,
+      r'C:\x\chrome.exe',
+      'Song - YouTube',
+    );
+    windows.tabsClose = false;
+    enforcer.check();
+    expect(notices, isEmpty);
+    windows.tabsClose = true;
+    enforcer.check();
+    expect(windows.actions, ['tab 1']);
+    expect(notices, ['YouTube']);
   });
 }

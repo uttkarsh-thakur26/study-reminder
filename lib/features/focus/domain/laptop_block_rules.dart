@@ -64,7 +64,11 @@ class LaptopBlockRules {
   }
 
   static bool _titleShows(String title, String site, String keyword) {
-    if (title.contains(site)) return true;
+    // The address itself, but not inside a longer one: x.com is not netflix.com.
+    final address = RegExp(
+      '(^|[^a-z0-9.-])${RegExp.escape(site)}(\$|[^a-z0-9-])',
+    );
+    if (address.hasMatch(title)) return true;
     if (keyword.length <= 2) {
       // Too short to look for on its own: X titles end in " / X".
       return RegExp('[/|]\\s${RegExp.escape(keyword)}(\\s|\$)').hasMatch(title);

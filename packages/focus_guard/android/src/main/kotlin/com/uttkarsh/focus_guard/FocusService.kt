@@ -60,6 +60,7 @@ class FocusService : Service() {
         } else {
             startForeground(FocusController.SESSION_NOTIFICATION, notification)
         }
+        FocusController.serviceRequestedAt = 0L
         if (current == null || current.isOver()) {
             if (current != null) FocusController.finish(this, done = true)
             stopSelf()

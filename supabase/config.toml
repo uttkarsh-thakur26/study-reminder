@@ -1,0 +1,6 @@
+# Settings for deploying with the Supabase CLI. The app's own functions check
+# the device secret, so the gateway must not ask for a signed-in user.
+project_id = "study-reminder"
+
+[functions.focus-push]
+verify_jwt = false

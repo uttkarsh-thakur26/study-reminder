@@ -481,6 +481,48 @@ void main() {
       expect((await laptop.focus.current()).active, isFalse);
     });
 
+    test('a failed pull after the upload still wakes the phone', () async {
+      phone.token = 'phone-token';
+      await pair();
+      await startOn(laptop);
+      api.failPulls = 1;
+      await expectLater(laptop.sync.sync(), throwsA(isA<SyncUnavailable>()));
+      expect(api.wakes, hasLength(1));
+    });
+
+    test('two starts made at once never mix', () async {
+      await pair();
+      // A plain session both devices know, stopped.
+      await startOn(phone);
+      await phone.focus.stop();
+      await phone.sync.sync();
+      await laptop.sync.sync();
+      // Offline, each starts its own kind of session.
+      await laptop.focus.start(
+        length: const Duration(minutes: 50),
+        target: FocusTarget.both,
+        blockApps: true,
+        quiet: true,
+        strict: true,
+        startedBy: 'Laptop',
+        now: DateTime.fromMillisecondsSinceEpoch(tick(), isUtc: true),
+      );
+      await startOn(phone);
+      await laptop.sync.sync();
+      await phone.sync.sync();
+      await laptop.sync.sync();
+      final a = await laptop.focus.current();
+      final b = await phone.focus.current();
+      expect(a.version, b.version);
+      expect(b.startedBy, 'Pixel', reason: 'the later start wins');
+      expect(
+        b.strict,
+        isFalse,
+        reason: "nothing of the laptop's start is left",
+      );
+      expect(b.length, const Duration(minutes: 25));
+    });
+
     test('other edits do not wake anyone', () async {
       phone.token = 'phone-token';
       await pair();

@@ -24,8 +24,10 @@ abstract interface class DesktopWindows {
   /// Asks the window to close, as its close button would.
   void close(int handle);
 
-  /// Closes the browser tab in front (Ctrl+W), if [handle] is still in front.
-  void closeTab(int handle);
+  /// Closes the browser tab in front (Ctrl+W), if [handle] is still in front
+  /// and no key the user holds would change the shortcut. False when it did
+  /// nothing, to try again on the next check.
+  bool closeTab(int handle);
 
   /// Programs with a window open now, for picking what to block.
   List<String> openPrograms();
@@ -38,6 +40,7 @@ class Win32Windows implements DesktopWindows {
   final int _ownPid;
 
   static const _vkW = 0x57;
+  static const _modifiers = [VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN];
 
   /// Shell parts that have windows but are not programs anyone would block.
   static const _shell = {
@@ -103,9 +106,13 @@ class Win32Windows implements DesktopWindows {
   void close(int handle) => PostMessage(handle, WM_CLOSE, 0, 0);
 
   @override
-  void closeTab(int handle) {
+  bool closeTab(int handle) {
     // Checked again right before, so the keys never land in another window.
-    if (GetForegroundWindow() != handle) return;
+    if (GetForegroundWindow() != handle) return false;
+    // With Shift held, Ctrl+W would close the whole window.
+    for (final key in _modifiers) {
+      if (GetAsyncKeyState(key) & 0x8000 != 0) return false;
+    }
     final inputs = calloc<INPUT>(4);
     try {
       void key(int i, int vk, {bool up = false}) {
@@ -118,7 +125,7 @@ class Win32Windows implements DesktopWindows {
       key(1, _vkW);
       key(2, _vkW, up: true);
       key(3, VK_CONTROL, up: true);
-      SendInput(4, inputs, sizeOf<INPUT>());
+      return SendInput(4, inputs, sizeOf<INPUT>()) == 4;
     } finally {
       free(inputs);
     }

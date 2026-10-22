@@ -2,9 +2,9 @@
 // starts, changes or stops, so a phone with the app closed reacts at once.
 //
 // The app calls it with {"secret": "<device secret>"} right after it pushes
-// the focus session. The function asks the database, the same way the app
-// does, for the other devices' push tokens and the session, then sends each
-// device a high-priority Firebase data message.
+// the focus session. The function asks the database for the other devices'
+// push tokens and the session, then sends each device a high-priority
+// Firebase data message.
 //
 // Needs the secret FIREBASE_SERVICE_ACCOUNT: the whole JSON key file of the
 // Firebase project's service account. Deploy with JWT verification off; the
@@ -71,18 +71,17 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
   return cached.token;
 }
 
-// The project's public key: the one the app sent, else the function's own.
-function publicKey(req: Request): string {
-  const sent = req.headers.get('apikey');
-  if (sent) return sent;
+// The project's secret key, which only this function holds: the database
+// gives push tokens to the service role alone, never to the apps.
+function serviceKey(): string {
   try {
-    const keys = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}');
+    const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}');
     const first = Object.values(keys)[0];
     if (typeof first === 'string') return first;
   } catch {
     // Not set on this project.
   }
-  return Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 }
 
 const reply = (status: number, body: unknown) =>
@@ -103,10 +102,16 @@ Deno.serve(async (req) => {
     return reply(400, { error: 'Missing device secret' });
   }
 
-  const key = publicKey(req);
+  const key = serviceKey();
   const targets = await fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/rpc/focus_push_targets`, {
     method: 'POST',
-    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    // New sb_secret_ keys go in apikey alone; an older service_role JWT also
+    // goes in Authorization.
+    headers: {
+      apikey: key,
+      ...(key.startsWith('sb_') ? {} : { Authorization: `Bearer ${key}` }),
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ p_secret: secret }),
   });
   if (!targets.ok) {
@@ -114,14 +119,19 @@ Deno.serve(async (req) => {
     const status = error.code === 'SR401' ? 401 : error.code === 'SR429' ? 429 : 502;
     return reply(status, { error: error.message ?? 'Database call failed' });
   }
-  const { tokens, focus } = await targets.json() as { tokens: string[]; focus: unknown };
+  const { tokens, focus, version } = await targets.json() as {
+    tokens: string[];
+    focus: unknown;
+    version: string | null;
+  };
   if (focus == null || tokens.length === 0) return reply(200, { sent: 0 });
 
   try {
     const sa = serviceAccount();
     const auth = await accessToken(sa);
     const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
-    const data = { type: 'focus', focus: JSON.stringify(focus) };
+    // The version lets the phone ignore news older than what it has.
+    const data = { type: 'focus', focus: JSON.stringify(focus), version: version ?? '' };
     const sent = await Promise.all(tokens.map(async (token) => {
       const res = await fetch(url, {
         method: 'POST',

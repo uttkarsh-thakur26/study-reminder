@@ -81,16 +81,17 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "start" -> {
-                FocusController.start(context, stateFrom(call))
-                result.success(null)
-            }
-            "stop" -> {
-                FocusController.finish(context, done = call.argument<Boolean>("done") == true)
+            "apply" -> {
+                val session = call.argument<Map<String, Any?>>("session")
+                FocusController.apply(
+                    context,
+                    call.argument<String>("version") ?: "",
+                    session?.let { stateFrom(it) },
+                    pushed = false,
+                )
                 result.success(null)
             }
             "isRunning" -> result.success(FocusController.isRunning(context))
-            "running" -> result.success(running())
             "setBlocklist" -> {
                 FocusState.saveBlocklist(
                     context,
@@ -108,23 +109,16 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
         }
     }
 
-    private fun stateFrom(call: MethodCall) = FocusState(
-        startedAt = call.argument<Number>("startedAt")?.toLong() ?: System.currentTimeMillis(),
-        endsAt = call.argument<Number>("endsAt")?.toLong() ?: 0L,
-        blockApps = call.argument<Boolean>("blockApps") == true,
-        quiet = call.argument<Boolean>("quiet") == true,
-        strict = call.argument<Boolean>("strict") == true,
-        blockGames = call.argument<Boolean>("blockGames") == true,
-        packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet(),
-        startedBy = call.argument<String>("startedBy") ?: "",
+    private fun stateFrom(m: Map<String, Any?>) = FocusState(
+        startedAt = (m["startedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        endsAt = (m["endsAt"] as? Number)?.toLong() ?: 0L,
+        blockApps = m["blockApps"] == true,
+        quiet = m["quiet"] == true,
+        strict = m["strict"] == true,
+        blockGames = m["blockGames"] == true,
+        packages = (m["packages"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
+        startedBy = m["startedBy"] as? String ?: "",
     )
-
-    /** The session running here, which may have come from another device. */
-    private fun running(): Map<String, Any>? {
-        val state = FocusState.load(context) ?: return null
-        if (state.isOver()) return null
-        return mapOf("startedAt" to state.startedAt, "endsAt" to state.endsAt)
-    }
 
     /** This phone's Firebase token, or null when there is none to be had. */
     private fun pushToken(result: MethodChannel.Result) {

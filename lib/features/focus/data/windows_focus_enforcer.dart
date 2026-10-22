@@ -80,7 +80,7 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     final hit = rules.match(window.exePath, window.title);
     if (hit == null) return;
     if (hit.isSite) {
-      _windows.closeTab(window.handle);
+      if (!_windows.closeTab(window.handle)) return;
     } else if (session.strict) {
       _windows.close(window.handle);
     } else {

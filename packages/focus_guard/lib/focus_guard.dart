@@ -110,27 +110,18 @@ class FocusGuard {
   static const _channel = MethodChannel('focus_guard');
   static const _flips = EventChannel('focus_guard/flip');
 
-  /// Starts [session], or updates the running one. Safe to repeat.
-  Future<void> start(FocusGuardSession session) =>
-      _channel.invokeMethod('start', session.toMap());
-
-  /// Ends the session. [done] posts "Focus done", for one that ran out.
-  Future<void> stop({bool done = false}) =>
-      _channel.invokeMethod('stop', {'done': done});
+  /// Applies the shared session at [version]: enforces [session] here, or
+  /// ends what runs here when it is null. The phone ignores a version older
+  /// than one it already acted on, including ones pushed while the app was
+  /// closed, so callers need no ordering of their own. Safe to repeat.
+  Future<void> apply({required String version, FocusGuardSession? session}) =>
+      _channel.invokeMethod('apply', {
+        'version': version,
+        'session': session?.toMap(),
+      });
 
   Future<bool> isRunning() async =>
       await _channel.invokeMethod<bool>('isRunning') ?? false;
-
-  /// When the session running on this phone started, or null when none is.
-  /// A session pushed from another device can be running before the app
-  /// has synced it.
-  Future<DateTime?> runningSince() async {
-    final m = await _channel.invokeMapMethod<String, Object?>('running');
-    final at = m?['startedAt'];
-    return at is int
-        ? DateTime.fromMillisecondsSinceEpoch(at, isUtc: true)
-        : null;
-  }
 
   /// What to block when a session arrives from another device while the app
   /// is closed.

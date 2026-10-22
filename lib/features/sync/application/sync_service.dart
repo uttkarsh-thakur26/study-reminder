@@ -138,6 +138,9 @@ class SyncService {
       pushedFocus |= _hasFocus(batch);
       if (batch.length < 200) break;
     }
+    // Right away: the server has the session now, and a failed pull below
+    // must not cost the wake, which nothing would send again.
+    if (pushedFocus) await _wakeOthers(secret);
 
     var received = 0;
     var cursor =
@@ -160,13 +163,12 @@ class SyncService {
     if (leftover.isNotEmpty) {
       await api.push(secret, [for (final p in leftover) p.record]);
       await _inSpace(space, () => _store.markPushed(leftover));
-      pushedFocus |= _hasFocus(leftover);
+      if (_hasFocus(leftover)) await _wakeOthers(secret);
     }
     await _db.writeSetting(
       SyncKeys.lastSynced,
       _now().toUtc().toIso8601String(),
     );
-    if (pushedFocus) await _wakeOthers(secret);
     await _sendPushToken(secret, space);
     return received;
   }

@@ -41,6 +41,11 @@ void main() {
     expect(rules.match(chrome, 'Calculus notes - Google Docs'), isNull);
     expect(rules.match(chrome, 'Matrix X Y plots - Wikipedia'), isNull);
     expect(rules.match(chrome, 'myyoutubehelper docs'), isNull);
+    // x.com inside other addresses.
+    expect(rules.match(chrome, 'netflix.com - Watch TV'), isNull);
+    expect(rules.match(chrome, 'dropbox.com login - Google Search'), isNull);
+    expect(rules.match(chrome, 'Box.com | Sign in'), isNull);
+    expect(rules.match(chrome, 'x.com/home - Google Chrome')?.label, 'X');
   });
 
   test('site keywords and tidying what the user types', () {
