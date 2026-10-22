@@ -1,4 +1,5 @@
 import '../../reminders/domain/reminder.dart';
+import 'focus_plan.dart';
 
 /// Which devices a focus session runs on.
 enum FocusTarget {
@@ -34,6 +35,9 @@ class FocusSession {
     this.quiet = true,
     this.strict = false,
     this.startedBy = '',
+    this.workMinutes = 0,
+    this.breakMinutes = 0,
+    this.subjectId,
     this.version = '',
   });
 
@@ -63,6 +67,14 @@ class FocusSession {
   /// The name of the device it was started on.
   final String startedBy;
 
+  /// The length of a round and of the break after it. Zero: one round, no
+  /// breaks. See [FocusPlan].
+  final int workMinutes;
+  final int breakMinutes;
+
+  /// What is being studied, for the stats. Null for no subject.
+  final String? subjectId;
+
   /// Which edit of the session this is: its newest field stamp. Sorts as
   /// text in the order the edits were made on every device. Empty for a
   /// session never saved here. Not a synced field.
@@ -74,7 +86,10 @@ class FocusSession {
       endsAt == other.endsAt &&
       blockApps == other.blockApps &&
       quiet == other.quiet &&
-      strict == other.strict;
+      strict == other.strict &&
+      workMinutes == other.workMinutes &&
+      breakMinutes == other.breakMinutes &&
+      subjectId == other.subjectId;
 
   bool runningAt(DateTime now) =>
       active && endsAt != null && now.isBefore(endsAt!);
@@ -88,6 +103,29 @@ class FocusSession {
   Duration get length => startedAt != null && endsAt != null
       ? endsAt!.difference(startedAt!)
       : Duration.zero;
+
+  /// Its rounds and breaks. Only for a session with a start and an end.
+  FocusPlan get plan => FocusPlan(
+    start: startedAt!,
+    end: endsAt!,
+    work: Duration(minutes: workMinutes),
+    rest: Duration(minutes: breakMinutes),
+  );
+
+  /// The round or break at [now], while it runs.
+  FocusPhase? phaseAt(DateTime now) => runningAt(now) ? plan.phaseAt(now) : null;
+
+  bool onBreakAt(DateTime now) => phaseAt(now)?.onBreak ?? false;
+
+  /// Whether [kind] should be blocking and quiet at [now]: the session runs
+  /// there and is not on a break.
+  bool enforcesOn(DeviceKind kind, DateTime now) =>
+      runsOn(kind, now) && !onBreakAt(now);
+
+  /// When the next round or break begins, or the session ends. Null when
+  /// it is not running.
+  DateTime? nextChangeAfter(DateTime now) =>
+      runningAt(now) ? plan.nextChangeAfter(now) : null;
 
   FocusSession copyWith({
     bool? active,
@@ -107,6 +145,23 @@ class FocusSession {
     quiet: quiet ?? this.quiet,
     strict: strict ?? this.strict,
     startedBy: startedBy ?? this.startedBy,
+    workMinutes: workMinutes,
+    breakMinutes: breakMinutes,
+    subjectId: subjectId,
+  );
+
+  FocusSession withSubject(String? id) => FocusSession(
+    active: active,
+    startedAt: startedAt,
+    endsAt: endsAt,
+    target: target,
+    blockApps: blockApps,
+    quiet: quiet,
+    strict: strict,
+    startedBy: startedBy,
+    workMinutes: workMinutes,
+    breakMinutes: breakMinutes,
+    subjectId: id,
   );
 
   Map<String, Object?> toFields() => {
@@ -118,6 +173,9 @@ class FocusSession {
     'quiet': quiet,
     'strict': strict,
     'started_by': startedBy,
+    'work_minutes': workMinutes,
+    'break_minutes': breakMinutes,
+    'subject_id': subjectId,
   };
 
   factory FocusSession.fromFields(Map<String, Object?> f) {
@@ -133,8 +191,14 @@ class FocusSession {
       quiet: f['quiet'] as bool? ?? true,
       strict: f['strict'] as bool? ?? false,
       startedBy: f['started_by'] as String? ?? '',
+      workMinutes: _minutes(f['work_minutes']),
+      breakMinutes: _minutes(f['break_minutes']),
+      subjectId: f['subject_id'] as String?,
     );
   }
+
+  static int _minutes(Object? v) =>
+      v is num ? v.toInt().clamp(0, 600) : 0;
 }
 
 /// The phone's and the laptop's sessions.

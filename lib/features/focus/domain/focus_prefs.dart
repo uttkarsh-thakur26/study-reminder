@@ -8,6 +8,9 @@ import 'focus_session.dart';
 class FocusPrefs {
   const FocusPrefs({
     this.minutes = 25,
+    this.rounds = 1,
+    this.breakMinutes = 5,
+    this.subjectId,
     this.target = FocusTarget.both,
     this.blockApps = true,
     this.quiet = true,
@@ -20,6 +23,8 @@ class FocusPrefs {
   });
 
   static const key = 'focus_prefs';
+
+  static const maxRounds = 8;
 
   /// Instagram, YouTube, Reddit and X.
   static const defaultPhoneApps = {
@@ -46,7 +51,15 @@ class FocusPrefs {
     'x.com',
   ];
 
+  /// The length of one round.
   final int minutes;
+
+  /// Rounds per session, with a break of [breakMinutes] between two.
+  final int rounds;
+  final int breakMinutes;
+
+  /// The subject a new session is for. Null for none.
+  final String? subjectId;
   final FocusTarget target;
   final bool blockApps;
   final bool quiet;
@@ -68,8 +81,19 @@ class FocusPrefs {
   /// Sites to block in browsers on the laptop.
   final List<String> sites;
 
+  /// Work and break lengths for a new session's rounds; zero for one round.
+  Duration get work => rounds > 1 ? Duration(minutes: minutes) : Duration.zero;
+  Duration get rest =>
+      rounds > 1 ? Duration(minutes: breakMinutes) : Duration.zero;
+
+  /// How long a new session runs, breaks included.
+  Duration get length =>
+      Duration(minutes: minutes * rounds + breakMinutes * (rounds - 1));
+
   FocusPrefs copyWith({
     int? minutes,
+    int? rounds,
+    int? breakMinutes,
     FocusTarget? target,
     bool? blockApps,
     bool? quiet,
@@ -81,6 +105,9 @@ class FocusPrefs {
     List<String>? sites,
   }) => FocusPrefs(
     minutes: minutes ?? this.minutes,
+    rounds: rounds ?? this.rounds,
+    breakMinutes: breakMinutes ?? this.breakMinutes,
+    subjectId: subjectId,
     target: target ?? this.target,
     blockApps: blockApps ?? this.blockApps,
     quiet: quiet ?? this.quiet,
@@ -92,8 +119,27 @@ class FocusPrefs {
     sites: sites ?? this.sites,
   );
 
+  FocusPrefs withSubject(String? id) => FocusPrefs(
+    minutes: minutes,
+    rounds: rounds,
+    breakMinutes: breakMinutes,
+    subjectId: id,
+    target: target,
+    blockApps: blockApps,
+    quiet: quiet,
+    strict: strict,
+    flipToFocus: flipToFocus,
+    phoneApps: phoneApps,
+    blockGames: blockGames,
+    laptopApps: laptopApps,
+    sites: sites,
+  );
+
   String encode() => jsonEncode({
     'minutes': minutes,
+    'rounds': rounds,
+    'breakMinutes': breakMinutes,
+    'subject': subjectId,
     'target': target.name,
     'blockApps': blockApps,
     'quiet': quiet,
@@ -123,6 +169,10 @@ class FocusPrefs {
     const d = FocusPrefs();
     return FocusPrefs(
       minutes: (m['minutes'] as num?)?.toInt().clamp(1, 600) ?? d.minutes,
+      rounds: (m['rounds'] as num?)?.toInt().clamp(1, maxRounds) ?? d.rounds,
+      breakMinutes:
+          (m['breakMinutes'] as num?)?.toInt().clamp(1, 60) ?? d.breakMinutes,
+      subjectId: m['subject'] as String?,
       target: FocusTarget.parse(m['target'] as String?),
       blockApps: m['blockApps'] as bool? ?? d.blockApps,
       quiet: m['quiet'] as bool? ?? d.quiet,

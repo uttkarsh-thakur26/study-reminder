@@ -60,7 +60,8 @@ class Occurrences extends Table with SyncColumns {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-/// The shared focus session; one row, id `current`. Times are epoch ms.
+/// The focus sessions, one row per device kind: `phone` and `laptop`.
+/// Times are epoch ms.
 @DataClassName('FocusSessionRow')
 class FocusSessions extends Table with SyncColumns {
   TextColumn get id => text()();
@@ -72,6 +73,26 @@ class FocusSessions extends Table with SyncColumns {
   BoolColumn get quiet => boolean().withDefault(const Constant(true))();
   BoolColumn get strict => boolean().withDefault(const Constant(false))();
   TextColumn get startedBy => text().withDefault(const Constant(''))();
+  IntColumn get workMinutes => integer().withDefault(const Constant(0))();
+  IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
+  TextColumn get subjectId => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+/// Every focus session ever started, for the stats. The id is the start
+/// time in epoch ms, so a session started on both devices is one row.
+/// Times are epoch ms.
+@DataClassName('StudySessionRow')
+class StudySessions extends Table with SyncColumns {
+  TextColumn get id => text()();
+  TextColumn get subjectId => text().nullable()();
+  IntColumn get startedAt => integer()();
+  IntColumn get endsAt => integer()();
+  IntColumn get stoppedAt => integer().nullable()();
+  IntColumn get workMinutes => integer().withDefault(const Constant(0))();
+  IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};

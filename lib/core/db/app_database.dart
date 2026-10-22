@@ -6,7 +6,14 @@ import 'tables.dart';
 part 'app_database.g.dart';
 
 @DriftDatabase(
-  tables: [Subjects, Reminders, Occurrences, FocusSessions, LocalSettings],
+  tables: [
+    Subjects,
+    Reminders,
+    Occurrences,
+    FocusSessions,
+    StudySessions,
+    LocalSettings,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   /// Shared across isolates so notification actions handled in the
@@ -21,7 +28,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -33,13 +40,28 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX reminders_dirty ON reminders (dirty) WHERE dirty = 1',
       );
+      await _indexStudySessions();
     },
     onUpgrade: (m, from, to) async {
-      if (from < 2) await m.createTable(focusSessions);
+      if (from < 2) {
+        await m.createTable(focusSessions);
+      } else if (from < 3) {
+        await m.addColumn(focusSessions, focusSessions.workMinutes);
+        await m.addColumn(focusSessions, focusSessions.breakMinutes);
+        await m.addColumn(focusSessions, focusSessions.subjectId);
+      }
+      if (from < 3) {
+        await m.createTable(studySessions);
+        await _indexStudySessions();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
+  );
+
+  Future<void> _indexStudySessions() => customStatement(
+    'CREATE INDEX study_sessions_started ON study_sessions (started_at)',
   );
 
   Future<String?> readSetting(String key) async {

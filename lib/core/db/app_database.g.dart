@@ -2298,6 +2298,41 @@ class $FocusSessionsTable extends FocusSessions
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _workMinutesMeta = const VerificationMeta(
+    'workMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> workMinutes = GeneratedColumn<int>(
+    'work_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _breakMinutesMeta = const VerificationMeta(
+    'breakMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> breakMinutes = GeneratedColumn<int>(
+    'break_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _subjectIdMeta = const VerificationMeta(
+    'subjectId',
+  );
+  @override
+  late final GeneratedColumn<String> subjectId = GeneratedColumn<String>(
+    'subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     hlc,
@@ -2313,6 +2348,9 @@ class $FocusSessionsTable extends FocusSessions
     quiet,
     strict,
     startedBy,
+    workMinutes,
+    breakMinutes,
+    subjectId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2405,6 +2443,30 @@ class $FocusSessionsTable extends FocusSessions
         startedBy.isAcceptableOrUnknown(data['started_by']!, _startedByMeta),
       );
     }
+    if (data.containsKey('work_minutes')) {
+      context.handle(
+        _workMinutesMeta,
+        workMinutes.isAcceptableOrUnknown(
+          data['work_minutes']!,
+          _workMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('break_minutes')) {
+      context.handle(
+        _breakMinutesMeta,
+        breakMinutes.isAcceptableOrUnknown(
+          data['break_minutes']!,
+          _breakMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('subject_id')) {
+      context.handle(
+        _subjectIdMeta,
+        subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta),
+      );
+    }
     return context;
   }
 
@@ -2466,6 +2528,18 @@ class $FocusSessionsTable extends FocusSessions
         DriftSqlType.string,
         data['${effectivePrefix}started_by'],
       )!,
+      workMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}work_minutes'],
+      )!,
+      breakMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}break_minutes'],
+      )!,
+      subjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subject_id'],
+      ),
     );
   }
 
@@ -2494,6 +2568,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
   final bool quiet;
   final bool strict;
   final String startedBy;
+  final int workMinutes;
+  final int breakMinutes;
+  final String? subjectId;
   const FocusSessionRow({
     required this.hlc,
     required this.fieldClock,
@@ -2508,6 +2585,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     required this.quiet,
     required this.strict,
     required this.startedBy,
+    required this.workMinutes,
+    required this.breakMinutes,
+    this.subjectId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2529,6 +2609,11 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     map['quiet'] = Variable<bool>(quiet);
     map['strict'] = Variable<bool>(strict);
     map['started_by'] = Variable<String>(startedBy);
+    map['work_minutes'] = Variable<int>(workMinutes);
+    map['break_minutes'] = Variable<int>(breakMinutes);
+    if (!nullToAbsent || subjectId != null) {
+      map['subject_id'] = Variable<String>(subjectId);
+    }
     return map;
   }
 
@@ -2551,6 +2636,11 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: Value(quiet),
       strict: Value(strict),
       startedBy: Value(startedBy),
+      workMinutes: Value(workMinutes),
+      breakMinutes: Value(breakMinutes),
+      subjectId: subjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(subjectId),
     );
   }
 
@@ -2573,6 +2663,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: serializer.fromJson<bool>(json['quiet']),
       strict: serializer.fromJson<bool>(json['strict']),
       startedBy: serializer.fromJson<String>(json['startedBy']),
+      workMinutes: serializer.fromJson<int>(json['workMinutes']),
+      breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
+      subjectId: serializer.fromJson<String?>(json['subjectId']),
     );
   }
   @override
@@ -2592,6 +2685,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       'quiet': serializer.toJson<bool>(quiet),
       'strict': serializer.toJson<bool>(strict),
       'startedBy': serializer.toJson<String>(startedBy),
+      'workMinutes': serializer.toJson<int>(workMinutes),
+      'breakMinutes': serializer.toJson<int>(breakMinutes),
+      'subjectId': serializer.toJson<String?>(subjectId),
     };
   }
 
@@ -2609,6 +2705,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     bool? quiet,
     bool? strict,
     String? startedBy,
+    int? workMinutes,
+    int? breakMinutes,
+    Value<String?> subjectId = const Value.absent(),
   }) => FocusSessionRow(
     hlc: hlc ?? this.hlc,
     fieldClock: fieldClock ?? this.fieldClock,
@@ -2623,6 +2722,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     quiet: quiet ?? this.quiet,
     strict: strict ?? this.strict,
     startedBy: startedBy ?? this.startedBy,
+    workMinutes: workMinutes ?? this.workMinutes,
+    breakMinutes: breakMinutes ?? this.breakMinutes,
+    subjectId: subjectId.present ? subjectId.value : this.subjectId,
   );
   FocusSessionRow copyWithCompanion(FocusSessionsCompanion data) {
     return FocusSessionRow(
@@ -2641,6 +2743,13 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       quiet: data.quiet.present ? data.quiet.value : this.quiet,
       strict: data.strict.present ? data.strict.value : this.strict,
       startedBy: data.startedBy.present ? data.startedBy.value : this.startedBy,
+      workMinutes: data.workMinutes.present
+          ? data.workMinutes.value
+          : this.workMinutes,
+      breakMinutes: data.breakMinutes.present
+          ? data.breakMinutes.value
+          : this.breakMinutes,
+      subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
     );
   }
 
@@ -2659,7 +2768,10 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           ..write('blockApps: $blockApps, ')
           ..write('quiet: $quiet, ')
           ..write('strict: $strict, ')
-          ..write('startedBy: $startedBy')
+          ..write('startedBy: $startedBy, ')
+          ..write('workMinutes: $workMinutes, ')
+          ..write('breakMinutes: $breakMinutes, ')
+          ..write('subjectId: $subjectId')
           ..write(')'))
         .toString();
   }
@@ -2679,6 +2791,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     quiet,
     strict,
     startedBy,
+    workMinutes,
+    breakMinutes,
+    subjectId,
   );
   @override
   bool operator ==(Object other) =>
@@ -2696,7 +2811,10 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           other.blockApps == this.blockApps &&
           other.quiet == this.quiet &&
           other.strict == this.strict &&
-          other.startedBy == this.startedBy);
+          other.startedBy == this.startedBy &&
+          other.workMinutes == this.workMinutes &&
+          other.breakMinutes == this.breakMinutes &&
+          other.subjectId == this.subjectId);
 }
 
 class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
@@ -2713,6 +2831,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
   final Value<bool> quiet;
   final Value<bool> strict;
   final Value<String> startedBy;
+  final Value<int> workMinutes;
+  final Value<int> breakMinutes;
+  final Value<String?> subjectId;
   final Value<int> rowid;
   const FocusSessionsCompanion({
     this.hlc = const Value.absent(),
@@ -2728,6 +2849,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.quiet = const Value.absent(),
     this.strict = const Value.absent(),
     this.startedBy = const Value.absent(),
+    this.workMinutes = const Value.absent(),
+    this.breakMinutes = const Value.absent(),
+    this.subjectId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FocusSessionsCompanion.insert({
@@ -2744,6 +2868,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.quiet = const Value.absent(),
     this.strict = const Value.absent(),
     this.startedBy = const Value.absent(),
+    this.workMinutes = const Value.absent(),
+    this.breakMinutes = const Value.absent(),
+    this.subjectId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : hlc = Value(hlc),
        id = Value(id);
@@ -2761,6 +2888,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Expression<bool>? quiet,
     Expression<bool>? strict,
     Expression<String>? startedBy,
+    Expression<int>? workMinutes,
+    Expression<int>? breakMinutes,
+    Expression<String>? subjectId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2777,6 +2907,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       if (quiet != null) 'quiet': quiet,
       if (strict != null) 'strict': strict,
       if (startedBy != null) 'started_by': startedBy,
+      if (workMinutes != null) 'work_minutes': workMinutes,
+      if (breakMinutes != null) 'break_minutes': breakMinutes,
+      if (subjectId != null) 'subject_id': subjectId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2795,6 +2928,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Value<bool>? quiet,
     Value<bool>? strict,
     Value<String>? startedBy,
+    Value<int>? workMinutes,
+    Value<int>? breakMinutes,
+    Value<String?>? subjectId,
     Value<int>? rowid,
   }) {
     return FocusSessionsCompanion(
@@ -2811,6 +2947,9 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       quiet: quiet ?? this.quiet,
       strict: strict ?? this.strict,
       startedBy: startedBy ?? this.startedBy,
+      workMinutes: workMinutes ?? this.workMinutes,
+      breakMinutes: breakMinutes ?? this.breakMinutes,
+      subjectId: subjectId ?? this.subjectId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2857,6 +2996,15 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     if (startedBy.present) {
       map['started_by'] = Variable<String>(startedBy.value);
     }
+    if (workMinutes.present) {
+      map['work_minutes'] = Variable<int>(workMinutes.value);
+    }
+    if (breakMinutes.present) {
+      map['break_minutes'] = Variable<int>(breakMinutes.value);
+    }
+    if (subjectId.present) {
+      map['subject_id'] = Variable<String>(subjectId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2879,6 +3027,674 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
           ..write('quiet: $quiet, ')
           ..write('strict: $strict, ')
           ..write('startedBy: $startedBy, ')
+          ..write('workMinutes: $workMinutes, ')
+          ..write('breakMinutes: $breakMinutes, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StudySessionsTable extends StudySessions
+    with TableInfo<$StudySessionsTable, StudySessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StudySessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _hlcMeta = const VerificationMeta('hlc');
+  @override
+  late final GeneratedColumn<String> hlc = GeneratedColumn<String>(
+    'hlc',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldClockMeta = const VerificationMeta(
+    'fieldClock',
+  );
+  @override
+  late final GeneratedColumn<String> fieldClock = GeneratedColumn<String>(
+    'field_clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _subjectIdMeta = const VerificationMeta(
+    'subjectId',
+  );
+  @override
+  late final GeneratedColumn<String> subjectId = GeneratedColumn<String>(
+    'subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<int> startedAt = GeneratedColumn<int>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endsAtMeta = const VerificationMeta('endsAt');
+  @override
+  late final GeneratedColumn<int> endsAt = GeneratedColumn<int>(
+    'ends_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stoppedAtMeta = const VerificationMeta(
+    'stoppedAt',
+  );
+  @override
+  late final GeneratedColumn<int> stoppedAt = GeneratedColumn<int>(
+    'stopped_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _workMinutesMeta = const VerificationMeta(
+    'workMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> workMinutes = GeneratedColumn<int>(
+    'work_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _breakMinutesMeta = const VerificationMeta(
+    'breakMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> breakMinutes = GeneratedColumn<int>(
+    'break_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    hlc,
+    fieldClock,
+    deleted,
+    dirty,
+    id,
+    subjectId,
+    startedAt,
+    endsAt,
+    stoppedAt,
+    workMinutes,
+    breakMinutes,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'study_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StudySessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('hlc')) {
+      context.handle(
+        _hlcMeta,
+        hlc.isAcceptableOrUnknown(data['hlc']!, _hlcMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hlcMeta);
+    }
+    if (data.containsKey('field_clock')) {
+      context.handle(
+        _fieldClockMeta,
+        fieldClock.isAcceptableOrUnknown(data['field_clock']!, _fieldClockMeta),
+      );
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('subject_id')) {
+      context.handle(
+        _subjectIdMeta,
+        subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta),
+      );
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('ends_at')) {
+      context.handle(
+        _endsAtMeta,
+        endsAt.isAcceptableOrUnknown(data['ends_at']!, _endsAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endsAtMeta);
+    }
+    if (data.containsKey('stopped_at')) {
+      context.handle(
+        _stoppedAtMeta,
+        stoppedAt.isAcceptableOrUnknown(data['stopped_at']!, _stoppedAtMeta),
+      );
+    }
+    if (data.containsKey('work_minutes')) {
+      context.handle(
+        _workMinutesMeta,
+        workMinutes.isAcceptableOrUnknown(
+          data['work_minutes']!,
+          _workMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('break_minutes')) {
+      context.handle(
+        _breakMinutesMeta,
+        breakMinutes.isAcceptableOrUnknown(
+          data['break_minutes']!,
+          _breakMinutesMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StudySessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StudySessionRow(
+      hlc: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hlc'],
+      )!,
+      fieldClock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field_clock'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      subjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subject_id'],
+      ),
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}started_at'],
+      )!,
+      endsAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ends_at'],
+      )!,
+      stoppedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}stopped_at'],
+      ),
+      workMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}work_minutes'],
+      )!,
+      breakMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}break_minutes'],
+      )!,
+    );
+  }
+
+  @override
+  $StudySessionsTable createAlias(String alias) {
+    return $StudySessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
+  /// Newest edit stamp across all fields (packed HLC).
+  final String hlc;
+
+  /// JSON map of field name to packed HLC, see `FieldClock`.
+  final String fieldClock;
+  final bool deleted;
+
+  /// Changed locally and not yet pushed to the server.
+  final bool dirty;
+  final String id;
+  final String? subjectId;
+  final int startedAt;
+  final int endsAt;
+  final int? stoppedAt;
+  final int workMinutes;
+  final int breakMinutes;
+  const StudySessionRow({
+    required this.hlc,
+    required this.fieldClock,
+    required this.deleted,
+    required this.dirty,
+    required this.id,
+    this.subjectId,
+    required this.startedAt,
+    required this.endsAt,
+    this.stoppedAt,
+    required this.workMinutes,
+    required this.breakMinutes,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['hlc'] = Variable<String>(hlc);
+    map['field_clock'] = Variable<String>(fieldClock);
+    map['deleted'] = Variable<bool>(deleted);
+    map['dirty'] = Variable<bool>(dirty);
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || subjectId != null) {
+      map['subject_id'] = Variable<String>(subjectId);
+    }
+    map['started_at'] = Variable<int>(startedAt);
+    map['ends_at'] = Variable<int>(endsAt);
+    if (!nullToAbsent || stoppedAt != null) {
+      map['stopped_at'] = Variable<int>(stoppedAt);
+    }
+    map['work_minutes'] = Variable<int>(workMinutes);
+    map['break_minutes'] = Variable<int>(breakMinutes);
+    return map;
+  }
+
+  StudySessionsCompanion toCompanion(bool nullToAbsent) {
+    return StudySessionsCompanion(
+      hlc: Value(hlc),
+      fieldClock: Value(fieldClock),
+      deleted: Value(deleted),
+      dirty: Value(dirty),
+      id: Value(id),
+      subjectId: subjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(subjectId),
+      startedAt: Value(startedAt),
+      endsAt: Value(endsAt),
+      stoppedAt: stoppedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stoppedAt),
+      workMinutes: Value(workMinutes),
+      breakMinutes: Value(breakMinutes),
+    );
+  }
+
+  factory StudySessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StudySessionRow(
+      hlc: serializer.fromJson<String>(json['hlc']),
+      fieldClock: serializer.fromJson<String>(json['fieldClock']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+      id: serializer.fromJson<String>(json['id']),
+      subjectId: serializer.fromJson<String?>(json['subjectId']),
+      startedAt: serializer.fromJson<int>(json['startedAt']),
+      endsAt: serializer.fromJson<int>(json['endsAt']),
+      stoppedAt: serializer.fromJson<int?>(json['stoppedAt']),
+      workMinutes: serializer.fromJson<int>(json['workMinutes']),
+      breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'hlc': serializer.toJson<String>(hlc),
+      'fieldClock': serializer.toJson<String>(fieldClock),
+      'deleted': serializer.toJson<bool>(deleted),
+      'dirty': serializer.toJson<bool>(dirty),
+      'id': serializer.toJson<String>(id),
+      'subjectId': serializer.toJson<String?>(subjectId),
+      'startedAt': serializer.toJson<int>(startedAt),
+      'endsAt': serializer.toJson<int>(endsAt),
+      'stoppedAt': serializer.toJson<int?>(stoppedAt),
+      'workMinutes': serializer.toJson<int>(workMinutes),
+      'breakMinutes': serializer.toJson<int>(breakMinutes),
+    };
+  }
+
+  StudySessionRow copyWith({
+    String? hlc,
+    String? fieldClock,
+    bool? deleted,
+    bool? dirty,
+    String? id,
+    Value<String?> subjectId = const Value.absent(),
+    int? startedAt,
+    int? endsAt,
+    Value<int?> stoppedAt = const Value.absent(),
+    int? workMinutes,
+    int? breakMinutes,
+  }) => StudySessionRow(
+    hlc: hlc ?? this.hlc,
+    fieldClock: fieldClock ?? this.fieldClock,
+    deleted: deleted ?? this.deleted,
+    dirty: dirty ?? this.dirty,
+    id: id ?? this.id,
+    subjectId: subjectId.present ? subjectId.value : this.subjectId,
+    startedAt: startedAt ?? this.startedAt,
+    endsAt: endsAt ?? this.endsAt,
+    stoppedAt: stoppedAt.present ? stoppedAt.value : this.stoppedAt,
+    workMinutes: workMinutes ?? this.workMinutes,
+    breakMinutes: breakMinutes ?? this.breakMinutes,
+  );
+  StudySessionRow copyWithCompanion(StudySessionsCompanion data) {
+    return StudySessionRow(
+      hlc: data.hlc.present ? data.hlc.value : this.hlc,
+      fieldClock: data.fieldClock.present
+          ? data.fieldClock.value
+          : this.fieldClock,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+      id: data.id.present ? data.id.value : this.id,
+      subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endsAt: data.endsAt.present ? data.endsAt.value : this.endsAt,
+      stoppedAt: data.stoppedAt.present ? data.stoppedAt.value : this.stoppedAt,
+      workMinutes: data.workMinutes.present
+          ? data.workMinutes.value
+          : this.workMinutes,
+      breakMinutes: data.breakMinutes.present
+          ? data.breakMinutes.value
+          : this.breakMinutes,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StudySessionRow(')
+          ..write('hlc: $hlc, ')
+          ..write('fieldClock: $fieldClock, ')
+          ..write('deleted: $deleted, ')
+          ..write('dirty: $dirty, ')
+          ..write('id: $id, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endsAt: $endsAt, ')
+          ..write('stoppedAt: $stoppedAt, ')
+          ..write('workMinutes: $workMinutes, ')
+          ..write('breakMinutes: $breakMinutes')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    hlc,
+    fieldClock,
+    deleted,
+    dirty,
+    id,
+    subjectId,
+    startedAt,
+    endsAt,
+    stoppedAt,
+    workMinutes,
+    breakMinutes,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StudySessionRow &&
+          other.hlc == this.hlc &&
+          other.fieldClock == this.fieldClock &&
+          other.deleted == this.deleted &&
+          other.dirty == this.dirty &&
+          other.id == this.id &&
+          other.subjectId == this.subjectId &&
+          other.startedAt == this.startedAt &&
+          other.endsAt == this.endsAt &&
+          other.stoppedAt == this.stoppedAt &&
+          other.workMinutes == this.workMinutes &&
+          other.breakMinutes == this.breakMinutes);
+}
+
+class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
+  final Value<String> hlc;
+  final Value<String> fieldClock;
+  final Value<bool> deleted;
+  final Value<bool> dirty;
+  final Value<String> id;
+  final Value<String?> subjectId;
+  final Value<int> startedAt;
+  final Value<int> endsAt;
+  final Value<int?> stoppedAt;
+  final Value<int> workMinutes;
+  final Value<int> breakMinutes;
+  final Value<int> rowid;
+  const StudySessionsCompanion({
+    this.hlc = const Value.absent(),
+    this.fieldClock = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.id = const Value.absent(),
+    this.subjectId = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endsAt = const Value.absent(),
+    this.stoppedAt = const Value.absent(),
+    this.workMinutes = const Value.absent(),
+    this.breakMinutes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StudySessionsCompanion.insert({
+    required String hlc,
+    this.fieldClock = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.dirty = const Value.absent(),
+    required String id,
+    this.subjectId = const Value.absent(),
+    required int startedAt,
+    required int endsAt,
+    this.stoppedAt = const Value.absent(),
+    this.workMinutes = const Value.absent(),
+    this.breakMinutes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : hlc = Value(hlc),
+       id = Value(id),
+       startedAt = Value(startedAt),
+       endsAt = Value(endsAt);
+  static Insertable<StudySessionRow> custom({
+    Expression<String>? hlc,
+    Expression<String>? fieldClock,
+    Expression<bool>? deleted,
+    Expression<bool>? dirty,
+    Expression<String>? id,
+    Expression<String>? subjectId,
+    Expression<int>? startedAt,
+    Expression<int>? endsAt,
+    Expression<int>? stoppedAt,
+    Expression<int>? workMinutes,
+    Expression<int>? breakMinutes,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (hlc != null) 'hlc': hlc,
+      if (fieldClock != null) 'field_clock': fieldClock,
+      if (deleted != null) 'deleted': deleted,
+      if (dirty != null) 'dirty': dirty,
+      if (id != null) 'id': id,
+      if (subjectId != null) 'subject_id': subjectId,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endsAt != null) 'ends_at': endsAt,
+      if (stoppedAt != null) 'stopped_at': stoppedAt,
+      if (workMinutes != null) 'work_minutes': workMinutes,
+      if (breakMinutes != null) 'break_minutes': breakMinutes,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StudySessionsCompanion copyWith({
+    Value<String>? hlc,
+    Value<String>? fieldClock,
+    Value<bool>? deleted,
+    Value<bool>? dirty,
+    Value<String>? id,
+    Value<String?>? subjectId,
+    Value<int>? startedAt,
+    Value<int>? endsAt,
+    Value<int?>? stoppedAt,
+    Value<int>? workMinutes,
+    Value<int>? breakMinutes,
+    Value<int>? rowid,
+  }) {
+    return StudySessionsCompanion(
+      hlc: hlc ?? this.hlc,
+      fieldClock: fieldClock ?? this.fieldClock,
+      deleted: deleted ?? this.deleted,
+      dirty: dirty ?? this.dirty,
+      id: id ?? this.id,
+      subjectId: subjectId ?? this.subjectId,
+      startedAt: startedAt ?? this.startedAt,
+      endsAt: endsAt ?? this.endsAt,
+      stoppedAt: stoppedAt ?? this.stoppedAt,
+      workMinutes: workMinutes ?? this.workMinutes,
+      breakMinutes: breakMinutes ?? this.breakMinutes,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (hlc.present) {
+      map['hlc'] = Variable<String>(hlc.value);
+    }
+    if (fieldClock.present) {
+      map['field_clock'] = Variable<String>(fieldClock.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (subjectId.present) {
+      map['subject_id'] = Variable<String>(subjectId.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<int>(startedAt.value);
+    }
+    if (endsAt.present) {
+      map['ends_at'] = Variable<int>(endsAt.value);
+    }
+    if (stoppedAt.present) {
+      map['stopped_at'] = Variable<int>(stoppedAt.value);
+    }
+    if (workMinutes.present) {
+      map['work_minutes'] = Variable<int>(workMinutes.value);
+    }
+    if (breakMinutes.present) {
+      map['break_minutes'] = Variable<int>(breakMinutes.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StudySessionsCompanion(')
+          ..write('hlc: $hlc, ')
+          ..write('fieldClock: $fieldClock, ')
+          ..write('deleted: $deleted, ')
+          ..write('dirty: $dirty, ')
+          ..write('id: $id, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endsAt: $endsAt, ')
+          ..write('stoppedAt: $stoppedAt, ')
+          ..write('workMinutes: $workMinutes, ')
+          ..write('breakMinutes: $breakMinutes, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3100,6 +3916,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RemindersTable reminders = $RemindersTable(this);
   late final $OccurrencesTable occurrences = $OccurrencesTable(this);
   late final $FocusSessionsTable focusSessions = $FocusSessionsTable(this);
+  late final $StudySessionsTable studySessions = $StudySessionsTable(this);
   late final $LocalSettingsTable localSettings = $LocalSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -3110,6 +3927,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     reminders,
     occurrences,
     focusSessions,
+    studySessions,
     localSettings,
   ];
 }
@@ -4172,6 +4990,9 @@ typedef $$FocusSessionsTableCreateCompanionBuilder =
       Value<bool> quiet,
       Value<bool> strict,
       Value<String> startedBy,
+      Value<int> workMinutes,
+      Value<int> breakMinutes,
+      Value<String?> subjectId,
       Value<int> rowid,
     });
 typedef $$FocusSessionsTableUpdateCompanionBuilder =
@@ -4189,6 +5010,9 @@ typedef $$FocusSessionsTableUpdateCompanionBuilder =
       Value<bool> quiet,
       Value<bool> strict,
       Value<String> startedBy,
+      Value<int> workMinutes,
+      Value<int> breakMinutes,
+      Value<String?> subjectId,
       Value<int> rowid,
     });
 
@@ -4263,6 +5087,21 @@ class $$FocusSessionsTableFilterComposer
 
   ColumnFilters<String> get startedBy => $composableBuilder(
     column: $table.startedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4340,6 +5179,21 @@ class $$FocusSessionsTableOrderingComposer
     column: $table.startedBy,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$FocusSessionsTableAnnotationComposer
@@ -4391,6 +5245,19 @@ class $$FocusSessionsTableAnnotationComposer
 
   GeneratedColumn<String> get startedBy =>
       $composableBuilder(column: $table.startedBy, builder: (column) => column);
+
+  GeneratedColumn<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get subjectId =>
+      $composableBuilder(column: $table.subjectId, builder: (column) => column);
 }
 
 class $$FocusSessionsTableTableManager
@@ -4437,6 +5304,9 @@ class $$FocusSessionsTableTableManager
                 Value<bool> quiet = const Value.absent(),
                 Value<bool> strict = const Value.absent(),
                 Value<String> startedBy = const Value.absent(),
+                Value<int> workMinutes = const Value.absent(),
+                Value<int> breakMinutes = const Value.absent(),
+                Value<String?> subjectId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FocusSessionsCompanion(
                 hlc: hlc,
@@ -4452,6 +5322,9 @@ class $$FocusSessionsTableTableManager
                 quiet: quiet,
                 strict: strict,
                 startedBy: startedBy,
+                workMinutes: workMinutes,
+                breakMinutes: breakMinutes,
+                subjectId: subjectId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4469,6 +5342,9 @@ class $$FocusSessionsTableTableManager
                 Value<bool> quiet = const Value.absent(),
                 Value<bool> strict = const Value.absent(),
                 Value<String> startedBy = const Value.absent(),
+                Value<int> workMinutes = const Value.absent(),
+                Value<int> breakMinutes = const Value.absent(),
+                Value<String?> subjectId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FocusSessionsCompanion.insert(
                 hlc: hlc,
@@ -4484,6 +5360,9 @@ class $$FocusSessionsTableTableManager
                 quiet: quiet,
                 strict: strict,
                 startedBy: startedBy,
+                workMinutes: workMinutes,
+                breakMinutes: breakMinutes,
+                subjectId: subjectId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -4518,6 +5397,335 @@ typedef $$FocusSessionsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $FocusSessionsTable, FocusSessionRow>,
       ),
       FocusSessionRow,
+      PrefetchHooks Function()
+    >;
+typedef $$StudySessionsTableCreateCompanionBuilder =
+    StudySessionsCompanion Function({
+      required String hlc,
+      Value<String> fieldClock,
+      Value<bool> deleted,
+      Value<bool> dirty,
+      required String id,
+      Value<String?> subjectId,
+      required int startedAt,
+      required int endsAt,
+      Value<int?> stoppedAt,
+      Value<int> workMinutes,
+      Value<int> breakMinutes,
+      Value<int> rowid,
+    });
+typedef $$StudySessionsTableUpdateCompanionBuilder =
+    StudySessionsCompanion Function({
+      Value<String> hlc,
+      Value<String> fieldClock,
+      Value<bool> deleted,
+      Value<bool> dirty,
+      Value<String> id,
+      Value<String?> subjectId,
+      Value<int> startedAt,
+      Value<int> endsAt,
+      Value<int?> stoppedAt,
+      Value<int> workMinutes,
+      Value<int> breakMinutes,
+      Value<int> rowid,
+    });
+
+class $$StudySessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $StudySessionsTable> {
+  $$StudySessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get hlc => $composableBuilder(
+    column: $table.hlc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endsAt => $composableBuilder(
+    column: $table.endsAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get stoppedAt => $composableBuilder(
+    column: $table.stoppedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StudySessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StudySessionsTable> {
+  $$StudySessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get hlc => $composableBuilder(
+    column: $table.hlc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endsAt => $composableBuilder(
+    column: $table.endsAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get stoppedAt => $composableBuilder(
+    column: $table.stoppedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StudySessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StudySessionsTable> {
+  $$StudySessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get hlc =>
+      $composableBuilder(column: $table.hlc, builder: (column) => column);
+
+  GeneratedColumn<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get subjectId =>
+      $composableBuilder(column: $table.subjectId, builder: (column) => column);
+
+  GeneratedColumn<int> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get endsAt =>
+      $composableBuilder(column: $table.endsAt, builder: (column) => column);
+
+  GeneratedColumn<int> get stoppedAt =>
+      $composableBuilder(column: $table.stoppedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get workMinutes => $composableBuilder(
+    column: $table.workMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get breakMinutes => $composableBuilder(
+    column: $table.breakMinutes,
+    builder: (column) => column,
+  );
+}
+
+class $$StudySessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StudySessionsTable,
+          StudySessionRow,
+          $$StudySessionsTableFilterComposer,
+          $$StudySessionsTableOrderingComposer,
+          $$StudySessionsTableAnnotationComposer,
+          $$StudySessionsTableCreateCompanionBuilder,
+          $$StudySessionsTableUpdateCompanionBuilder,
+          (
+            StudySessionRow,
+            BaseReferences<_$AppDatabase, $StudySessionsTable, StudySessionRow>,
+          ),
+          StudySessionRow,
+          PrefetchHooks Function()
+        > {
+  $$StudySessionsTableTableManager(_$AppDatabase db, $StudySessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StudySessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StudySessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StudySessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> hlc = const Value.absent(),
+                Value<String> fieldClock = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String?> subjectId = const Value.absent(),
+                Value<int> startedAt = const Value.absent(),
+                Value<int> endsAt = const Value.absent(),
+                Value<int?> stoppedAt = const Value.absent(),
+                Value<int> workMinutes = const Value.absent(),
+                Value<int> breakMinutes = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StudySessionsCompanion(
+                hlc: hlc,
+                fieldClock: fieldClock,
+                deleted: deleted,
+                dirty: dirty,
+                id: id,
+                subjectId: subjectId,
+                startedAt: startedAt,
+                endsAt: endsAt,
+                stoppedAt: stoppedAt,
+                workMinutes: workMinutes,
+                breakMinutes: breakMinutes,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String hlc,
+                Value<String> fieldClock = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                required String id,
+                Value<String?> subjectId = const Value.absent(),
+                required int startedAt,
+                required int endsAt,
+                Value<int?> stoppedAt = const Value.absent(),
+                Value<int> workMinutes = const Value.absent(),
+                Value<int> breakMinutes = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StudySessionsCompanion.insert(
+                hlc: hlc,
+                fieldClock: fieldClock,
+                deleted: deleted,
+                dirty: dirty,
+                id: id,
+                subjectId: subjectId,
+                startedAt: startedAt,
+                endsAt: endsAt,
+                stoppedAt: stoppedAt,
+                workMinutes: workMinutes,
+                breakMinutes: breakMinutes,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$StudySessionsTable, StudySessionRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $StudySessionsTable,
+                    StudySessionRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StudySessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StudySessionsTable,
+      StudySessionRow,
+      $$StudySessionsTableFilterComposer,
+      $$StudySessionsTableOrderingComposer,
+      $$StudySessionsTableAnnotationComposer,
+      $$StudySessionsTableCreateCompanionBuilder,
+      $$StudySessionsTableUpdateCompanionBuilder,
+      (
+        StudySessionRow,
+        BaseReferences<_$AppDatabase, $StudySessionsTable, StudySessionRow>,
+      ),
+      StudySessionRow,
       PrefetchHooks Function()
     >;
 typedef $$LocalSettingsTableCreateCompanionBuilder =
@@ -4679,6 +5887,8 @@ class $AppDatabaseManager {
       $$OccurrencesTableTableManager(_db, _db.occurrences);
   $$FocusSessionsTableTableManager get focusSessions =>
       $$FocusSessionsTableTableManager(_db, _db.focusSessions);
+  $$StudySessionsTableTableManager get studySessions =>
+      $$StudySessionsTableTableManager(_db, _db.studySessions);
   $$LocalSettingsTableTableManager get localSettings =>
       $$LocalSettingsTableTableManager(_db, _db.localSettings);
 }
