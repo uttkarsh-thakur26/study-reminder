@@ -5,6 +5,7 @@ import '../features/alerts/application/alert_providers.dart';
 import '../features/alerts/application/background_actions.dart';
 import '../features/alerts/data/local_notifications.dart';
 import '../features/focus/application/focus_providers.dart';
+import '../features/home_widget/application/home_widget_providers.dart';
 import '../features/settings/settings_controller.dart';
 import '../desktop/desktop_window.dart';
 import '../desktop/start_with_windows.dart';
@@ -36,6 +37,7 @@ Future<List<Override>> bootstrap() async {
         SupabaseSyncApi(url: SyncConfig.url, publicKey: SyncConfig.publicKey),
       ),
     ...focusPlatformOverrides(),
+    ...homeWidgetOverrides(),
     ...await _backgroundRefresh(),
   ];
 }

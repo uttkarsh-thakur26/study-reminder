@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="study_widget_surface">#FF1C1C22</color>
+    <color name="study_widget_on_surface">#FFE5E4EC</color>
+    <color name="study_widget_on_surface_variant">#FFA6A5B4</color>
+    <color name="study_widget_accent">#FFA5B4FC</color>
+    <color name="study_widget_on_accent">#FF1E1B4B</color>
+    <color name="study_widget_accent_container">#FF2F2D5C</color>
+    <color name="study_widget_on_accent_container">#FFE0E0FF</color>
+    <color name="study_widget_ripple">#33FFFFFF</color>
+</resources>
