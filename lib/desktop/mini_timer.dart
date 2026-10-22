@@ -100,14 +100,27 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
     final sessions =
         ref.watch(focusSessionsProvider).value ?? FocusSessions.idle;
     final session = sessions.of(here);
-    final phase = session.phaseAt(now);
+    final paused = session.isPaused;
+    final phase = session.phaseAt(now) ?? session.pausedPhase;
     final mini = ref.read(miniTimerProvider.notifier);
+    final repo = ref.read(focusRepositoryProvider);
+    // Every device in this session, so they stay alike.
+    final on = sessions.sharing(here, now);
 
     final String clock;
     final String label;
     if (phase == null) {
       clock = 'Done';
       label = 'No focus session running';
+    } else if (paused) {
+      clock = _clock(
+        phase.rounds > 1
+            ? phase.endsAt.difference(session.pausedAt!)
+            : session.pausedLeft,
+      );
+      label = phase.rounds > 1
+          ? 'Paused · round ${phase.round} of ${phase.rounds}'
+          : 'Paused';
     } else {
       final left = phase.rounds > 1
           ? phase.endsAt.difference(now)
@@ -119,7 +132,11 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
           ? 'Break · round ${phase.round} of ${phase.rounds} done'
           : 'Round ${phase.round} of ${phase.rounds}';
     }
-    final color = phase?.onBreak ?? false ? scheme.tertiary : scheme.primary;
+    final color = paused
+        ? scheme.outline
+        : phase?.onBreak ?? false
+        ? scheme.tertiary
+        : scheme.primary;
 
     return Material(
       color: scheme.surfaceContainer,
@@ -168,16 +185,22 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
                     icon: const Icon(Icons.open_in_full_rounded, size: 20),
                     tooltip: 'Back to the full window',
                   ),
-                  if (phase != null)
+                  if (paused)
                     IconButton(
-                      // Every device in this session, so they still end
-                      // together.
-                      onPressed: () => ref
-                          .read(focusRepositoryProvider)
-                          .extend(
-                            sessions.sharing(here, now),
-                            const Duration(minutes: 5),
-                          ),
+                      onPressed: () => repo.resume(on),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                      tooltip: 'Resume',
+                    )
+                  else if (phase != null && !session.strict)
+                    IconButton(
+                      onPressed: () => repo.pause(on),
+                      icon: const Icon(Icons.pause_rounded, size: 20),
+                      tooltip: 'Pause',
+                    )
+                  else if (phase != null)
+                    IconButton(
+                      onPressed: () =>
+                          repo.extend(on, const Duration(minutes: 5)),
                       icon: const Icon(Icons.more_time_rounded, size: 20),
                       tooltip: '5 minutes more',
                     ),

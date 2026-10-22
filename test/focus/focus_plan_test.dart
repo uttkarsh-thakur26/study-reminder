@@ -79,6 +79,23 @@ void main() {
     expect(p.nextChangeAfter(at(35)), at(40));
   });
 
+  test('a resumed plan counts only from when it began again', () {
+    final p = FocusPlan(
+      start: start,
+      since: at(10),
+      end: at(55),
+      work: const Duration(minutes: 25),
+      rest: const Duration(minutes: 5),
+      rounds: 2,
+    );
+    expect(p.workSpans, [
+      (from: at(10), to: at(25)),
+      (from: at(30), to: at(55)),
+    ]);
+    expect(p.focused, const Duration(minutes: 40));
+    expect(p.phaseAt(at(12)).round, 1);
+  });
+
   test('without lengths it is one round', () {
     final p = FocusPlan(start: start, end: at(45));
     expect(p.hasBreaks, isFalse);

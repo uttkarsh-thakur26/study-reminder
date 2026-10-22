@@ -16,6 +16,7 @@ class FocusGuardSession {
     this.rounds = 1,
     this.workMinutes = 0,
     this.breakMinutes = 0,
+    this.doneMs = 0,
   });
 
   final DateTime startedAt;
@@ -40,6 +41,9 @@ class FocusGuardSession {
   final int workMinutes;
   final int breakMinutes;
 
+  /// For a session resumed after a pause: how far into its rounds it was.
+  final int doneMs;
+
   Map<String, Object?> toMap() => {
     'startedAt': startedAt.millisecondsSinceEpoch,
     'endsAt': endsAt.millisecondsSinceEpoch,
@@ -52,6 +56,7 @@ class FocusGuardSession {
     'rounds': rounds,
     'workMinutes': workMinutes,
     'breakMinutes': breakMinutes,
+    'doneMs': doneMs,
   };
 
   @override
@@ -161,6 +166,9 @@ class FocusGuard {
   /// This phone's push token, so other devices can wake it. Null when the app
   /// was built without Firebase or the phone has no Google Play services.
   Future<String?> pushToken() => _channel.invokeMethod<String>('pushToken');
+
+  /// A short buzz, felt with the phone face down.
+  Future<void> buzz() => _channel.invokeMethod<void>('buzz');
 
   Future<FocusGuardAccess> access() async => FocusGuardAccess.fromMap(
     await _channel.invokeMethod<Map<Object?, Object?>>('access') ?? const {},

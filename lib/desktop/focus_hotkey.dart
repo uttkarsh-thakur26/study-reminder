@@ -6,7 +6,8 @@ import '../features/reminders/domain/reminder.dart';
 
 /// What the focus shortcut does with the laptop's session.
 enum FocusHotkeyStep {
-  /// None runs: start one with this laptop's Focus defaults.
+  /// None runs: resume the paused one, or start one with this laptop's
+  /// Focus defaults.
   start,
 
   /// One runs that may stop early: stop it.
@@ -33,8 +34,14 @@ Future<({FocusHotkeyStep step, FocusSession laptop})> toggleLaptopFocus(
   final step = focusHotkeyStep((await repo.current()).laptop, at);
   switch (step) {
     case FocusHotkeyStep.start:
-      final prefs = await repo.prefs();
-      await repo.startWith(prefs, on: laptop, startedBy: startedBy, now: at);
+      final sessions = await repo.current();
+      if (sessions.laptop.isPaused) {
+        // Carries on where it was paused, on every device it was paused on.
+        await repo.resume(sessions.sharing(DeviceKind.laptop, at), now: at);
+      } else {
+        final prefs = await repo.prefs();
+        await repo.startWith(prefs, on: laptop, startedBy: startedBy, now: at);
+      }
     case FocusHotkeyStep.stop:
       await repo.stop(laptop, now: at);
     case FocusHotkeyStep.show:

@@ -42,6 +42,9 @@ class FocusPhase {
 /// before the plan's (a session stopped early) cuts it short. With no work
 /// or rest length, or one round, it is a single round.
 ///
+/// [since] is when it really began, for a session resumed after a pause
+/// whose plan [start]s earlier: working time before it is not this one's.
+///
 /// Every device works out the same rounds from these values. The phone does
 /// it in Kotlin as well (FocusState.phaseAt), for sessions it gets with the
 /// app closed; keep the two alike.
@@ -52,9 +55,11 @@ class FocusPlan {
     this.work = Duration.zero,
     this.rest = Duration.zero,
     this._rounds = 1,
-  });
+    DateTime? since,
+  }) : since = since ?? start;
 
   final DateTime start;
+  final DateTime since;
   final DateTime end;
   final Duration work;
   final Duration rest;
@@ -74,20 +79,27 @@ class FocusPlan {
 
   int get rounds => hasBreaks ? _rounds : 1;
 
-  /// The rounds' working times up to [end], in order.
+  /// The rounds' working times from [since] up to [end], in order.
   List<({DateTime from, DateTime to})> get workSpans {
     final n = rounds;
-    if (n == 1) return end.isAfter(start) ? [(from: start, to: end)] : [];
-    final cycle = work + rest;
-    final out = <({DateTime from, DateTime to})>[];
-    for (var k = 0; k < n; k++) {
-      final from = start.add(cycle * k);
-      if (!from.isBefore(end)) break;
-      final planned = from.add(work);
-      final to = k == n - 1 || planned.isAfter(end) ? end : planned;
-      out.add((from: from, to: to));
+    final all = <({DateTime from, DateTime to})>[];
+    if (n == 1) {
+      all.add((from: start, to: end));
+    } else {
+      final cycle = work + rest;
+      for (var k = 0; k < n; k++) {
+        final from = start.add(cycle * k);
+        if (!from.isBefore(end)) break;
+        final planned = from.add(work);
+        final to = k == n - 1 || planned.isAfter(end) ? end : planned;
+        all.add((from: from, to: to));
+      }
     }
-    return out;
+    return [
+      for (final s in all)
+        if (s.to.isAfter(since) && s.to.isAfter(s.from))
+          (from: s.from.isBefore(since) ? since : s.from, to: s.to),
+    ];
   }
 
   /// The round or break at [now], which must be within the session; times

@@ -8,6 +8,7 @@ import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
+import '../../../core/ui/minutes_dialog.dart';
 import '../../../desktop/desktop_window.dart';
 import '../../../desktop/mini_timer.dart';
 import '../../reminders/application/reminder_providers.dart';
@@ -19,6 +20,7 @@ import '../domain/focus_plan.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import 'focus_setup.dart';
+import 'focus_time_sheet.dart';
 
 /// Start a focus session on this device, the paired one or both, follow
 /// the ones running, and set up what each device blocks.
@@ -117,15 +119,17 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     final sessions = widget.sessions;
     final here = ref.watch(deviceKindProvider);
     final paired = ref.watch(syncApiProvider) != null;
-    final busy = sessions.busyAt(now);
+    // Running or paused: a paused session holds its device until it is
+    // resumed or stopped.
+    final held = {...sessions.busyAt(now), ...sessions.paused};
     final groups = <Set<DeviceKind>>[
-      if (busy.length == 2 && sessions.phone.sameAs(sessions.laptop))
-        busy
+      if (held.length == 2 && sessions.phone.sameAs(sessions.laptop))
+        held
       else
-        for (final k in busy) {k},
+        for (final k in held) {k},
     ];
     final mine = groups.where((g) => g.contains(here)).firstOrNull;
-    final free = (paired ? DeviceKind.values.toSet() : {here}).difference(busy);
+    final free = (paired ? DeviceKind.values.toSet() : {here}).difference(held);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -202,11 +206,19 @@ class _RunningSession extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final phase = session.phaseAt(now) ?? session.plan.phaseAt(now);
+    final paused = session.isPaused;
+    final phase =
+        session.pausedPhase ??
+        session.phaseAt(now) ??
+        session.plan.phaseAt(now);
     final rounds = phase.rounds > 1;
+    // Stopped in time while paused.
+    final at = paused ? session.pausedAt! : now;
     // With rounds, the clock and the ring follow the round or break.
     final left = rounds
-        ? phase.endsAt.difference(now)
+        ? phase.endsAt.difference(at)
+        : paused
+        ? session.pausedLeft
         : session.remainingAt(now);
     final total = (rounds ? phase.length : session.length).inMilliseconds;
     final progress = total <= 0
@@ -218,27 +230,47 @@ class _RunningSession extends ConsumerWidget {
     final phaseEnd = formatTime(context, phase.endsAt.toLocal());
     final where = _devices(on, here);
     final subject = ref.watch(subjectsByIdProvider)[session.subjectId];
+    final color = paused
+        ? scheme.outline
+        : phase.onBreak
+        ? scheme.tertiary
+        : scheme.primary;
     Widget ring(double size, Widget child) => SizedBox.square(
       dimension: size,
       child: CustomPaint(
         painter: _RingPainter(
           progress: progress,
           track: scheme.surfaceContainerHighest,
-          color: phase.onBreak ? scheme.tertiary : scheme.primary,
+          color: color,
           stroke: size / 18,
         ),
         child: Center(child: child),
       ),
     );
     final clock = _clock(left.isNegative ? Duration.zero : left);
+    void changeTime() => showFocusTimeSheet(context, on: on, where: where);
+    void pickSubject() => _pickSubject(
+      context,
+      ref,
+      current: subject?.id,
+      onPick: (id) => repo.setSubject(on, id),
+    );
 
     if (compact) {
+      final left = paused ? session.pausedLeft : session.remainingAt(now);
       return Card(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(Gap.m, Gap.m, Gap.s, Gap.m),
+          padding: const EdgeInsets.fromLTRB(Gap.m, Gap.m, 0, Gap.m),
           child: Row(
             children: [
-              ring(56, Icon(_icon(on), size: 22, color: scheme.primary)),
+              ring(
+                56,
+                Icon(
+                  paused ? Icons.pause_rounded : _icon(on),
+                  size: 22,
+                  color: paused ? scheme.outline : scheme.primary,
+                ),
+              ),
               const SizedBox(width: Gap.m),
               Expanded(
                 child: Column(
@@ -254,13 +286,15 @@ class _RunningSession extends ConsumerWidget {
                     ),
                     Text(
                       [
-                        if (phase.onBreak)
+                        if (paused)
+                          'paused, ${_clock(left)} left'
+                        else if (phase.onBreak)
                           'break, $clock left'
                         else
                           '$clock left',
                         if (rounds) 'round ${phase.round} of ${phase.rounds}',
                         if (subject != null) subject.name,
-                        'until $until',
+                        if (!paused) 'until $until',
                         if (session.strict) 'strict',
                       ].join(' · '),
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -271,17 +305,44 @@ class _RunningSession extends ConsumerWidget {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => repo.extend(on, const Duration(minutes: 5)),
-                icon: const Icon(Icons.more_time_rounded),
-                tooltip: '5 minutes more on $where',
-              ),
-              if (!session.strict)
+              if (paused)
                 IconButton(
-                  onPressed: () => repo.stop(on),
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  tooltip: 'Stop on $where',
+                  onPressed: () => repo.resume(on),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  tooltip: 'Resume on $where',
+                )
+              else if (!session.strict)
+                IconButton(
+                  onPressed: () => repo.pause(on),
+                  icon: const Icon(Icons.pause_rounded),
+                  tooltip: 'Pause on $where',
                 ),
+              IconButton(
+                onPressed: changeTime,
+                icon: const Icon(Icons.more_time_rounded),
+                tooltip: 'Change the time on $where',
+              ),
+              PopupMenuButton<VoidCallback>(
+                tooltip: 'More for $where',
+                onSelected: (action) => action(),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: pickSubject,
+                    child: const ListTile(
+                      leading: Icon(Icons.menu_book_outlined),
+                      title: Text('Change subject'),
+                    ),
+                  ),
+                  if (!session.strict || paused)
+                    PopupMenuItem(
+                      value: () => repo.stop(on),
+                      child: ListTile(
+                        leading: const Icon(Icons.stop_circle_outlined),
+                        title: Text(paused ? 'End session' : 'Stop'),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -303,10 +364,13 @@ class _RunningSession extends ConsumerWidget {
                     style: theme.textTheme.displayMedium?.copyWith(
                       fontFeatures: const [FontFeature.tabularFigures()],
                       fontWeight: FontWeight.w600,
+                      color: paused ? scheme.onSurfaceVariant : null,
                     ),
                   ),
                   Text(
-                    !rounds
+                    paused
+                        ? 'paused'
+                        : !rounds
                         ? 'left'
                         : phase.onBreak
                         ? 'break'
@@ -324,7 +388,9 @@ class _RunningSession extends ConsumerWidget {
             ],
             const SizedBox(height: Gap.l),
             Text(
-              !rounds || phase.isLastRound && !phase.onBreak
+              paused
+                  ? 'Paused, ${_clock(session.pausedLeft)} left'
+                  : !rounds || phase.isLastRound && !phase.onBreak
                   ? 'Until $until'
                   : phase.onBreak
                   ? 'Back to focus at $phaseEnd'
@@ -335,9 +401,13 @@ class _RunningSession extends ConsumerWidget {
             Text(
               [
                 'On $where',
-                if (session.startedBy.isNotEmpty)
-                  'started on ${session.startedBy}',
-                if (rounds && !phase.isLastRound) 'ends $until',
+                if (paused)
+                  'nothing is blocked until you resume'
+                else ...[
+                  if (session.startedBy.isNotEmpty)
+                    'started on ${session.startedBy}',
+                  if (rounds && !phase.isLastRound) 'ends $until',
+                ],
               ].join(', '),
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -345,28 +415,37 @@ class _RunningSession extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: Gap.m),
-            _SubjectButton(
-              subject: subject,
-              onPick: (id) => repo.setSubject(on, id),
-            ),
+            _SubjectButton(subject: subject, onPressed: pickSubject),
             const SizedBox(height: Gap.m),
             Wrap(
               alignment: WrapAlignment.center,
               spacing: Gap.m,
               runSpacing: Gap.s,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => repo.extend(on, const Duration(minutes: 5)),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('5 min'),
-                ),
-                if (!session.strict)
+                if (paused)
+                  FilledButton.icon(
+                    onPressed: () => repo.resume(on),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Resume'),
+                  )
+                else if (!session.strict)
                   FilledButton.tonalIcon(
+                    onPressed: () => repo.pause(on),
+                    icon: const Icon(Icons.pause_rounded),
+                    label: const Text('Pause'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: changeTime,
+                  icon: const Icon(Icons.more_time_rounded),
+                  label: const Text('Time'),
+                ),
+                if (!session.strict || paused)
+                  OutlinedButton.icon(
                     onPressed: () => repo.stop(on),
                     icon: const Icon(Icons.stop_rounded),
-                    label: const Text('Stop'),
+                    label: Text(paused ? 'End' : 'Stop'),
                   ),
-                if (isWindowsApp && on.contains(here))
+                if (isWindowsApp && on.contains(here) && !paused)
                   OutlinedButton.icon(
                     onPressed: () =>
                         ref.read(miniTimerProvider.notifier).enter(),
@@ -375,10 +454,10 @@ class _RunningSession extends ConsumerWidget {
                   ),
               ],
             ),
-            if (session.strict) ...[
+            if (session.strict && !paused) ...[
               const SizedBox(height: Gap.s),
               Text(
-                'Strict session: it runs to the end.',
+                'Strict session: it runs to the end, with no pausing.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -425,9 +504,9 @@ class _StartElsewhere extends ConsumerWidget {
                 final sessions =
                     ref.watch(focusSessionsProvider).value ??
                     FocusSessions.idle;
-                final stillFree = free.difference(
-                  sessions.busyAt(DateTime.now()),
-                );
+                final stillFree = free
+                    .difference(sessions.busyAt(DateTime.now()))
+                    .difference(sessions.paused);
                 return SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.l),
                   child: stillFree.isEmpty
@@ -527,10 +606,21 @@ class _StartForm extends ConsumerWidget {
     final here = ref.watch(deviceKindProvider);
     final wanted = prefs.target.kinds.intersection(free);
     final on = wanted.isEmpty ? free : wanted;
-    void save(FocusPrefs p) => repo.savePrefs(p);
-    void setMinutes(int m) => save(prefs.copyWith(minutes: m.clamp(5, 240)));
-    final subjects = ref.watch(subjectsProvider).value ?? const <Subject>[];
     final rounds = prefs.rounds;
+    void save(FocusPrefs p) => repo.savePrefs(p);
+    void setMinutes(int m) => save(prefs.copyWith(minutes: m.clamp(1, 240)));
+    Future<void> typeMinutes() async {
+      final m = await showMinutesDialog(
+        context,
+        title: rounds > 1 ? 'Minutes a round' : 'Minutes',
+        initial: prefs.minutes,
+      );
+      if (m != null) setMinutes(m);
+    }
+
+    final minutes = prefs.minutes;
+    final custom = !_presets.contains(minutes);
+    final subjects = ref.watch(subjectsProvider).value ?? const <Subject>[];
 
     final form = Padding(
       padding: flat ? EdgeInsets.zero : const EdgeInsets.all(Gap.l),
@@ -541,39 +631,46 @@ class _StartForm extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton.filledTonal(
-                onPressed: prefs.minutes > 5
-                    ? () => setMinutes(prefs.minutes - 5)
+                onPressed: minutes > 1
+                    ? () => setMinutes(_less(minutes))
                     : null,
                 icon: const Icon(Icons.remove_rounded),
-                tooltip: '5 minutes less',
+                tooltip: 'Less',
               ),
               SizedBox(
                 width: 150,
-                child: Column(
-                  children: [
-                    Text(
-                      '${prefs.minutes}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.displayMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(Radii.m),
+                  onTap: typeMinutes,
+                  child: Tooltip(
+                    message: 'Type the minutes',
+                    child: Column(
+                      children: [
+                        Text(
+                          '$minutes',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        Text(
+                          rounds > 1 ? 'minutes a round' : 'minutes',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      rounds > 1 ? 'minutes a round' : 'minutes',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
               IconButton.filledTonal(
-                onPressed: prefs.minutes < 240
-                    ? () => setMinutes(prefs.minutes + 5)
+                onPressed: minutes < 240
+                    ? () => setMinutes(_more(minutes))
                     : null,
                 icon: const Icon(Icons.add_rounded),
-                tooltip: '5 minutes more',
+                tooltip: 'More',
               ),
             ],
           ),
@@ -581,13 +678,20 @@ class _StartForm extends ConsumerWidget {
           Wrap(
             alignment: WrapAlignment.center,
             spacing: Gap.s,
+            runSpacing: Gap.xs,
             children: [
               for (final m in _presets)
                 ChoiceChip(
                   label: Text('$m'),
-                  selected: prefs.minutes == m,
+                  selected: minutes == m,
                   onSelected: (_) => setMinutes(m),
                 ),
+              ChoiceChip(
+                avatar: custom ? null : const Icon(Icons.edit_outlined),
+                label: Text(custom ? '$minutes' : 'Other'),
+                selected: custom,
+                onSelected: (_) => typeMinutes(),
+              ),
             ],
           ),
           const SizedBox(height: Gap.m),
@@ -659,6 +763,28 @@ class _StartForm extends ConsumerWidget {
             value: prefs.strict,
             onChanged: (v) => save(prefs.copyWith(strict: v)),
           ),
+          if (ref.watch(flipArmedProvider) && on.contains(here)) ...[
+            const SizedBox(height: Gap.s),
+            Row(
+              children: [
+                Icon(
+                  Icons.screen_rotation_alt_rounded,
+                  size: 18,
+                  color: scheme.primary,
+                ),
+                const SizedBox(width: Gap.s),
+                Expanded(
+                  child: Text(
+                    'Flip to focus is on: lay the phone screen down for '
+                    '2 seconds to start. It buzzes when focus starts.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: Gap.m),
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -683,6 +809,11 @@ class _StartForm extends ConsumerWidget {
     );
     return flat ? form : Card(child: form);
   }
+
+  /// One minute at a time up to 10, then to the next multiple of 5.
+  static int _less(int m) => m > 10 ? (m - 1) ~/ 5 * 5 : m - 1;
+
+  static int _more(int m) => m >= 10 ? (m ~/ 5 + 1) * 5 : m + 1;
 }
 
 /// Rounds per session and the break between two.
@@ -700,6 +831,7 @@ class _RoundsPicker extends StatelessWidget {
     final scheme = theme.colorScheme;
     final rounds = prefs.rounds;
     final end = formatTime(context, DateTime.now().add(prefs.length));
+    final customBreak = !_breaks.contains(prefs.breakMinutes);
     return Container(
       padding: const EdgeInsets.fromLTRB(Gap.m, Gap.s, Gap.s, Gap.s),
       decoration: BoxDecoration(
@@ -752,31 +884,58 @@ class _RoundsPicker extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
+                        Wrap(
+                          spacing: Gap.xs,
+                          runSpacing: Gap.xs,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Icon(
-                              Icons.local_cafe_outlined,
-                              size: 20,
-                              color: scheme.tertiary,
-                            ),
-                            const SizedBox(width: Gap.s),
-                            Expanded(
-                              child: Text(
-                                'Breaks',
-                                style: theme.textTheme.titleSmall,
+                            Padding(
+                              padding: const EdgeInsets.only(right: Gap.s),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.local_cafe_outlined,
+                                    size: 20,
+                                    color: scheme.tertiary,
+                                  ),
+                                  const SizedBox(width: Gap.s),
+                                  Text(
+                                    'Breaks',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                ],
                               ),
                             ),
                             for (final m in _breaks)
-                              Padding(
-                                padding: const EdgeInsets.only(left: Gap.xs),
-                                child: ChoiceChip(
-                                  label: Text('$m min'),
-                                  selected: prefs.breakMinutes == m,
-                                  onSelected: (_) => onChanged(
-                                    prefs.copyWith(breakMinutes: m),
-                                  ),
-                                ),
+                              ChoiceChip(
+                                label: Text('$m min'),
+                                selected: prefs.breakMinutes == m,
+                                onSelected: (_) =>
+                                    onChanged(prefs.copyWith(breakMinutes: m)),
                               ),
+                            ChoiceChip(
+                              avatar: customBreak
+                                  ? null
+                                  : const Icon(Icons.edit_outlined),
+                              label: Text(
+                                customBreak
+                                    ? '${prefs.breakMinutes} min'
+                                    : 'Other',
+                              ),
+                              selected: customBreak,
+                              onSelected: (_) async {
+                                final m = await showMinutesDialog(
+                                  context,
+                                  title: 'Minutes a break',
+                                  initial: prefs.breakMinutes,
+                                  max: 60,
+                                );
+                                if (m != null) {
+                                  onChanged(prefs.copyWith(breakMinutes: m));
+                                }
+                              },
+                            ),
                           ],
                         ),
                         const SizedBox(height: Gap.s),
@@ -823,7 +982,10 @@ class _SubjectChips extends StatelessWidget {
         ),
         for (final s in subjects)
           ChoiceChip(
-            avatar: _Dot(Color(s.color)),
+            showCheckmark: false,
+            avatar: selected == s.id
+                ? Icon(Icons.check_rounded, size: 18, color: Color(s.color))
+                : _Dot(Color(s.color)),
             label: Text(s.name),
             selected: selected == s.id,
             onSelected: (_) => onSelected(s.id),
@@ -848,10 +1010,10 @@ class _Dot extends StatelessWidget {
 
 /// The running session's subject, tap to change it.
 class _SubjectButton extends ConsumerWidget {
-  const _SubjectButton({required this.subject, required this.onPick});
+  const _SubjectButton({required this.subject, required this.onPressed});
 
   final Subject? subject;
-  final ValueChanged<String?> onPick;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -863,34 +1025,48 @@ class _SubjectButton extends ConsumerWidget {
           ? const Icon(Icons.menu_book_outlined, size: 18)
           : _Dot(Color(current.color)),
       label: Text(current?.name ?? 'Add a subject'),
-      onPressed: () => showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (sheet) => Padding(
-          padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'What are you studying?',
-                style: Theme.of(sheet).textTheme.titleMedium,
-              ),
-              const SizedBox(height: Gap.m),
-              _SubjectChips(
-                subjects: subjects,
-                selected: current?.id,
-                onSelected: (id) {
-                  onPick(id);
-                  Navigator.of(sheet).pop();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+      onPressed: onPressed,
     );
   }
+}
+
+/// Asks what a running or paused session is for.
+Future<void> _pickSubject(
+  BuildContext context,
+  WidgetRef ref, {
+  required String? current,
+  required ValueChanged<String?> onPick,
+}) {
+  final subjects = ref.read(subjectsProvider).value ?? const <Subject>[];
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) => Padding(
+      padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'What are you studying?',
+            style: Theme.of(sheet).textTheme.titleMedium,
+          ),
+          const SizedBox(height: Gap.m),
+          if (subjects.isEmpty)
+            const Text('Add subjects on the Study tab first.')
+          else
+            _SubjectChips(
+              subjects: subjects,
+              selected: current,
+              onSelected: (id) {
+                onPick(id);
+                Navigator.of(sheet).pop();
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// One dot per round: done, running and still to come.

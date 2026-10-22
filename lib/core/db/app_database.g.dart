@@ -2343,6 +2343,27 @@ class $FocusSessionsTable extends FocusSessions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _doneMsMeta = const VerificationMeta('doneMs');
+  @override
+  late final GeneratedColumn<int> doneMs = GeneratedColumn<int>(
+    'done_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _pausedAtMeta = const VerificationMeta(
+    'pausedAt',
+  );
+  @override
+  late final GeneratedColumn<int> pausedAt = GeneratedColumn<int>(
+    'paused_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     hlc,
@@ -2362,6 +2383,8 @@ class $FocusSessionsTable extends FocusSessions
     workMinutes,
     breakMinutes,
     subjectId,
+    doneMs,
+    pausedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2484,6 +2507,18 @@ class $FocusSessionsTable extends FocusSessions
         subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta),
       );
     }
+    if (data.containsKey('done_ms')) {
+      context.handle(
+        _doneMsMeta,
+        doneMs.isAcceptableOrUnknown(data['done_ms']!, _doneMsMeta),
+      );
+    }
+    if (data.containsKey('paused_at')) {
+      context.handle(
+        _pausedAtMeta,
+        pausedAt.isAcceptableOrUnknown(data['paused_at']!, _pausedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -2561,6 +2596,14 @@ class $FocusSessionsTable extends FocusSessions
         DriftSqlType.string,
         data['${effectivePrefix}subject_id'],
       ),
+      doneMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}done_ms'],
+      )!,
+      pausedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}paused_at'],
+      ),
     );
   }
 
@@ -2593,6 +2636,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
   final int workMinutes;
   final int breakMinutes;
   final String? subjectId;
+  final int doneMs;
+  final int? pausedAt;
   const FocusSessionRow({
     required this.hlc,
     required this.fieldClock,
@@ -2611,6 +2656,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     required this.workMinutes,
     required this.breakMinutes,
     this.subjectId,
+    required this.doneMs,
+    this.pausedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2637,6 +2684,10 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     map['break_minutes'] = Variable<int>(breakMinutes);
     if (!nullToAbsent || subjectId != null) {
       map['subject_id'] = Variable<String>(subjectId);
+    }
+    map['done_ms'] = Variable<int>(doneMs);
+    if (!nullToAbsent || pausedAt != null) {
+      map['paused_at'] = Variable<int>(pausedAt);
     }
     return map;
   }
@@ -2666,6 +2717,10 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       subjectId: subjectId == null && nullToAbsent
           ? const Value.absent()
           : Value(subjectId),
+      doneMs: Value(doneMs),
+      pausedAt: pausedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pausedAt),
     );
   }
 
@@ -2692,6 +2747,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       workMinutes: serializer.fromJson<int>(json['workMinutes']),
       breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
       subjectId: serializer.fromJson<String?>(json['subjectId']),
+      doneMs: serializer.fromJson<int>(json['doneMs']),
+      pausedAt: serializer.fromJson<int?>(json['pausedAt']),
     );
   }
   @override
@@ -2715,6 +2772,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
       'workMinutes': serializer.toJson<int>(workMinutes),
       'breakMinutes': serializer.toJson<int>(breakMinutes),
       'subjectId': serializer.toJson<String?>(subjectId),
+      'doneMs': serializer.toJson<int>(doneMs),
+      'pausedAt': serializer.toJson<int?>(pausedAt),
     };
   }
 
@@ -2736,6 +2795,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     int? workMinutes,
     int? breakMinutes,
     Value<String?> subjectId = const Value.absent(),
+    int? doneMs,
+    Value<int?> pausedAt = const Value.absent(),
   }) => FocusSessionRow(
     hlc: hlc ?? this.hlc,
     fieldClock: fieldClock ?? this.fieldClock,
@@ -2754,6 +2815,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     workMinutes: workMinutes ?? this.workMinutes,
     breakMinutes: breakMinutes ?? this.breakMinutes,
     subjectId: subjectId.present ? subjectId.value : this.subjectId,
+    doneMs: doneMs ?? this.doneMs,
+    pausedAt: pausedAt.present ? pausedAt.value : this.pausedAt,
   );
   FocusSessionRow copyWithCompanion(FocusSessionsCompanion data) {
     return FocusSessionRow(
@@ -2780,6 +2843,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           ? data.breakMinutes.value
           : this.breakMinutes,
       subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      doneMs: data.doneMs.present ? data.doneMs.value : this.doneMs,
+      pausedAt: data.pausedAt.present ? data.pausedAt.value : this.pausedAt,
     );
   }
 
@@ -2802,7 +2867,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
-          ..write('subjectId: $subjectId')
+          ..write('subjectId: $subjectId, ')
+          ..write('doneMs: $doneMs, ')
+          ..write('pausedAt: $pausedAt')
           ..write(')'))
         .toString();
   }
@@ -2826,6 +2893,8 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
     workMinutes,
     breakMinutes,
     subjectId,
+    doneMs,
+    pausedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -2847,7 +2916,9 @@ class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
           other.rounds == this.rounds &&
           other.workMinutes == this.workMinutes &&
           other.breakMinutes == this.breakMinutes &&
-          other.subjectId == this.subjectId);
+          other.subjectId == this.subjectId &&
+          other.doneMs == this.doneMs &&
+          other.pausedAt == this.pausedAt);
 }
 
 class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
@@ -2868,6 +2939,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
   final Value<int> workMinutes;
   final Value<int> breakMinutes;
   final Value<String?> subjectId;
+  final Value<int> doneMs;
+  final Value<int?> pausedAt;
   final Value<int> rowid;
   const FocusSessionsCompanion({
     this.hlc = const Value.absent(),
@@ -2887,6 +2960,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.subjectId = const Value.absent(),
+    this.doneMs = const Value.absent(),
+    this.pausedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FocusSessionsCompanion.insert({
@@ -2907,6 +2982,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
     this.subjectId = const Value.absent(),
+    this.doneMs = const Value.absent(),
+    this.pausedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : hlc = Value(hlc),
        id = Value(id);
@@ -2928,6 +3005,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Expression<int>? workMinutes,
     Expression<int>? breakMinutes,
     Expression<String>? subjectId,
+    Expression<int>? doneMs,
+    Expression<int>? pausedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2948,6 +3027,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       if (workMinutes != null) 'work_minutes': workMinutes,
       if (breakMinutes != null) 'break_minutes': breakMinutes,
       if (subjectId != null) 'subject_id': subjectId,
+      if (doneMs != null) 'done_ms': doneMs,
+      if (pausedAt != null) 'paused_at': pausedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2970,6 +3051,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     Value<int>? workMinutes,
     Value<int>? breakMinutes,
     Value<String?>? subjectId,
+    Value<int>? doneMs,
+    Value<int?>? pausedAt,
     Value<int>? rowid,
   }) {
     return FocusSessionsCompanion(
@@ -2990,6 +3073,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
       workMinutes: workMinutes ?? this.workMinutes,
       breakMinutes: breakMinutes ?? this.breakMinutes,
       subjectId: subjectId ?? this.subjectId,
+      doneMs: doneMs ?? this.doneMs,
+      pausedAt: pausedAt ?? this.pausedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3048,6 +3133,12 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
     if (subjectId.present) {
       map['subject_id'] = Variable<String>(subjectId.value);
     }
+    if (doneMs.present) {
+      map['done_ms'] = Variable<int>(doneMs.value);
+    }
+    if (pausedAt.present) {
+      map['paused_at'] = Variable<int>(pausedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3074,6 +3165,8 @@ class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
           ..write('subjectId: $subjectId, ')
+          ..write('doneMs: $doneMs, ')
+          ..write('pausedAt: $pausedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3222,6 +3315,16 @@ class $StudySessionsTable extends StudySessions
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _doneMsMeta = const VerificationMeta('doneMs');
+  @override
+  late final GeneratedColumn<int> doneMs = GeneratedColumn<int>(
+    'done_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     hlc,
@@ -3236,6 +3339,7 @@ class $StudySessionsTable extends StudySessions
     rounds,
     workMinutes,
     breakMinutes,
+    doneMs,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3333,6 +3437,12 @@ class $StudySessionsTable extends StudySessions
         ),
       );
     }
+    if (data.containsKey('done_ms')) {
+      context.handle(
+        _doneMsMeta,
+        doneMs.isAcceptableOrUnknown(data['done_ms']!, _doneMsMeta),
+      );
+    }
     return context;
   }
 
@@ -3390,6 +3500,10 @@ class $StudySessionsTable extends StudySessions
         DriftSqlType.int,
         data['${effectivePrefix}break_minutes'],
       )!,
+      doneMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}done_ms'],
+      )!,
     );
   }
 
@@ -3417,6 +3531,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
   final int rounds;
   final int workMinutes;
   final int breakMinutes;
+  final int doneMs;
   const StudySessionRow({
     required this.hlc,
     required this.fieldClock,
@@ -3430,6 +3545,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     required this.rounds,
     required this.workMinutes,
     required this.breakMinutes,
+    required this.doneMs,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3452,6 +3568,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     map['rounds'] = Variable<int>(rounds);
     map['work_minutes'] = Variable<int>(workMinutes);
     map['break_minutes'] = Variable<int>(breakMinutes);
+    map['done_ms'] = Variable<int>(doneMs);
     return map;
   }
 
@@ -3475,6 +3592,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       rounds: Value(rounds),
       workMinutes: Value(workMinutes),
       breakMinutes: Value(breakMinutes),
+      doneMs: Value(doneMs),
     );
   }
 
@@ -3496,6 +3614,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       rounds: serializer.fromJson<int>(json['rounds']),
       workMinutes: serializer.fromJson<int>(json['workMinutes']),
       breakMinutes: serializer.fromJson<int>(json['breakMinutes']),
+      doneMs: serializer.fromJson<int>(json['doneMs']),
     );
   }
   @override
@@ -3514,6 +3633,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       'rounds': serializer.toJson<int>(rounds),
       'workMinutes': serializer.toJson<int>(workMinutes),
       'breakMinutes': serializer.toJson<int>(breakMinutes),
+      'doneMs': serializer.toJson<int>(doneMs),
     };
   }
 
@@ -3530,6 +3650,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     int? rounds,
     int? workMinutes,
     int? breakMinutes,
+    int? doneMs,
   }) => StudySessionRow(
     hlc: hlc ?? this.hlc,
     fieldClock: fieldClock ?? this.fieldClock,
@@ -3543,6 +3664,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     rounds: rounds ?? this.rounds,
     workMinutes: workMinutes ?? this.workMinutes,
     breakMinutes: breakMinutes ?? this.breakMinutes,
+    doneMs: doneMs ?? this.doneMs,
   );
   StudySessionRow copyWithCompanion(StudySessionsCompanion data) {
     return StudySessionRow(
@@ -3568,6 +3690,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
       breakMinutes: data.breakMinutes.present
           ? data.breakMinutes.value
           : this.breakMinutes,
+      doneMs: data.doneMs.present ? data.doneMs.value : this.doneMs,
     );
   }
 
@@ -3585,7 +3708,8 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
           ..write('laptopUntil: $laptopUntil, ')
           ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
-          ..write('breakMinutes: $breakMinutes')
+          ..write('breakMinutes: $breakMinutes, ')
+          ..write('doneMs: $doneMs')
           ..write(')'))
         .toString();
   }
@@ -3604,6 +3728,7 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
     rounds,
     workMinutes,
     breakMinutes,
+    doneMs,
   );
   @override
   bool operator ==(Object other) =>
@@ -3620,7 +3745,8 @@ class StudySessionRow extends DataClass implements Insertable<StudySessionRow> {
           other.laptopUntil == this.laptopUntil &&
           other.rounds == this.rounds &&
           other.workMinutes == this.workMinutes &&
-          other.breakMinutes == this.breakMinutes);
+          other.breakMinutes == this.breakMinutes &&
+          other.doneMs == this.doneMs);
 }
 
 class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
@@ -3636,6 +3762,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
   final Value<int> rounds;
   final Value<int> workMinutes;
   final Value<int> breakMinutes;
+  final Value<int> doneMs;
   final Value<int> rowid;
   const StudySessionsCompanion({
     this.hlc = const Value.absent(),
@@ -3650,6 +3777,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
+    this.doneMs = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   StudySessionsCompanion.insert({
@@ -3665,6 +3793,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     this.rounds = const Value.absent(),
     this.workMinutes = const Value.absent(),
     this.breakMinutes = const Value.absent(),
+    this.doneMs = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : hlc = Value(hlc),
        id = Value(id),
@@ -3682,6 +3811,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     Expression<int>? rounds,
     Expression<int>? workMinutes,
     Expression<int>? breakMinutes,
+    Expression<int>? doneMs,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3697,6 +3827,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
       if (rounds != null) 'rounds': rounds,
       if (workMinutes != null) 'work_minutes': workMinutes,
       if (breakMinutes != null) 'break_minutes': breakMinutes,
+      if (doneMs != null) 'done_ms': doneMs,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3714,6 +3845,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     Value<int>? rounds,
     Value<int>? workMinutes,
     Value<int>? breakMinutes,
+    Value<int>? doneMs,
     Value<int>? rowid,
   }) {
     return StudySessionsCompanion(
@@ -3729,6 +3861,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
       rounds: rounds ?? this.rounds,
       workMinutes: workMinutes ?? this.workMinutes,
       breakMinutes: breakMinutes ?? this.breakMinutes,
+      doneMs: doneMs ?? this.doneMs,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3772,6 +3905,9 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
     if (breakMinutes.present) {
       map['break_minutes'] = Variable<int>(breakMinutes.value);
     }
+    if (doneMs.present) {
+      map['done_ms'] = Variable<int>(doneMs.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3793,6 +3929,7 @@ class StudySessionsCompanion extends UpdateCompanion<StudySessionRow> {
           ..write('rounds: $rounds, ')
           ..write('workMinutes: $workMinutes, ')
           ..write('breakMinutes: $breakMinutes, ')
+          ..write('doneMs: $doneMs, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5092,6 +5229,8 @@ typedef $$FocusSessionsTableCreateCompanionBuilder =
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<String?> subjectId,
+      Value<int> doneMs,
+      Value<int?> pausedAt,
       Value<int> rowid,
     });
 typedef $$FocusSessionsTableUpdateCompanionBuilder =
@@ -5113,6 +5252,8 @@ typedef $$FocusSessionsTableUpdateCompanionBuilder =
       Value<int> workMinutes,
       Value<int> breakMinutes,
       Value<String?> subjectId,
+      Value<int> doneMs,
+      Value<int?> pausedAt,
       Value<int> rowid,
     });
 
@@ -5207,6 +5348,16 @@ class $$FocusSessionsTableFilterComposer
 
   ColumnFilters<String> get subjectId => $composableBuilder(
     column: $table.subjectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get doneMs => $composableBuilder(
+    column: $table.doneMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pausedAt => $composableBuilder(
+    column: $table.pausedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5304,6 +5455,16 @@ class $$FocusSessionsTableOrderingComposer
     column: $table.subjectId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get doneMs => $composableBuilder(
+    column: $table.doneMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pausedAt => $composableBuilder(
+    column: $table.pausedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$FocusSessionsTableAnnotationComposer
@@ -5371,6 +5532,12 @@ class $$FocusSessionsTableAnnotationComposer
 
   GeneratedColumn<String> get subjectId =>
       $composableBuilder(column: $table.subjectId, builder: (column) => column);
+
+  GeneratedColumn<int> get doneMs =>
+      $composableBuilder(column: $table.doneMs, builder: (column) => column);
+
+  GeneratedColumn<int> get pausedAt =>
+      $composableBuilder(column: $table.pausedAt, builder: (column) => column);
 }
 
 class $$FocusSessionsTableTableManager
@@ -5421,6 +5588,8 @@ class $$FocusSessionsTableTableManager
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<String?> subjectId = const Value.absent(),
+                Value<int> doneMs = const Value.absent(),
+                Value<int?> pausedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FocusSessionsCompanion(
                 hlc: hlc,
@@ -5440,6 +5609,8 @@ class $$FocusSessionsTableTableManager
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 subjectId: subjectId,
+                doneMs: doneMs,
+                pausedAt: pausedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5461,6 +5632,8 @@ class $$FocusSessionsTableTableManager
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
                 Value<String?> subjectId = const Value.absent(),
+                Value<int> doneMs = const Value.absent(),
+                Value<int?> pausedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FocusSessionsCompanion.insert(
                 hlc: hlc,
@@ -5480,6 +5653,8 @@ class $$FocusSessionsTableTableManager
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
                 subjectId: subjectId,
+                doneMs: doneMs,
+                pausedAt: pausedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -5530,6 +5705,7 @@ typedef $$StudySessionsTableCreateCompanionBuilder =
       Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
+      Value<int> doneMs,
       Value<int> rowid,
     });
 typedef $$StudySessionsTableUpdateCompanionBuilder =
@@ -5546,6 +5722,7 @@ typedef $$StudySessionsTableUpdateCompanionBuilder =
       Value<int> rounds,
       Value<int> workMinutes,
       Value<int> breakMinutes,
+      Value<int> doneMs,
       Value<int> rowid,
     });
 
@@ -5615,6 +5792,11 @@ class $$StudySessionsTableFilterComposer
 
   ColumnFilters<int> get breakMinutes => $composableBuilder(
     column: $table.breakMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get doneMs => $composableBuilder(
+    column: $table.doneMs,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5687,6 +5869,11 @@ class $$StudySessionsTableOrderingComposer
     column: $table.breakMinutes,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get doneMs => $composableBuilder(
+    column: $table.doneMs,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$StudySessionsTableAnnotationComposer
@@ -5743,6 +5930,9 @@ class $$StudySessionsTableAnnotationComposer
     column: $table.breakMinutes,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get doneMs =>
+      $composableBuilder(column: $table.doneMs, builder: (column) => column);
 }
 
 class $$StudySessionsTableTableManager
@@ -5788,6 +5978,7 @@ class $$StudySessionsTableTableManager
                 Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
+                Value<int> doneMs = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StudySessionsCompanion(
                 hlc: hlc,
@@ -5802,6 +5993,7 @@ class $$StudySessionsTableTableManager
                 rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
+                doneMs: doneMs,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5818,6 +6010,7 @@ class $$StudySessionsTableTableManager
                 Value<int> rounds = const Value.absent(),
                 Value<int> workMinutes = const Value.absent(),
                 Value<int> breakMinutes = const Value.absent(),
+                Value<int> doneMs = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StudySessionsCompanion.insert(
                 hlc: hlc,
@@ -5832,6 +6025,7 @@ class $$StudySessionsTableTableManager
                 rounds: rounds,
                 workMinutes: workMinutes,
                 breakMinutes: breakMinutes,
+                doneMs: doneMs,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

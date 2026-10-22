@@ -18,6 +18,7 @@ class StudySession {
     this.rounds = 1,
     this.workMinutes = 0,
     this.breakMinutes = 0,
+    this.doneMs = 0,
     this.deleted = false,
   });
 
@@ -40,7 +41,14 @@ class StudySession {
   final int rounds;
   final int workMinutes;
   final int breakMinutes;
+
+  /// For the part of a session after a pause: how far into its plan it
+  /// already was, see `FocusSession.doneMs`.
+  final int doneMs;
   final bool deleted;
+
+  /// The part of a session after a pause.
+  bool get resumed => doneMs > 0;
 
   DateTime? untilOn(DeviceKind kind) =>
       kind == DeviceKind.phone ? phoneUntil : laptopUntil;
@@ -55,7 +63,8 @@ class StudySession {
   }
 
   FocusPlan get plan => FocusPlan(
-    start: startedAt,
+    start: startedAt.subtract(Duration(milliseconds: doneMs)),
+    since: startedAt,
     end: endedAt,
     work: Duration(minutes: workMinutes),
     rest: Duration(minutes: breakMinutes),
@@ -69,6 +78,18 @@ class StudySession {
         (from: s.from, to: s.to.isBefore(now) ? s.to : now),
   ];
 
+  /// The working time until [now], without breaks.
+  Duration focusedUntil(DateTime now) =>
+      workSpansUntil(now)
+          .fold(Duration.zero, (a, w) => a + w.to.difference(w.from));
+
+  /// Whether it shows in the stats at [now]: while it runs, and after if it
+  /// lasted a minute, so a start stopped at once leaves nothing behind.
+  bool countsAt(DateTime now) =>
+      !deleted && (endedAt.isAfter(now) || focusedUntil(now) >= shortest);
+
+  static const shortest = Duration(minutes: 1);
+
   Map<String, Object?> toFields() => {
     'subject_id': subjectId,
     'started_at': startedAt.toUtc().millisecondsSinceEpoch,
@@ -77,6 +98,7 @@ class StudySession {
     'rounds': rounds,
     'work_minutes': workMinutes,
     'break_minutes': breakMinutes,
+    'done_ms': doneMs,
     'deleted': deleted,
   };
 
@@ -104,6 +126,9 @@ class StudySession {
           : 1,
       workMinutes: minutes(f['work_minutes']),
       breakMinutes: minutes(f['break_minutes']),
+      doneMs: f['done_ms'] is num
+          ? (f['done_ms']! as num).toInt().clamp(0, 7 * 24 * 3600 * 1000)
+          : 0,
       deleted: f['deleted'] as bool? ?? false,
     );
   }

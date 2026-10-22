@@ -52,7 +52,7 @@ class StudyStats {
 
     final live = [
       for (final s in sessions)
-        if (!s.deleted) s,
+        if (s.countsAt(now)) s,
     ];
     final all = _merge([for (final s in live) ...s.workSpansUntil(now)]);
     final perDay = _perDay(all);

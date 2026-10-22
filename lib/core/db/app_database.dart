@@ -6,14 +6,21 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-/// Focus session fields added in schema 3.
+/// Synced fields added after the first version of their table.
 abstract final class FocusSessionKeys {
+  /// Focus session fields added in schema 3.
   static const added = [
     'rounds',
     'work_minutes',
     'break_minutes',
     'subject_id',
   ];
+
+  /// Focus session fields added in schema 4, for pausing.
+  static const pause = ['done_ms', 'paused_at'];
+
+  /// Study session fields added in schema 4.
+  static const studyPause = ['done_ms'];
 }
 
 @DriftDatabase(
@@ -39,7 +46,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -66,6 +73,18 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await m.createTable(studySessions);
         await _indexStudySessions();
+      }
+      if (from >= 2 && from < 4) {
+        await m.addColumn(focusSessions, focusSessions.doneMs);
+        await m.addColumn(focusSessions, focusSessions.pausedAt);
+        await _forgetUnknownStamps('focus_sessions', FocusSessionKeys.pause);
+      }
+      if (from == 3) {
+        await m.addColumn(studySessions, studySessions.doneMs);
+        await _forgetUnknownStamps(
+          'study_sessions',
+          FocusSessionKeys.studyPause,
+        );
       }
     },
     beforeOpen: (details) async {

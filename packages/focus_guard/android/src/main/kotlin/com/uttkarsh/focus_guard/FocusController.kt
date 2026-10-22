@@ -64,7 +64,13 @@ object FocusController {
      * phone: stopped, or only for the laptop.
      */
     @Synchronized
-    fun apply(context: Context, version: String, state: FocusState?, pushed: Boolean) {
+    fun apply(
+        context: Context,
+        version: String,
+        state: FocusState?,
+        pushed: Boolean,
+        paused: Boolean = false,
+    ) {
         if (version.isEmpty()) return
         val last = FocusState.lastVersion(context)
         val running = FocusState.load(context)
@@ -85,7 +91,7 @@ object FocusController {
             start(context, state)
         } else if (running != null) {
             finish(context, done = false)
-            if (pushed) postStopped(context)
+            if (pushed) postStopped(context, paused)
         }
     }
 
@@ -460,12 +466,18 @@ object FocusController {
     }
 
     /** A short note that another device ended the session, gone after 10 s. */
-    fun postStopped(context: Context) {
+    fun postStopped(context: Context, paused: Boolean = false) {
         ensureChannels(context)
         val notification = Notification.Builder(context, SESSION_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
-            .setContentTitle("Focus ended")
-            .setContentText("Stopped from your other device.")
+            .setContentTitle(if (paused) "Focus paused" else "Focus ended")
+            .setContentText(
+                if (paused) {
+                    "Paused from your other device. Open the app to resume."
+                } else {
+                    "Stopped from your other device."
+                },
+            )
             .setAutoCancel(true)
             .setTimeoutAfter(10_000)
             .setContentIntent(openApp(context))

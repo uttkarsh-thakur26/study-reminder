@@ -27,7 +27,10 @@ object FocusRemote {
     fun apply(context: Context, focus: JSONObject, version: String) {
         val app = context.applicationContext
         val state = sessionForPhone(app, focus, System.currentTimeMillis())
-        main.post { FocusController.apply(app, version, state, pushed = true) }
+        // Paused, not stopped: it says so, and the app can resume it.
+        val paused = !focus.optBoolean("active") && !focus.isNull("paused_at") &&
+            focus.optLong("paused_at", 0L) > 0L
+        main.post { FocusController.apply(app, version, state, pushed = true, paused = paused) }
     }
 
     /** Shows [raw], something another device asked this phone to tell the user. */
@@ -63,6 +66,7 @@ object FocusRemote {
             workMs = focus.optLong("work_minutes", 0L).coerceIn(0L, 600L) * 60_000L,
             breakMs = focus.optLong("break_minutes", 0L).coerceIn(0L, 600L) * 60_000L,
             plannedRounds = focus.optInt("rounds", 1).coerceIn(1, 100),
+            doneMs = focus.optLong("done_ms", 0L).coerceAtLeast(0L),
         )
     }
 }

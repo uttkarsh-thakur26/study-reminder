@@ -160,13 +160,18 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
   void _updateFlip() {
     final guard = ref.read(focusGuardProvider);
     final prefs = _prefs;
-    final idle = !(_session?.runningAt(DateTime.now()) ?? false);
+    final session = _session;
+    // A paused session waits to be resumed; a flip does not start another.
+    final idle =
+        session == null ||
+        !(session.runningAt(DateTime.now()) || session.isPaused);
     final want =
         guard != null &&
         prefs != null &&
         prefs.flipToFocus &&
         _foreground &&
         idle;
+    ref.read(flipArmedProvider.notifier).set(want);
     if (!want) {
       _flips?.cancel();
       _flips = null;
@@ -192,10 +197,16 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       orFree: false,
     );
     if (on.isEmpty) return;
-    await HapticFeedback.heavyImpact();
     await ref
         .read(focusRepositoryProvider)
         .startWith(prefs, on: on, startedBy: ref.read(deviceNameProvider));
+    // Felt through the table; a tap's haptics may be turned off.
+    try {
+      await ref.read(focusGuardProvider)?.buzz();
+    } on Object catch (e) {
+      debugPrint('focus: no buzz: $e');
+      await HapticFeedback.heavyImpact();
+    }
   }
 
   /// "Focus here" on the note that the laptop quit its strict session:

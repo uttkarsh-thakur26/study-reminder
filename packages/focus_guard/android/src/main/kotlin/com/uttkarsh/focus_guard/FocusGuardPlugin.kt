@@ -14,6 +14,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -144,11 +147,31 @@ class FocusGuardPlugin :
                 focusUntil = 0L
                 result.success(if (until == 0L) null else until)
             }
+            "buzz" -> {
+                buzz()
+                result.success(null)
+            }
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }
             "icon" -> inBackground(result) { icon(call.argument<String>("package") ?: "") }
             else -> result.notImplemented()
+        }
+    }
+
+    /** A short buzz, felt with the phone face down, when a flip starts focus. */
+    private fun buzz() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Vibrator::class.java)
+        } ?: return
+        if (!vibrator.hasVibrator()) return
+        try {
+            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0L, 180L, 120L, 180L), -1))
+        } catch (e: SecurityException) {
+            // No vibration permission; the session starts all the same.
         }
     }
 
@@ -164,6 +187,7 @@ class FocusGuardPlugin :
         workMs = ((m["workMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
         breakMs = ((m["breakMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
         plannedRounds = ((m["rounds"] as? Number)?.toInt() ?: 1).coerceIn(1, 100),
+        doneMs = ((m["doneMs"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
     )
 
     /** This phone's Firebase token, or null when there is none to be had. */

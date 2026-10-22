@@ -21,6 +21,8 @@ data class FocusState(
     val breakMs: Long = 0L,
     /** How many rounds were planned; time added goes to the last one. */
     val plannedRounds: Int = 1,
+    /** For a session resumed after a pause, how far into its plan it was. */
+    val doneMs: Long = 0L,
 ) {
     fun isOver(now: Long = System.currentTimeMillis()) = now >= endsAt
 
@@ -43,27 +45,33 @@ data class FocusState(
      * The round or break at [now]. The app works this out the same way
      * (FocusPlan in Dart); keep the two alike.
      */
+    /** Where the plan began: before [startedAt] for a resumed session. */
+    private val planStart: Long
+        get() = startedAt - doneMs
+
     fun phaseAt(now: Long = System.currentTimeMillis()): Phase {
         val n = rounds()
-        if (n == 1) return Phase(false, 1, 1, startedAt, endsAt)
+        val start = planStart
+        if (n == 1) return Phase(false, 1, 1, start, endsAt)
         val cycle = workMs + breakMs
         for (k in 0 until n - 1) {
-            val workEnd = startedAt + k * cycle + workMs
-            if (now < workEnd) return Phase(false, k + 1, n, startedAt + k * cycle, workEnd)
-            val next = startedAt + (k + 1) * cycle
+            val workEnd = start + k * cycle + workMs
+            if (now < workEnd) return Phase(false, k + 1, n, start + k * cycle, workEnd)
+            val next = start + (k + 1) * cycle
             if (now < next) return Phase(true, k + 1, n, workEnd, next)
         }
-        return Phase(false, n, n, startedAt + (n - 1) * cycle, endsAt)
+        return Phase(false, n, n, start + (n - 1) * cycle, endsAt)
     }
 
-    /** Working time in the whole session, without breaks. */
+    /** Working time in the whole session, a part before a pause included. */
     fun focusedMs(): Long {
         val n = rounds()
-        if (n == 1) return endsAt - startedAt
+        val start = planStart
+        if (n == 1) return endsAt - start
         val cycle = workMs + breakMs
         var total = 0L
         for (k in 0 until n) {
-            val from = startedAt + k * cycle
+            val from = start + k * cycle
             if (from >= endsAt) break
             val to = if (k == n - 1) endsAt else minOf(from + workMs, endsAt)
             total += to - from
@@ -92,6 +100,7 @@ data class FocusState(
                 workMs = p.getLong("workMs", 0L),
                 breakMs = p.getLong("breakMs", 0L),
                 plannedRounds = p.getInt("rounds", 1),
+                doneMs = p.getLong("doneMs", 0L),
             )
         }
 
@@ -109,6 +118,7 @@ data class FocusState(
                 .putLong("workMs", state.workMs)
                 .putLong("breakMs", state.breakMs)
                 .putInt("rounds", state.plannedRounds)
+                .putLong("doneMs", state.doneMs)
                 .apply()
         }
 

@@ -77,6 +77,8 @@ class FocusSessions extends Table with SyncColumns {
   IntColumn get workMinutes => integer().withDefault(const Constant(0))();
   IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
   TextColumn get subjectId => text().nullable()();
+  IntColumn get doneMs => integer().withDefault(const Constant(0))();
+  IntColumn get pausedAt => integer().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -95,6 +97,7 @@ class StudySessions extends Table with SyncColumns {
   IntColumn get rounds => integer().withDefault(const Constant(1))();
   IntColumn get workMinutes => integer().withDefault(const Constant(0))();
   IntColumn get breakMinutes => integer().withDefault(const Constant(0))();
+  IntColumn get doneMs => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};

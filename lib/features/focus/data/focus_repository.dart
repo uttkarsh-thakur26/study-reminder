@@ -57,11 +57,7 @@ class FocusRepository {
     String? subjectId,
     DateTime? now,
   }) {
-    // Whole milliseconds, as stored, so the session read back matches.
-    final at = DateTime.fromMillisecondsSinceEpoch(
-      (now ?? DateTime.now()).millisecondsSinceEpoch,
-      isUtc: true,
-    );
+    final at = _wholeMs(now);
     final breaks = rounds > 1 && work > Duration.zero && rest > Duration.zero;
     // Stamps every field: a new session replaces the old one whole, so two
     // starts made at once never merge into a mix of both.
@@ -108,20 +104,60 @@ class FocusRepository {
     now: now,
   );
 
-  Future<void> stop(Set<DeviceKind> on, {DateTime? now}) => _update(
-    on,
-    at: (now ?? DateTime.now()).toUtc(),
-    (_, s) => s.copyWith(active: false),
-  );
+  /// Stops the sessions on [on], running or paused.
+  Future<void> stop(Set<DeviceKind> on, {DateTime? now}) =>
+      _update(on, at: (now ?? DateTime.now()).toUtc(), (_, s) => s.ended());
 
-  /// Moves the end of the sessions running on [on] by [by].
+  /// Pauses the sessions running on [on], strict ones aside: they stop, and
+  /// keep the time they had left for [resume].
+  Future<void> pause(Set<DeviceKind> on, {DateTime? now}) {
+    final at = _wholeMs(now);
+    return _update(
+      on,
+      at: at,
+      (_, s) => s.runningAt(at) && !s.strict ? s.pausedAtTime(at) : null,
+    );
+  }
+
+  /// Starts the paused sessions on [on] again where they left off. Devices
+  /// paused together are resumed as one session again.
+  Future<void> resume(Set<DeviceKind> on, {DateTime? now}) {
+    final at = _wholeMs(now);
+    return _update(
+      on,
+      at: at,
+      whole: true,
+      (_, s) => s.isPaused ? s.resumedAt(at) : null,
+    );
+  }
+
+  /// Whole milliseconds, as stored, so a session read back matches.
+  static DateTime _wholeMs(DateTime? now) =>
+      DateTime.fromMillisecondsSinceEpoch(
+        (now ?? DateTime.now()).millisecondsSinceEpoch,
+        isUtc: true,
+      );
+
+  /// Moves the end of the sessions running or paused on [on] by [by]. Time
+  /// taken off a strict session is ignored, and a session keeps at least
+  /// [minimumLeft].
   Future<void> extend(Set<DeviceKind> on, Duration by, {DateTime? now}) {
     final at = (now ?? DateTime.now()).toUtc();
     return _update(on, at: at, (_, s) {
-      if (!s.runningAt(at)) return s;
-      return s.copyWith(endsAt: s.endsAt!.add(by));
+      final running = s.runningAt(at);
+      if (!running && !s.isPaused) return null;
+      if (by.isNegative && s.strict) return null;
+      var end = s.endsAt!.add(by);
+      final from = running ? at : s.pausedAt!;
+      final least = from.add(minimumLeft);
+      if (end.isBefore(least)) end = least;
+      if (end == s.endsAt) return null;
+      return s.copyWith(endsAt: end);
     });
   }
+
+  /// The least time a session keeps when time is taken off it.
+  static const minimumLeft = Duration(minutes: 1);
 
   /// Changes what the sessions running on [on] are for.
   Future<void> setSubject(
@@ -250,6 +286,7 @@ class FocusRepository {
         after['rounds'] = s.rounds;
         after['work_minutes'] = s.workMinutes;
         after['break_minutes'] = s.breakMinutes;
+        after['done_ms'] = s.doneMs;
       } else if (same.subjectId != s.subjectId) {
         after['subject_id'] = s.subjectId;
       }
@@ -292,7 +329,7 @@ FocusSession focusSessionFromRow(FocusSessionRow row) {
   }
   final startedStamp = clock.of('started_at');
   bool fresh(String field) => !(clock.of(field) < startedStamp);
-  final ofThisStart = FocusSession.startFields.every(fresh);
+  final ofThisStart = ['rounds', 'work_minutes', 'break_minutes'].every(fresh);
   return FocusSession(
     active: row.active,
     startedAt: time(row.startedAt),
@@ -306,6 +343,8 @@ FocusSession focusSessionFromRow(FocusSessionRow row) {
     workMinutes: ofThisStart ? row.workMinutes : 0,
     breakMinutes: ofThisStart ? row.breakMinutes : 0,
     subjectId: fresh('subject_id') ? row.subjectId : null,
+    doneMs: fresh('done_ms') ? row.doneMs : 0,
+    pausedAt: fresh('paused_at') ? time(row.pausedAt) : null,
     version: row.hlc,
   );
 }
@@ -330,6 +369,8 @@ FocusSessionsCompanion focusSessionCompanion(
     workMinutes: Value(s.workMinutes),
     breakMinutes: Value(s.breakMinutes),
     subjectId: Value(s.subjectId),
+    doneMs: Value(s.doneMs),
+    pausedAt: Value(s.pausedAt?.millisecondsSinceEpoch),
     hlc: w.hlc.pack(),
     fieldClock: Value(w.clock.encode()),
     dirty: Value(dirty),

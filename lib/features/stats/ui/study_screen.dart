@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
+import '../../../core/ui/minutes_dialog.dart';
 import '../../reminders/application/reminder_providers.dart';
 import '../../reminders/domain/recurrence.dart';
 import '../../subjects/ui/subject_editor.dart';
@@ -33,13 +34,13 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     super.dispose();
   }
 
-  /// Counts up once a minute while a session runs, and not otherwise.
+  /// Counts up while a session runs, and not otherwise.
   void _syncTicker(List<StudySession> sessions, DateTime now) {
     final running = sessions.any(
       (s) => !s.deleted && s.endedAt.isAfter(now) && !s.startedAt.isAfter(now),
     );
     if (running && _tick == null) {
-      _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      _tick = Timer.periodic(const Duration(seconds: 15), (_) {
         if (mounted) setState(() {});
       });
     } else if (!running) {
@@ -97,9 +98,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
               ),
             ),
             SubjectsSection(studied: stats.bySubject),
-            if (sessions.isNotEmpty) ...[
+            if (sessions.any((s) => s.countsAt(now))) ...[
               const SectionHeader('RECENT SESSIONS'),
-              _RecentSessions(sessions: sessions.take(8).toList(), now: now),
+              _RecentSessions(
+                sessions: sessions
+                    .where((s) => s.countsAt(now))
+                    .take(8)
+                    .toList(),
+                now: now,
+              ),
             ],
           ],
         ),
@@ -171,32 +178,41 @@ class _WeekBars extends StatelessWidget {
 
   static const _height = 112.0;
 
+  /// The tallest bar, with room above it for its time.
+  static const _barMax = _height - 18;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final today = DateTime(now.year, now.month, now.day);
-    final top = [
-      stats.goal,
-      ...stats.days,
-    ].fold(Duration.zero, (a, b) => a > b ? a : b);
-    final goalAt = top == Duration.zero
+    final most = stats.days.fold(Duration.zero, (a, b) => a > b ? a : b);
+    // Up to the goal, unless that would leave the bars too small to see:
+    // then up to the busiest day, and the goal line is left out.
+    final showGoal = most * 3 >= stats.goal;
+    final top = showGoal
+        ? (most > stats.goal ? most : stats.goal)
+        : (most * 1.3 > const Duration(minutes: 30)
+              ? most * 1.3
+              : const Duration(minutes: 30));
+    final goalAt = top == Duration.zero || !showGoal
         ? 0.0
-        : _height * stats.goal.inSeconds / top.inSeconds;
+        : _barMax * stats.goal.inSeconds / top.inSeconds;
 
     return SizedBox(
       height: _height + 24,
       child: Stack(
         children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 24 + goalAt,
-            child: Container(
-              height: 1,
-              color: scheme.tertiary.withValues(alpha: 0.6),
+          if (showGoal)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24 + goalAt,
+              child: Container(
+                height: 1,
+                color: scheme.tertiary.withValues(alpha: 0.6),
+              ),
             ),
-          ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -212,7 +228,7 @@ class _WeekBars extends StatelessWidget {
                     goal: stats.goal,
                     height: top == Duration.zero
                         ? 0
-                        : _height * stats.days[i].inSeconds / top.inSeconds,
+                        : _barMax * stats.days[i].inSeconds / top.inSeconds,
                     today: today,
                   ),
                 ),
@@ -251,6 +267,18 @@ class _DayBar extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          if (studied >= const Duration(minutes: 1))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                _short(studied),
+                maxLines: 1,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: isToday ? scheme.primary : scheme.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
@@ -280,6 +308,16 @@ class _DayBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "8m", "1h", "1h20": short enough to sit above a bar.
+String _short(Duration d) {
+  final m = d.inMinutes;
+  if (m < 60) return '${m}m';
+  final rest = m % 60;
+  return rest == 0
+      ? '${m ~/ 60}h'
+      : '${m ~/ 60}h${rest.toString().padLeft(2, '0')}';
 }
 
 class _StreakCard extends ConsumerWidget {
@@ -407,6 +445,32 @@ class _StreakCard extends ConsumerWidget {
                         Navigator.of(sheet).pop();
                       },
                     ),
+                  ChoiceChip(
+                    avatar: _goals.contains(current)
+                        ? const Icon(Icons.edit_outlined)
+                        : null,
+                    label: Text(
+                      _goals.contains(current)
+                          ? 'Other'
+                          : formatStudyTime(Duration(minutes: current)),
+                    ),
+                    selected: !_goals.contains(current),
+                    onSelected: (_) async {
+                      final m = await showMinutesDialog(
+                        sheet,
+                        title: 'Daily goal',
+                        initial: current,
+                        min: 5,
+                        max: 600,
+                        help: 'In minutes: 90 is 1 h 30 min',
+                      );
+                      if (m == null) return;
+                      await ref
+                          .read(studyRepositoryProvider)
+                          .saveGoalMinutes(m);
+                      if (sheet.mounted) Navigator.of(sheet).pop();
+                    },
+                  ),
                 ],
               ),
             ],
@@ -442,9 +506,7 @@ class _RecentSessions extends ConsumerWidget {
                     : day == DateTime(today.year, today.month, today.day - 1)
                     ? 'Yesterday'
                     : DateFormat('EEE d MMM').format(start);
-                final focused = s
-                    .workSpansUntil(now)
-                    .fold(Duration.zero, (a, w) => a + w.to.difference(w.from));
+                final focused = s.focusedUntil(now);
                 final running = s.endedAt.isAfter(now);
                 return ListTile(
                   leading: Container(
@@ -463,6 +525,7 @@ class _RecentSessions extends ConsumerWidget {
                     [
                       '$dayLabel, ${formatTime(context, start)}',
                       if (s.plan.rounds > 1) '${s.plan.rounds} rounds',
+                      if (s.resumed) 'after a pause',
                       if (running) 'running',
                     ].join(' · '),
                   ),

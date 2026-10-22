@@ -117,6 +117,34 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('a paused session shows its time and resumes', (tester) async {
+    final at = DateTime.now().toUtc().subtract(const Duration(minutes: 1));
+    final paused = FocusSession(
+      startedAt: at.subtract(const Duration(minutes: 5)),
+      endsAt: at.add(const Duration(minutes: 20)),
+      target: FocusTarget.phone,
+      startedBy: 'Pixel',
+      pausedAt: at,
+    );
+    await pump(tester, FocusSessions(phone: paused));
+    expect(find.text('paused'), findsOneWidget);
+    expect(find.text('20:00'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Start focus'), findsNothing, reason: 'still held');
+    expect(find.text('Focus on the laptop too'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets("the laptop's session can be paused from the phone", (
+    tester,
+  ) async {
+    await pump(tester, FocusSessions(laptop: running(DeviceKind.laptop)));
+    expect(find.byTooltip('Pause on the laptop'), findsOneWidget);
+    expect(find.byTooltip('Change the time on the laptop'), findsOneWidget);
+    expect(find.byTooltip('More for the laptop'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('with nothing paired, there is no choice of device', (
     tester,
   ) async {

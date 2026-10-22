@@ -72,6 +72,7 @@ StudySession studySessionFromRow(StudySessionRow row) {
     rounds: row.rounds,
     workMinutes: row.workMinutes,
     breakMinutes: row.breakMinutes,
+    doneMs: row.doneMs,
     deleted: row.deleted,
   );
 }
@@ -91,6 +92,7 @@ StudySessionsCompanion studySessionCompanion(
     rounds: Value(s.rounds),
     workMinutes: Value(s.workMinutes),
     breakMinutes: Value(s.breakMinutes),
+    doneMs: Value(s.doneMs),
     hlc: w.hlc.pack(),
     fieldClock: Value(w.clock.encode()),
     deleted: Value(s.deleted),

@@ -62,11 +62,39 @@ class SubjectsSection extends ConsumerWidget {
 
 /// "1 h 20 min", "45 min".
 String formatStudyTime(Duration d) {
+  if (d > Duration.zero && d < const Duration(minutes: 1)) return '<1 min';
   final minutes = d.inMinutes;
   final h = minutes ~/ 60;
   final m = minutes % 60;
   if (h == 0) return '$m min';
   return m == 0 ? '$h h' : '$h h $m min';
+}
+
+/// A plain bar, filled by [fraction] in [color].
+class _TimeBar extends StatelessWidget {
+  const _TimeBar({required this.fraction, required this.color});
+
+  final double fraction;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 6,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(3),
+    ),
+    alignment: Alignment.centerLeft,
+    child: FractionallySizedBox(
+      widthFactor: fraction.clamp(0.02, 1.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+    ),
+  );
 }
 
 class _SubjectRow extends ConsumerWidget {
@@ -110,16 +138,13 @@ class _SubjectRow extends ConsumerWidget {
               count == 1 ? '1 reminder' : '$count reminders',
             ].join(' · '),
           ),
-          if (studied > Duration.zero && most > Duration.zero) ...[
+          if (studied >= const Duration(minutes: 1) &&
+              most > Duration.zero) ...[
             const SizedBox(height: Gap.xs),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: studied.inSeconds / most.inSeconds,
-                minHeight: 5,
-                color: Color(subject.color),
-                backgroundColor: Color(subject.color).withValues(alpha: 0.15),
-              ),
+            // Against the subject studied most this week.
+            _TimeBar(
+              fraction: studied.inSeconds / most.inSeconds,
+              color: Color(subject.color),
             ),
           ],
         ],

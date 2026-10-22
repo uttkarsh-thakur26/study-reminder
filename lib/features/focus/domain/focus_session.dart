@@ -39,6 +39,8 @@ class FocusSession {
     this.workMinutes = 0,
     this.breakMinutes = 0,
     this.subjectId,
+    this.doneMs = 0,
+    this.pausedAt,
     this.version = '',
   });
 
@@ -77,6 +79,14 @@ class FocusSession {
   /// What is being studied, for the stats. Null for no subject.
   final String? subjectId;
 
+  /// For a session resumed after a pause: how far into its plan, rounds and
+  /// breaks included, it already was. 0 otherwise.
+  final int doneMs;
+
+  /// When it was paused. A paused session is stopped, [active] false, and
+  /// keeps the time it had left until it is resumed. Null otherwise.
+  final DateTime? pausedAt;
+
   /// Which edit of the session this is: its newest field stamp. Sorts as
   /// text in the order the edits were made on every device. Empty for a
   /// session never saved here. Not a synced field.
@@ -92,7 +102,21 @@ class FocusSession {
       rounds == other.rounds &&
       workMinutes == other.workMinutes &&
       breakMinutes == other.breakMinutes &&
-      subjectId == other.subjectId;
+      subjectId == other.subjectId &&
+      doneMs == other.doneMs &&
+      pausedAt == other.pausedAt;
+
+  /// Paused with time left, so it can be resumed.
+  bool get isPaused =>
+      !active &&
+      pausedAt != null &&
+      startedAt != null &&
+      endsAt != null &&
+      pausedAt!.isBefore(endsAt!);
+
+  /// The time a paused session had left.
+  Duration get pausedLeft =>
+      isPaused ? endsAt!.difference(pausedAt!) : Duration.zero;
 
   bool runningAt(DateTime now) =>
       active && endsAt != null && now.isBefore(endsAt!);
@@ -107,9 +131,11 @@ class FocusSession {
       ? endsAt!.difference(startedAt!)
       : Duration.zero;
 
-  /// Its rounds and breaks. Only for a session with a start and an end.
+  /// Its rounds and breaks. Only for a session with a start and an end. A
+  /// resumed session carries on the plan of the one it continues.
   FocusPlan get plan => FocusPlan(
-    start: startedAt!,
+    start: startedAt!.subtract(Duration(milliseconds: doneMs)),
+    since: startedAt,
     end: endsAt!,
     work: Duration(minutes: workMinutes),
     rest: Duration(minutes: breakMinutes),
@@ -119,6 +145,9 @@ class FocusSession {
   /// The round or break at [now], while it runs.
   FocusPhase? phaseAt(DateTime now) =>
       runningAt(now) ? plan.phaseAt(now) : null;
+
+  /// The round or break it was paused in.
+  FocusPhase? get pausedPhase => isPaused ? plan.phaseAt(pausedAt!) : null;
 
   bool onBreakAt(DateTime now) => phaseAt(now)?.onBreak ?? false;
 
@@ -154,6 +183,59 @@ class FocusSession {
     workMinutes: workMinutes,
     breakMinutes: breakMinutes,
     subjectId: subjectId,
+    doneMs: doneMs,
+    pausedAt: pausedAt,
+  );
+
+  /// Stopped for good: no longer paused either.
+  FocusSession ended() => FocusSession(
+    startedAt: startedAt,
+    endsAt: endsAt,
+    target: target,
+    blockApps: blockApps,
+    quiet: quiet,
+    strict: strict,
+    startedBy: startedBy,
+    rounds: rounds,
+    workMinutes: workMinutes,
+    breakMinutes: breakMinutes,
+    subjectId: subjectId,
+    doneMs: doneMs,
+  );
+
+  /// Paused at [at], with the time left kept for [resumedAt].
+  FocusSession pausedAtTime(DateTime at) => FocusSession(
+    startedAt: startedAt,
+    endsAt: endsAt,
+    target: target,
+    blockApps: blockApps,
+    quiet: quiet,
+    strict: strict,
+    startedBy: startedBy,
+    rounds: rounds,
+    workMinutes: workMinutes,
+    breakMinutes: breakMinutes,
+    subjectId: subjectId,
+    doneMs: doneMs,
+    pausedAt: at,
+  );
+
+  /// A paused session started again at [at], where it left off: a new
+  /// session with the time that was left, in the same round or break.
+  FocusSession resumedAt(DateTime at) => FocusSession(
+    active: true,
+    startedAt: at,
+    endsAt: at.add(pausedLeft),
+    target: target,
+    blockApps: blockApps,
+    quiet: quiet,
+    strict: strict,
+    startedBy: startedBy,
+    rounds: rounds,
+    workMinutes: workMinutes,
+    breakMinutes: breakMinutes,
+    subjectId: subjectId,
+    doneMs: doneMs + pausedAt!.difference(startedAt!).inMilliseconds,
   );
 
   FocusSession withSubject(String? id) => FocusSession(
@@ -169,6 +251,8 @@ class FocusSession {
     workMinutes: workMinutes,
     breakMinutes: breakMinutes,
     subjectId: id,
+    doneMs: doneMs,
+    pausedAt: pausedAt,
   );
 
   Map<String, Object?> toFields() => {
@@ -184,6 +268,8 @@ class FocusSession {
     'work_minutes': workMinutes,
     'break_minutes': breakMinutes,
     'subject_id': subjectId,
+    'done_ms': doneMs,
+    'paused_at': pausedAt?.toUtc().millisecondsSinceEpoch,
   };
 
   /// The fields a start sets that older versions of the app do not know.
@@ -193,6 +279,8 @@ class FocusSession {
     'work_minutes',
     'break_minutes',
     'subject_id',
+    'done_ms',
+    'paused_at',
   ];
 
   factory FocusSession.fromFields(Map<String, Object?> f) {
@@ -214,6 +302,10 @@ class FocusSession {
       workMinutes: _minutes(f['work_minutes']),
       breakMinutes: _minutes(f['break_minutes']),
       subjectId: f['subject_id'] as String?,
+      doneMs: f['done_ms'] is num
+          ? (f['done_ms']! as num).toInt().clamp(0, 7 * 24 * 3600 * 1000)
+          : 0,
+      pausedAt: time(f['paused_at']),
     );
   }
 
@@ -240,11 +332,18 @@ class FocusSessions {
     final other = kind == DeviceKind.phone
         ? DeviceKind.laptop
         : DeviceKind.phone;
+    final o = of(other);
     return {
       kind,
-      if (of(other).runningAt(now) && of(other).sameAs(of(kind))) other,
+      if ((o.runningAt(now) || o.isPaused) && o.sameAs(of(kind))) other,
     };
   }
+
+  /// The devices with a session paused.
+  Set<DeviceKind> get paused => {
+    for (final k in DeviceKind.values)
+      if (of(k).isPaused) k,
+  };
 
   /// The devices with a session running.
   Set<DeviceKind> busyAt(DateTime now) => {
@@ -262,9 +361,10 @@ class FocusSessions {
     required DateTime now,
     bool orFree = true,
   }) {
-    final free = (paired ? DeviceKind.values.toSet() : {here}).difference(
-      busyAt(now),
-    );
+    // A paused session holds its device until it is resumed or stopped.
+    final free = (paired ? DeviceKind.values.toSet() : {here})
+        .difference(busyAt(now))
+        .difference(paused);
     final both = paired ? wanted.kinds.intersection(free) : free;
     return both.isNotEmpty || !orFree ? both : free;
   }

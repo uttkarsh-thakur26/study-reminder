@@ -151,6 +151,7 @@ void main() {
       workMinutes: 25,
       breakMinutes: 5,
       subjectId: 'old',
+      doneMs: 0,
       hlc: stamp(1).pack(),
       fieldClock: FieldClock({
         'started_at': stamp(1),
@@ -179,6 +180,7 @@ void main() {
       workMinutes: 25,
       breakMinutes: 5,
       subjectId: 'new',
+      doneMs: 0,
       hlc: row.hlc,
       fieldClock: FieldClock({
         'started_at': stamp(1),

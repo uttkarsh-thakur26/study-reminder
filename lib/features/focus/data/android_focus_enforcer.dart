@@ -40,6 +40,7 @@ class AndroidFocusEnforcer implements FocusEnforcer {
               rounds: session.rounds,
               workMinutes: session.workMinutes,
               breakMinutes: session.breakMinutes,
+              doneMs: session.doneMs,
             )
           : null,
     );
