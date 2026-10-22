@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
+import '../../../desktop/desktop_shortcuts_card.dart';
 import '../../alerts/ui/alert_health.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../sync/ui/sync_card.dart';
@@ -115,6 +116,7 @@ class SettingsScreen extends ConsumerWidget {
             const SyncCard(),
             const SectionHeader('ALERTS'),
             const AlertHealthCard(),
+            const DesktopShortcutsSection(),
             const SectionHeader('THIS DEVICE'),
             Card(
               child: Column(

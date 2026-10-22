@@ -14,6 +14,7 @@ import '../features/focus/application/focus_providers.dart';
 import '../features/sync/application/sync_providers.dart';
 import '../features/reminders/ui/reminder_editor.dart';
 import 'desktop_window.dart';
+import 'global_hotkeys.dart';
 
 const _openItem = 'open';
 const _newItem = 'new';
@@ -46,6 +47,8 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
     trayManager.addListener(this);
     _taps = ref.read(localNotificationsProvider)?.taps.listen(_onTap);
     unawaited(_setUpTray());
+    // Turns the global shortcuts on, unless the user turned them off.
+    ref.read(globalHotkeysProvider);
   }
 
   @override

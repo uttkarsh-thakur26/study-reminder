@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/focus/ui/focus_screen.dart';
@@ -8,6 +9,7 @@ import '../features/reminders/ui/today_screen.dart';
 import '../features/reminders/ui/upcoming_screen.dart';
 import '../features/settings/ui/settings_screen.dart';
 import '../features/subjects/ui/subjects_screen.dart';
+import 'shell_requests.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -31,14 +33,15 @@ const _destinations = [
 /// Bottom navigation on phones, a side rail on laptops.
 ///
 /// Keyboard: Ctrl+N new reminder, Ctrl+K quick add, Ctrl+1..5 switch pages.
-class AppShell extends StatefulWidget {
+/// On Windows, global shortcuts reach it through [shellRequestsProvider].
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
   final _quickAddFocus = FocusNode(debugLabel: 'quick-add');
 
@@ -67,8 +70,21 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// From outside the pages, like a global shortcut on Windows.
+  void _onRequest(NumberedShellRequest? _, NumberedShellRequest? next) {
+    switch (next?.request) {
+      case ShellRequest.quickAdd:
+        _focusQuickAdd();
+      case ShellRequest.focus:
+        _select(_destinations.indexWhere((d) => d.label == 'Focus'));
+      case null:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<NumberedShellRequest?>(shellRequestsProvider, _onRequest);
     final wide = isWide(context);
     final scheme = Theme.of(context).colorScheme;
     final body = IndexedStack(index: _index, children: _pages);
