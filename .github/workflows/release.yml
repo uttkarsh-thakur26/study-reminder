@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      code: ${{ steps.version.outputs.code }}
     steps:
       - uses: actions/checkout@v6
       - id: version
@@ -55,6 +56,8 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Minutes since 2025, like CI builds, so updates always install.
+          echo "code=$(( ($(date +%s) - 1735689600) / 60 ))" >> "$GITHUB_OUTPUT"
 
   test:
     name: Analyze and test
@@ -95,12 +98,14 @@ jobs:
           key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
           required: true
-      # The run number grows with every release, and so the versionCode,
-      # which Android needs to install an update.
+      # The version code grows with every build, which Android needs to
+      # install an update.
       - run: >-
           flutter build apk --release
-          "--build-name=$VERSION" "--build-number=$GITHUB_RUN_NUMBER"
+          "--build-name=$VERSION" "--build-number=$BUILD_CODE"
           "--dart-define=APP_VERSION=$VERSION"
+        env:
+          BUILD_CODE: ${{ needs.version.outputs.code }}
       - run: mv build/app/outputs/flutter-apk/app-release.apk "StudyReminder-$VERSION.apk"
       - uses: actions/upload-artifact@v7
         with:

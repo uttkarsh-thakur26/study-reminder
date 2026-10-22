@@ -66,9 +66,9 @@ installer for 30 days, as artifacts of the run. Those show a version like
   `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets, and the run fails
   without them. Keep the same keystore for good: Android only installs an
   update signed with the same key.
-- **Android version code.** It is the release workflow's run number, so it
-  grows with every release. CI builds use the build number from
-  `pubspec.yaml`, so leave that small.
+- **Android version code.** Every build, CI or release, uses the minutes
+  since 2025 as its version code, so a newer APK always installs over an
+  older one. The number after `+` in `pubspec.yaml` is not used for it.
 - **Windows SmartScreen.** The installer and the app are not code signed, so
   Windows warns the first time they run ("Windows protected your PC"). Click
   **More info**, then **Run anyway**. Browsers may also ask before keeping
