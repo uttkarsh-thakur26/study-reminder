@@ -12,6 +12,7 @@ class QuickAddResult {
     this.style = ReminderStyle.notification,
     this.subjectTag,
     this.dateIsExplicit = false,
+    this.dateIsWeekday = false,
   });
 
   final String title;
@@ -25,6 +26,10 @@ class QuickAddResult {
 
   /// True when the text named a day ("today", "fri", "25 oct", "in 2 days").
   final bool dateIsExplicit;
+
+  /// True when the day came from a weekday name ("thu", "on friday"), which
+  /// means the next one to come, so a time already gone today means next week.
+  final bool dateIsWeekday;
 
   bool get understoodWhen =>
       date != null || minuteOfDay != null || recurrence.repeats;
@@ -94,12 +99,14 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
   var text = ' ${input.trim()} ';
   final today = CalendarDate(now.year, now.month, now.day);
 
-  /// Removes the first match of [re] from the text when [accept] returns
-  /// true for it.
+  /// Removes the first match of [re] that [accept] returns true for. The
+  /// gap is marked so the title cleanup knows where text was taken out.
   void takeIf(RegExp re, bool Function(Match m) accept) {
-    final m = re.firstMatch(text);
-    if (m == null || !accept(m)) return;
-    text = text.replaceRange(m.start, m.end, ' ');
+    for (final m in re.allMatches(text)) {
+      if (!accept(m)) continue;
+      text = text.replaceRange(m.start, m.end, ' $_gap ');
+      return;
+    }
   }
 
   /// Removes the first match of [re] from the text after passing it to [use].
@@ -115,6 +122,8 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
   int? minute;
   var recurrence = Recurrence.once;
   var bareHour = -1;
+  var tonight = false;
+  var weekdayName = false;
 
   // Style: "!alarm", or "alarm" as the first or last word.
   take(_re(r'\s!a(larm)?(?=[\s,.!?;])'), (_) => style = ReminderStyle.alarm);
@@ -185,12 +194,19 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
             .map((d) => _weekdayWords[d.group(0)!.toLowerCase()]!)
             .toSet();
         // "on friday" is a date, "on fridays" or "every friday" repeats.
-        final plural = _re('(?:$_weekdayAlt)s(?=\\W|\$)').hasMatch(m.group(1)!);
+        // "tues" and "thurs" are abbreviations, not plurals.
+        final plural = _re(r'[a-z]+').allMatches(m.group(1)!).any((w) {
+          final t = w.group(0)!.toLowerCase();
+          return t.endsWith('s') &&
+              !_weekdayWords.containsKey(t) &&
+              _weekdayWords.containsKey(t.substring(0, t.length - 1));
+        });
         if (t.trimLeft().startsWith('every') || plural || days.length > 1) {
           recurrence = Recurrence.weekly(days);
         } else {
           date = _nextWeekday(today, days.first, includeToday: true);
           dateIsExplicit = true;
+          weekdayName = true;
         }
       },
     );
@@ -254,17 +270,23 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     take(_re(r'\stonight(?=[\s,.!?;])'), (_) {
       date = today;
       dateIsExplicit = true;
-      minute ??= 20 * 60;
+      tonight = true;
     });
   }
   if (date == null && !recurrence.repeats) {
-    take(
-      _re('\\s(next\\s+|this\\s+)?(?:on\\s+)?($_weekdayAlt)(?=[\\s,.!?;])'),
+    takeIf(
+      _re(
+        '\\s(next\\s+|this\\s+|on\\s+|by\\s+)?(?:on\\s+)?($_weekdayAlt)(?=[\\s,.!?;])',
+      ),
       (m) {
-        final day = _weekdayWords[m.group(2)!.toLowerCase()]!;
+        final word = m.group(2)!.toLowerCase();
+        // "SAT prep" or "the sun" are not days unless the text says so.
+        if (m.group(1) == null && _wordLikeDays.contains(word)) return false;
         final next = m.group(1)?.trim().toLowerCase() == 'next';
-        date = _nextWeekday(today, day, includeToday: !next);
+        date = _nextWeekday(today, _weekdayWords[word]!, includeToday: !next);
         dateIsExplicit = true;
+        weekdayName = true;
+        return true;
       },
     );
   }
@@ -373,6 +395,8 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
   if (bareHour >= 0) {
     if (bareHour == 0 || bareHour > 12) {
       minute = bareHour * 60;
+    } else if (tonight) {
+      minute = (bareHour == 12 ? 12 : bareHour + 12) * 60;
     } else if (date != null || recurrence.repeats) {
       // A study reminder "at 5" means 5 pm; "at 9" means 9 am.
       final h = bareHour == 12
@@ -388,6 +412,12 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     }
   }
 
+  if (tonight && minute == null) {
+    // 8 pm, or the next full hour once 8 pm has gone.
+    final nextHour = (now.hour + 1) * 60;
+    minute = nextHour > 20 * 60 && nextHour < 24 * 60 ? nextHour : 20 * 60;
+  }
+
   return QuickAddResult(
     title: _cleanTitle(text),
     date: date,
@@ -396,13 +426,16 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     style: style,
     subjectTag: subjectTag,
     dateIsExplicit: dateIsExplicit,
+    dateIsWeekday: weekdayName,
   );
 }
 
 /// Turns a parse result into a concrete start date and time.
 ///
 /// Without a time it picks the next full hour today, or 9:00 on a later day.
-/// A time already past today moves to tomorrow unless the text said "today".
+/// A time already past today moves to tomorrow, or a week on when a weekday
+/// was named ("thu 9am" said on Thursday afternoon), unless the text said
+/// "today" or gave the date.
 ({CalendarDate date, int minuteOfDay}) resolveStart(
   QuickAddResult r, {
   required DateTime now,
@@ -415,7 +448,7 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     if (date == today) {
       final nextHour = (now.hour + 1) * 60;
       if (nextHour >= 24 * 60) {
-        date = today.addDays(1);
+        date = today.addDays(r.dateIsWeekday ? 7 : 1);
         minute = 9 * 60;
       } else {
         minute = nextHour;
@@ -424,8 +457,12 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
       minute = 9 * 60;
     }
   }
-  if (date == today && minute <= nowMinute && !r.dateIsExplicit) {
-    date = today.addDays(1);
+  if (date == today && minute <= nowMinute) {
+    if (r.dateIsWeekday) {
+      date = today.addDays(7);
+    } else if (!r.dateIsExplicit) {
+      date = today.addDays(1);
+    }
   }
   return (date: date, minuteOfDay: minute);
 }
@@ -455,25 +492,35 @@ CalendarDate? _dateOrNextYear(
   int? year,
 ) {
   if (month < 1 || month > 12 || day < 1) return null;
-  final y = year ?? today.year;
-  if (day > CalendarDate.daysInMonth(y, month)) return null;
-  final d = CalendarDate(y, month, day);
-  if (year == null && d.isBefore(today)) {
-    if (day > CalendarDate.daysInMonth(y + 1, month)) return null;
-    return CalendarDate(y + 1, month, day);
+  CalendarDate? on(int y) => day > CalendarDate.daysInMonth(y, month)
+      ? null
+      : CalendarDate(y, month, day);
+  if (year != null) return on(year);
+  // Without a year: the next time that date comes round, so 29 Feb said in
+  // 2027 means 2028.
+  for (var y = today.year; y <= today.year + 4; y++) {
+    final d = on(y);
+    if (d != null && !d.isBefore(today)) return d;
   }
-  return d;
+  return null;
 }
 
-final _danglingStart = _re(
-  r'^(?:(?:at|on|by|for|to|in|every|the|and|,|-)\s+)+',
+/// Stands in for text taken out of the title.
+const _gap = '\u0000';
+
+/// Weekday abbreviations that are also everyday words.
+const _wordLikeDays = {'sat', 'sun'};
+
+/// Connecting words left behind just before a removed date or time
+/// ("essay due by [fri]"). Words elsewhere are part of the title.
+final _danglingBeforeGap = _re(
+  '(?:\\s(?:at|on|by|for|to|in|every|from|and|,|-))+\\s*$_gap',
 );
-final _danglingEnd = _re(r'(?:\s+(?:at|on|by|for|to|in|every|the|and|,|-))+$');
 
 String _cleanTitle(String text) {
-  var t = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  var t = text.replaceAll(_danglingBeforeGap, ' ').replaceAll(_gap, ' ');
+  t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
   t = t.replaceAll(RegExp(r'\s+,'), ',');
-  t = t.replaceFirst(_danglingStart, '').replaceFirst(_danglingEnd, '');
   t = t.replaceAll(RegExp(r'^[,\s-]+|[,\s-]+$'), '');
   if (t.isEmpty) return t;
   return t[0].toUpperCase() + t.substring(1);

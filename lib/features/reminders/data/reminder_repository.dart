@@ -27,34 +27,52 @@ class ReminderRepository {
     return row == null ? null : reminderFromRow(row);
   }
 
-  Future<void> save(Reminder reminder) => _db.transaction(() async {
+  /// Saves an edit. Pass the version the editor started from as [base] so
+  /// only the fields the user changed are written; see [applyEdit].
+  Future<void> save(Reminder edited, {Reminder? base}) => _update(
+    edited.id,
+    (current) => applyEdit(
+      current: current,
+      base: base?.toFields(),
+      edited: edited.toFields(),
+    ),
+  );
+
+  Future<void> delete(String id) => _setDeleted(id, true);
+
+  /// Brings back a reminder deleted by mistake (the undo in the snackbar).
+  Future<void> restore(String id) => _setDeleted(id, false);
+
+  Future<void> _setDeleted(String id, bool deleted) => _update(
+    id,
+    (current) => current == null ? null : {...current, 'deleted': deleted},
+  );
+
+  /// Reads the stored record, applies [change] and stamps whatever differs,
+  /// all in one transaction. [change] returns null to write nothing.
+  Future<void> _update(
+    String id,
+    Map<String, Object?>? Function(Map<String, Object?>? current) change,
+  ) => _db.transaction(() async {
     final existing = await (_db.select(
       _db.reminders,
-    )..where((r) => r.id.equals(reminder.id))).getSingleOrNull();
+    )..where((r) => r.id.equals(id))).getSingleOrNull();
+    final current = existing == null
+        ? null
+        : reminderFromRow(existing).toFields();
+    final after = change(current);
+    if (after == null) return;
     final write = stampLocalEdit(
-      before: existing == null ? null : reminderFromRow(existing).toFields(),
+      before: current,
       beforeClock: existing?.fieldClock ?? '',
-      after: reminder.toFields(),
+      after: after,
       clock: _clock,
     );
     if (write == null) return;
     await _db
         .into(_db.reminders)
-        .insertOnConflictUpdate(reminderCompanion(reminder.id, write));
+        .insertOnConflictUpdate(reminderCompanion(id, write));
   });
-
-  Future<void> delete(String id) async {
-    final reminder = await byId(id);
-    if (reminder == null || reminder.deleted) return;
-    await save(reminder.copyWith(deleted: true));
-  }
-
-  /// Brings back a reminder deleted by mistake (the undo in the snackbar).
-  Future<void> restore(String id) async {
-    final reminder = await byId(id);
-    if (reminder == null || !reminder.deleted) return;
-    await save(reminder.copyWith(deleted: false));
-  }
 
   /// Live occurrence states keyed by occurrence id.
   Stream<Map<String, OccurrenceState>> watchOccurrences() => _db

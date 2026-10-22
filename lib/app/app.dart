@@ -4,12 +4,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_theme.dart';
 import '../features/settings/settings_controller.dart';
 import '../shell/app_shell.dart';
+import 'providers.dart';
 
-class StudyReminderApp extends ConsumerWidget {
+class StudyReminderApp extends ConsumerStatefulWidget {
   const StudyReminderApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudyReminderApp> createState() => _StudyReminderAppState();
+}
+
+class _StudyReminderAppState extends ConsumerState<StudyReminderApp> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(
+      onResume: () => ref.read(deviceTimeZoneProvider.notifier).refresh(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     return MaterialApp(
       title: 'Study Reminder',

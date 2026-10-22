@@ -87,6 +87,27 @@ void main() {
     },
   );
 
+  test('an edit only writes the fields it changed', () async {
+    await repo.save(reminder);
+    final opened = (await repo.byId('r1'))!;
+    // Meanwhile the notes change elsewhere, e.g. synced from the phone.
+    await repo.save(opened.copyWith(notes: 'From the phone'), base: opened);
+    await repo.save(opened.copyWith(title: 'Physics revision'), base: opened);
+    final back = (await repo.byId('r1'))!;
+    expect(back.title, 'Physics revision');
+    expect(back.notes, 'From the phone');
+  });
+
+  test('an editor opened before a delete does not bring it back', () async {
+    await repo.save(reminder);
+    final opened = (await repo.byId('r1'))!;
+    await repo.delete('r1');
+    await repo.save(opened.copyWith(title: 'Renamed'), base: opened);
+    final row = await db.select(db.reminders).getSingle();
+    expect(row.deleted, isTrue);
+    expect(row.title, 'Renamed');
+  });
+
   test('occurrence actions share one record per occurrence', () async {
     final at = DateTime.utc(2026, 10, 22, 13, 30);
     await repo.markDone('r1', at);

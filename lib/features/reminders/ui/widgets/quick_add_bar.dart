@@ -187,8 +187,11 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
                   icon: const Icon(Icons.tune_rounded),
                   onPressed: () async {
                     final prefill = _parsed;
-                    await openReminderEditor(context, prefill: prefill);
-                    if (prefill != null && mounted) {
+                    final saved = await openReminderEditor(
+                      context,
+                      prefill: prefill,
+                    );
+                    if (saved == true && prefill != null && mounted) {
                       _controller.clear();
                       setState(() => _parsed = null);
                     }

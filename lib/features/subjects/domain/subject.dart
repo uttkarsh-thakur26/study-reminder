@@ -43,6 +43,20 @@ class Subject {
 
 /// Subject colours offered in the picker, tuned to read well in light and
 /// dark themes.
+/// Names for [subjectPalette], read out by screen readers.
+const subjectPaletteNames = [
+  'Indigo',
+  'Sky',
+  'Teal',
+  'Green',
+  'Amber',
+  'Orange',
+  'Red',
+  'Pink',
+  'Purple',
+  'Slate',
+];
+
 const subjectPalette = <int>[
   0xFF6366F1, // indigo
   0xFF0EA5E9, // sky

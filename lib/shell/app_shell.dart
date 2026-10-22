@@ -156,7 +156,9 @@ class _AppShellState extends State<AppShell> {
 
     return CallbackShortcuts(
       bindings: shortcuts,
-      child: Focus(autofocus: true, child: scaffold),
+      // A scope below the shortcuts: when a text field lets go of focus it
+      // lands here, so the shortcuts keep working.
+      child: FocusScope(autofocus: true, child: scaffold),
     );
   }
 }

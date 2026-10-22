@@ -43,6 +43,32 @@ void main() {
   );
 
   group('buildAgenda', () {
+    test('a snooze past midnight keeps yesterday\'s occurrence on today', () {
+      final r = reminder(
+        'late',
+        anchor: '2026-10-01',
+        minute: 23 * 60 + 50,
+        recurrence: const Recurrence.daily(),
+      );
+      final at = tz.TZDateTime(india, 2026, 10, 21, 23, 50);
+      final state = OccurrenceState(
+        reminderId: 'late',
+        occurrenceAt: at,
+        status: OccurrenceStatus.snoozed,
+        snoozeUntil: tz.TZDateTime(india, 2026, 10, 22, 0, 20),
+      );
+      final agenda = buildAgenda(
+        reminders: [r],
+        states: {state.id: state},
+        now: tz.TZDateTime(india, 2026, 10, 22, 0, 5),
+        here: india,
+      );
+      final carried = agenda.today.where((i) => i.at.isAtSameMomentAs(at));
+      expect(carried.single.status, OccurrenceStatus.snoozed);
+      // Today's own 23:50 is still there too.
+      expect(agenda.today.length, 2);
+    });
+
     test('sorts today, keeps missed earlier items, groups upcoming days', () {
       final agenda = buildAgenda(
         reminders: [

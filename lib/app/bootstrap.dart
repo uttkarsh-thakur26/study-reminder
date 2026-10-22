@@ -1,12 +1,12 @@
 import 'package:drift/drift.dart' show Variable;
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:uuid/uuid.dart';
 
 import '../core/db/app_database.dart';
 import '../core/sync/hlc.dart';
+import '../core/time/device_zone.dart';
 import '../features/settings/settings_controller.dart';
 import 'providers.dart';
 
@@ -14,7 +14,7 @@ import 'providers.dart';
 /// database, this device's identity and the saved appearance settings.
 Future<List<Override>> bootstrap() async {
   tzdata.initializeTimeZones();
-  final zone = await _deviceTimeZone();
+  final zone = await readDeviceTimeZone();
   tz.setLocalLocation(tz.getLocation(zone));
 
   final db = AppDatabase();
@@ -34,19 +34,9 @@ Future<List<Override>> bootstrap() async {
     databaseProvider.overrideWithValue(db),
     deviceIdProvider.overrideWithValue(deviceId),
     hlcClockProvider.overrideWithValue(clock),
-    deviceTimeZoneProvider.overrideWithValue(zone),
+    initialTimeZoneProvider.overrideWithValue(zone),
     initialSettingsProvider.overrideWithValue(settings),
   ];
-}
-
-Future<String> _deviceTimeZone() async {
-  try {
-    final info = await FlutterTimezone.getLocalTimezone();
-    tz.getLocation(info.identifier); // throws for names the database lacks
-    return info.identifier;
-  } catch (_) {
-    return 'UTC';
-  }
 }
 
 /// The newest stamp already written on this device, so the clock never

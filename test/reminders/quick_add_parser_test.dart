@@ -150,7 +150,72 @@ void main() {
     expect(r.title, 'Essay due');
   });
 
+  test('tues, weds and thurs are one-off days, not plurals', () {
+    for (final word in ['tues', 'weds', 'thurs']) {
+      final r = parse('Quiz on $word');
+      expect(r.recurrence.repeats, isFalse, reason: word);
+      expect(r.date, isNotNull, reason: word);
+      expect(r.title, 'Quiz', reason: word);
+    }
+    expect(parse('Quiz on tuesdays').recurrence, const Recurrence.weekly({2}));
+  });
+
+  test('a section number does not hide the real time after it', () {
+    final r = parse('Section 2.10 at 6:30pm');
+    expect(r.title, 'Section 2.10');
+    expect(r.minuteOfDay, 18 * 60 + 30);
+    final r2 = parse('Ex 1.15 at 7.45');
+    expect(r2.title, 'Ex 1.15');
+    expect(r2.minuteOfDay, 7 * 60 + 45);
+  });
+
+  test('tonight takes an explicit time and reads a bare hour as evening', () {
+    expect(parse('Study tonight at 9').minuteOfDay, 21 * 60);
+    expect(parse('Study tonight at 9').title, 'Study');
+    expect(parse('Study tonight 11pm').minuteOfDay, 23 * 60);
+    expect(parse('Study tonight').minuteOfDay, 20 * 60);
+    final late = DateTime(2026, 10, 22, 22, 10);
+    expect(parseQuickAdd('Study tonight', now: late).minuteOfDay, 23 * 60);
+  });
+
+  test('SAT and sun stay words unless the text makes them a day', () {
+    final sat = parse('Practice SAT math');
+    expect(sat.title, 'Practice SAT math');
+    expect(sat.date, isNull);
+    expect(parse('Read about the sun').title, 'Read about the sun');
+    expect(parse('Match on sat').date, const CalendarDate(2026, 10, 24));
+    expect(parse('Quiz wed 5pm').date, const CalendarDate(2026, 10, 28));
+  });
+
+  test('titles keep leading words, only connectors before a date go', () {
+    expect(parse('The Great Gatsby essay').title, 'The Great Gatsby essay');
+    expect(
+      parse('To kill a mockingbird essay tomorrow').title,
+      'To kill a mockingbird essay',
+    );
+    expect(parse('Essay due by fri').title, 'Essay due');
+    expect(parse('What to listen to').title, 'What to listen to');
+  });
+
+  test('29 Feb without a year means the next leap year', () {
+    final r = parseQuickAdd('Exam 29/2', now: DateTime(2027, 10, 22));
+    expect(r.date, const CalendarDate(2028, 2, 29));
+    expect(r.title, 'Exam');
+  });
+
   group('resolveStart', () {
+    test('a weekday named on that day with a time gone means next week', () {
+      for (final text in [
+        'Study thu 9am',
+        'Study 9am thu',
+        'Study on thu 9am',
+      ]) {
+        final s = resolveStart(parse(text), now: now);
+        expect(s.date, today.addDays(7), reason: text);
+      }
+      expect(resolveStart(parse('Study thu 11am'), now: now).date, today);
+    });
+
     test('no time today means the next full hour', () {
       final s = resolveStart(parse('Revise'), now: now);
       expect(s.date, today);

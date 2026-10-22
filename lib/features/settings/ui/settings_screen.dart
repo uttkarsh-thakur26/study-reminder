@@ -70,30 +70,36 @@ class SettingsScreen extends ConsumerWidget {
                         for (final (i, choice) in accentChoices.indexed)
                           Tooltip(
                             message: choice.name,
-                            child: InkResponse(
-                              onTap: () => controller.setAccent(i),
-                              radius: 24,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: choice.color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: settings.accentIndex == i
-                                        ? scheme.onSurface
-                                        : Colors.transparent,
-                                    width: 2.5,
+                            excludeFromSemantics: true,
+                            child: Semantics(
+                              button: true,
+                              selected: settings.accentIndex == i,
+                              label: choice.name,
+                              child: InkResponse(
+                                onTap: () => controller.setAccent(i),
+                                radius: 24,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: choice.color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: settings.accentIndex == i
+                                          ? scheme.onSurface
+                                          : Colors.transparent,
+                                      width: 2.5,
+                                    ),
                                   ),
+                                  child: settings.accentIndex == i
+                                      ? const Icon(
+                                          Icons.check_rounded,
+                                          color: Colors.white,
+                                          size: 20,
+                                        )
+                                      : null,
                                 ),
-                                child: settings.accentIndex == i
-                                    ? const Icon(
-                                        Icons.check_rounded,
-                                        color: Colors.white,
-                                        size: 20,
-                                      )
-                                    : null,
                               ),
                             ),
                           ),

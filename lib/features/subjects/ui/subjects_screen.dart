@@ -133,7 +133,7 @@ class _SubjectRow extends ConsumerWidget {
             ),
           );
           if (ok == true) {
-            await ref.read(subjectRepositoryProvider).delete(subject);
+            await ref.read(subjectRepositoryProvider).delete(subject.id);
           }
         },
       ),

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../core/db/app_database.dart';
 import '../core/sync/hlc.dart';
+import '../core/time/device_zone.dart';
 import '../features/reminders/domain/reminder.dart';
 
 /// Opened in `bootstrap` and overridden in the root `ProviderScope`.
@@ -21,8 +23,26 @@ final hlcClockProvider = Provider<HlcClock>(
   (ref) => throw UnimplementedError('hlcClockProvider must be overridden'),
 );
 
-/// IANA name of the device time zone, e.g. `Asia/Kolkata`.
-final deviceTimeZoneProvider = Provider<String>((ref) => 'UTC');
+/// The zone found at startup; overridden in `bootstrap`.
+final initialTimeZoneProvider = Provider<String>((ref) => 'UTC');
+
+/// IANA name of the device time zone, e.g. `Asia/Kolkata`. Re-read when the
+/// app comes back to the foreground, in case the user has travelled.
+final deviceTimeZoneProvider = NotifierProvider<DeviceTimeZone, String>(
+  DeviceTimeZone.new,
+);
+
+class DeviceTimeZone extends Notifier<String> {
+  @override
+  String build() => ref.watch(initialTimeZoneProvider);
+
+  Future<void> refresh() async {
+    final zone = await readDeviceTimeZone();
+    if (zone == state) return;
+    tz.setLocalLocation(tz.getLocation(zone));
+    state = zone;
+  }
+}
 
 final deviceKindProvider = Provider<DeviceKind>((ref) {
   return switch (defaultTargetPlatform) {

@@ -62,7 +62,7 @@ class _SubjectDialogState extends ConsumerState<_SubjectDialog> {
           color: _color,
           sortOrder: await repo.nextSortOrder(),
         );
-    await repo.save(subject);
+    await repo.save(subject, base: widget.existing);
     if (mounted) Navigator.of(context).pop(subject);
   }
 
@@ -89,8 +89,9 @@ class _SubjectDialogState extends ConsumerState<_SubjectDialog> {
               spacing: Gap.s,
               runSpacing: Gap.s,
               children: [
-                for (final c in subjectPalette)
+                for (final (i, c) in subjectPalette.indexed)
                   _Swatch(
+                    label: subjectPaletteNames[i],
                     color: Color(c),
                     selected: c == _color,
                     onTap: () => setState(() => _color = c),
@@ -116,11 +117,13 @@ class _SubjectDialogState extends ConsumerState<_SubjectDialog> {
 
 class _Swatch extends StatelessWidget {
   const _Swatch({
+    required this.label,
     required this.color,
     required this.selected,
     required this.onTap,
   });
 
+  final String label;
   final Color color;
   final bool selected;
   final VoidCallback onTap;
@@ -130,6 +133,7 @@ class _Swatch extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
+      label: label,
       child: InkResponse(
         onTap: onTap,
         radius: 24,

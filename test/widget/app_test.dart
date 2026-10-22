@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:study_reminder/app/app.dart';
@@ -33,7 +34,7 @@ void main() {
           databaseProvider.overrideWithValue(db),
           deviceIdProvider.overrideWithValue('test-device'),
           hlcClockProvider.overrideWithValue(HlcClock('testdevice01')),
-          deviceTimeZoneProvider.overrideWithValue('Asia/Kolkata'),
+          initialTimeZoneProvider.overrideWithValue('Asia/Kolkata'),
           minuteTickProvider.overrideWith(
             (ref) => Stream.value(DateTime.now()),
           ),
@@ -131,6 +132,50 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.text('Accent colour'), findsOneWidget);
+    await tearDownApp(tester);
+  });
+
+  testWidgets('keyboard shortcuts keep working after a quick add', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(1280, 800));
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Revise physics today 11:59pm',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Accent colour'), findsOneWidget);
+    await tearDownApp(tester);
+  });
+
+  testWidgets('saving an untouched reminder keeps its repeat interval', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Maths every 2 months 11:59pm',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Maths'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final row = (await real(
+      tester,
+      () => db.select(db.reminders).get(),
+    )).single;
+    expect(row.repeatKind, 'monthly');
+    expect(row.repeatInterval, 2);
     await tearDownApp(tester);
   });
 }

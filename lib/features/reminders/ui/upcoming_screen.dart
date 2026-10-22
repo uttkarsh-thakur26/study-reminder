@@ -162,35 +162,40 @@ class _WeekStrip extends StatelessWidget {
               onTap: count > 0 ? () => onTap(day) : null,
               child: SizedBox(
                 width: 52,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      weekdayShortNames[day.weekday - 1],
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isToday
-                            ? scheme.onPrimary
-                            : scheme.onSurfaceVariant,
+                // Shrinks rather than overflows with large text sizes.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        weekdayShortNames[day.weekday - 1],
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: isToday
+                              ? scheme.onPrimary
+                              : scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${day.day}',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: isToday ? scheme.onPrimary : scheme.onSurface,
+                      Text(
+                        '${day.day}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: isToday ? scheme.onPrimary : scheme.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: count == 0
-                            ? Colors.transparent
-                            : (isToday ? scheme.onPrimary : scheme.primary),
+                      const SizedBox(height: 2),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: count == 0
+                              ? Colors.transparent
+                              : (isToday ? scheme.onPrimary : scheme.primary),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

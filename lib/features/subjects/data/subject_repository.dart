@@ -21,23 +21,45 @@ class SubjectRepository {
     return query.watch().map((rows) => rows.map(subjectFromRow).toList());
   }
 
-  Future<void> save(Subject subject) => _db.transaction(() async {
+  /// Saves an edit. Pass the version the editor started from as [base] so
+  /// only the fields the user changed are written; see [applyEdit].
+  Future<void> save(Subject edited, {Subject? base}) => _update(
+    edited.id,
+    (current) => applyEdit(
+      current: current,
+      base: base?.toFields(),
+      edited: edited.toFields(),
+    ),
+  );
+
+  Future<void> delete(String id) => _update(
+    id,
+    (current) => current == null ? null : {...current, 'deleted': true},
+  );
+
+  Future<void> _update(
+    String id,
+    Map<String, Object?>? Function(Map<String, Object?>? current) change,
+  ) => _db.transaction(() async {
     final existing = await (_db.select(
       _db.subjects,
-    )..where((s) => s.id.equals(subject.id))).getSingleOrNull();
+    )..where((s) => s.id.equals(id))).getSingleOrNull();
+    final current = existing == null
+        ? null
+        : subjectFromRow(existing).toFields();
+    final after = change(current);
+    if (after == null) return;
     final write = stampLocalEdit(
-      before: existing == null ? null : subjectFromRow(existing).toFields(),
+      before: current,
       beforeClock: existing?.fieldClock ?? '',
-      after: subject.toFields(),
+      after: after,
       clock: _clock,
     );
     if (write == null) return;
     await _db
         .into(_db.subjects)
-        .insertOnConflictUpdate(subjectCompanion(subject.id, write));
+        .insertOnConflictUpdate(subjectCompanion(id, write));
   });
-
-  Future<void> delete(Subject subject) => save(subject.copyWith(deleted: true));
 
   /// Next sort position, so new subjects go to the end of the list.
   Future<int> nextSortOrder() async {
