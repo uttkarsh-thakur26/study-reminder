@@ -27,8 +27,15 @@ class FieldClock {
   /// The newest stamp across all fields.
   Hlc get latest => stamps.values.fold(Hlc.zero, (a, b) => b > a ? b : a);
 
-  String encode() =>
-      jsonEncode({for (final e in stamps.entries) e.key: e.value.pack()});
+  String encode() => jsonEncode(toJson());
+
+  Map<String, String> toJson() => {
+    for (final e in stamps.entries) e.key: e.value.pack(),
+  };
+
+  factory FieldClock.fromJson(Map<String, Object?> json) => FieldClock({
+    for (final e in json.entries) e.key: Hlc.parse(e.value! as String),
+  });
 
   /// Stamps every field whose value differs between [before] and [after].
   ///

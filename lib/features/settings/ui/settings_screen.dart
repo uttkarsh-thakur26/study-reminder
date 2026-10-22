@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../alerts/ui/alert_health.dart';
 import '../../reminders/domain/reminder.dart';
+import '../../sync/ui/sync_card.dart';
 import '../settings_controller.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -110,6 +111,8 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SectionHeader('SYNC'),
+            const SyncCard(),
             const SectionHeader('ALERTS'),
             const AlertHealthCard(),
             const SectionHeader('THIS DEVICE'),

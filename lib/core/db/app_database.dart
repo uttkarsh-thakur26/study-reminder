@@ -49,6 +49,13 @@ class AppDatabase extends _$AppDatabase {
           .watchSingleOrNull()
           .map((row) => row?.value);
 
+  /// Writes [value] only if [key] has none yet; the first writer wins.
+  Future<void> writeSettingIfAbsent(String key, String value) =>
+      into(localSettings).insert(
+        LocalSettingsCompanion.insert(key: key, value: value),
+        mode: InsertMode.insertOrIgnore,
+      );
+
   Future<void> writeSetting(String key, String value) => into(localSettings)
       .insertOnConflictUpdate(
         LocalSettingsCompanion.insert(key: key, value: value),

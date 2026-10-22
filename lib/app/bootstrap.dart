@@ -7,6 +7,11 @@ import '../features/alerts/data/local_notifications.dart';
 import '../features/settings/settings_controller.dart';
 import '../desktop/desktop_window.dart';
 import '../desktop/start_with_windows.dart';
+import '../features/sync/application/background_refresh.dart';
+import '../features/sync/application/sync_providers.dart';
+import '../features/sync/data/device_name.dart';
+import '../features/sync/data/supabase_sync_api.dart';
+import '../features/sync/data/sync_config.dart';
 import 'core_services.dart';
 import 'providers.dart';
 
@@ -24,7 +29,24 @@ Future<List<Override>> bootstrap() async {
     initialTimeZoneProvider.overrideWithValue(core.timeZone),
     initialSettingsProvider.overrideWithValue(settings),
     ...await _notifications(),
+    deviceNameProvider.overrideWithValue(await readDeviceName()),
+    if (SyncConfig.isSet)
+      syncApiProvider.overrideWithValue(
+        SupabaseSyncApi(url: SyncConfig.url, publicKey: SyncConfig.publicKey),
+      ),
+    ...await _backgroundRefresh(),
   ];
+}
+
+/// Android: sync and top up alarms every 15 minutes, even when closed.
+Future<List<Override>> _backgroundRefresh() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return [];
+  try {
+    await scheduleBackgroundRefresh();
+  } catch (e) {
+    debugPrint('background refresh unavailable: $e');
+  }
+  return [];
 }
 
 Future<List<Override>> _notifications() async {
