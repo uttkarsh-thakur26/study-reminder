@@ -74,8 +74,6 @@ class BlockActivity : Activity() {
         val app = intent.getStringExtra(EXTRA_APP) ?: "This app"
         heading.text = "$app is blocked"
         detail.text = detailText()
-        // With notification access, MediaGuard pauses just the blocked app.
-        if (!MediaGuard.granted(this)) MediaGuard.silence(this)
     }
 
     private fun detailText(): String {

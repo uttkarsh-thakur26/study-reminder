@@ -102,10 +102,11 @@ class FocusService : Service() {
             return
         }
         if (!s.blockApps) return
+        // Notification access may have been given or taken back since the
+        // session began. Media plays with the screen off too.
+        media.start()
         val power = getSystemService(PowerManager::class.java)
         if (!power.isInteractive) return
-        // Notification access may have been given since the session began.
-        media.start()
         val app = currentApp() ?: return
         if (app == packageName || app in neverBlock || !isBlocked(s, app)) return
         val now = System.currentTimeMillis()
