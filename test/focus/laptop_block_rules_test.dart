@@ -48,6 +48,38 @@ void main() {
     expect(rules.match(chrome, 'x.com/home - Google Chrome')?.label, 'X');
   });
 
+  test('tabs match by their title, whatever program they are in', () {
+    final hit = rules.matchTab('Lo-fi beats - YouTube - Audio playing');
+    expect(hit?.label, 'YouTube');
+    expect(hit?.isSite, isTrue);
+    expect(rules.matchTab('Home / X')?.label, 'X');
+    expect(rules.matchTab('r/learnmath - Reddit - Pinned'), isNotNull);
+    expect(rules.matchTab('Lo-fi\u200b - YouTube')?.label, 'YouTube');
+    expect(rules.matchTab('Calculus notes - Google Docs'), isNull);
+    expect(rules.matchTab('Matrix X Y plots - Wikipedia'), isNull);
+    // Programs are not sites.
+    expect(rules.matchTab('Steam Store'), isNull);
+    expect(rules.matchTab(''), isNull);
+  });
+
+  test('knows whether any site is blocked', () {
+    expect(rules.blocksSites, isTrue);
+    expect(
+      LaptopBlockRules(
+        programs: ['steam.exe'],
+        sites: ['localhost'],
+      ).blocksSites,
+      isFalse,
+    );
+  });
+
+  test('tab browsers are all browsers', () {
+    expect(
+      LaptopBlockRules.browsers,
+      containsAll(LaptopBlockRules.tabBrowsers),
+    );
+  });
+
   test('site keywords and tidying what the user types', () {
     expect(siteKeyword('https://www.youtube.com/watch'), 'youtube');
     expect(siteKeyword('news.bbc.co.uk'), 'bbc');

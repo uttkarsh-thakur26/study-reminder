@@ -65,25 +65,10 @@ class Win32Windows implements DesktopWindows {
     try {
       GetWindowThreadProcessId(hwnd, pid);
       if (pid.value == 0 || pid.value == _ownPid) return null;
-      final exe = _exePath(pid.value);
+      final exe = exePathOf(pid.value);
       return exe == null ? null : DesktopWindow(hwnd, exe, _title(hwnd));
     } finally {
       free(pid);
-    }
-  }
-
-  static String? _exePath(int pid) {
-    final process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (process == 0) return null;
-    final size = calloc<Uint32>()..value = 1024;
-    final buffer = wsalloc(1024);
-    try {
-      if (QueryFullProcessImageName(process, 0, buffer, size) == 0) return null;
-      return buffer.toDartString(length: size.value);
-    } finally {
-      free(buffer);
-      free(size);
-      CloseHandle(process);
     }
   }
 
@@ -152,5 +137,21 @@ class Win32Windows implements DesktopWindows {
       callback.close();
     }
     return (found.difference(_shell).toList())..sort();
+  }
+}
+
+/// The program file of process [pid], or null when it can't be read.
+String? exePathOf(int pid) {
+  final process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (process == 0) return null;
+  final size = calloc<Uint32>()..value = 1024;
+  final buffer = wsalloc(1024);
+  try {
+    if (QueryFullProcessImageName(process, 0, buffer, size) == 0) return null;
+    return buffer.toDartString(length: size.value);
+  } finally {
+    free(buffer);
+    free(size);
+    CloseHandle(process);
   }
 }

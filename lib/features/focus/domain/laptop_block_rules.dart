@@ -43,6 +43,21 @@ class LaptopBlockRules {
     'zen.exe',
   };
 
+  /// The browsers whose tabs Focus can read and close when they are not in
+  /// front: those built on Chromium with its own tab strip. Vivaldi draws its
+  /// tabs as a web page, and turning on Firefox's accessibility costs it too
+  /// much to do every few seconds.
+  static const tabBrowsers = {
+    'chrome.exe',
+    'msedge.exe',
+    'brave.exe',
+    'opera.exe',
+    'chromium.exe',
+  };
+
+  /// Whether any site is blocked.
+  bool get blocksSites => _sites.isNotEmpty;
+
   /// What [exePath] showing [title] matches, or null when it is fine.
   BlockHit? match(String exePath, String title) {
     final program = programName(exePath);
@@ -53,6 +68,12 @@ class LaptopBlockRules {
       );
     }
     if (!browsers.contains(program)) return null;
+    return matchTab(title);
+  }
+
+  /// The blocked site a browser tab titled [title] shows, or null. Programs
+  /// are not looked at.
+  BlockHit? matchTab(String title) {
     // Edge puts a zero-width space in its own name.
     final t = title.toLowerCase().replaceAll('\u200b', '');
     for (final s in _sites) {

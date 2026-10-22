@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/providers.dart';
 import '../../alerts/application/alert_providers.dart';
 import '../data/android_focus_enforcer.dart';
+import '../data/browser_tabs.dart';
 import '../data/desktop_windows.dart';
 import '../data/focus_enforcer.dart';
 import '../data/focus_repository.dart';
@@ -34,6 +35,10 @@ final focusGuardProvider = Provider<FocusGuard?>((ref) => null);
 /// The laptop's windows. Set at startup on Windows.
 final desktopWindowsProvider = Provider<DesktopWindows?>((ref) => null);
 
+/// The laptop's browser tabs that are not in front. Set at startup on
+/// Windows.
+final browserTabsProvider = Provider<BrowserTabs?>((ref) => null);
+
 /// What makes this device follow the focus session.
 final focusEnforcerProvider = Provider<FocusEnforcer>((ref) {
   final guard = ref.watch(focusGuardProvider);
@@ -44,6 +49,7 @@ final focusEnforcerProvider = Provider<FocusEnforcer>((ref) {
   } else if (windows != null) {
     enforcer = WindowsFocusEnforcer(
       windows: windows,
+      tabs: ref.watch(browserTabsProvider),
       onBlocked: (hit, session) => _notice(ref, hit, session),
     );
   } else {
@@ -73,6 +79,7 @@ List<Override> focusPlatformOverrides() {
     ],
     TargetPlatform.windows => [
       desktopWindowsProvider.overrideWithValue(Win32Windows()),
+      browserTabsProvider.overrideWithValue(const Win32BrowserTabs()),
     ],
     _ => [],
   };
