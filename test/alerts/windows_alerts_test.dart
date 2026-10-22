@@ -20,6 +20,9 @@ class WindowsLikeQueue implements AlertScheduler {
   final copies = <PlannedAlert>[];
 
   @override
+  Future<String> timing() async => 'exact';
+
+  @override
   Future<List<ScheduledAlert>> pending() async => [
     for (final a in copies) ScheduledAlert(a.notificationId, null),
   ];
@@ -127,6 +130,7 @@ void main() {
       occurrenceAt: DateTime.utc(2026, 10, 22, 13, 30),
       style: ReminderStyle.alarm,
       signature: 'abc',
+      ringsAt: DateTime.utc(2026, 10, 22, 13, 40),
     );
 
     test('Android: the button arrives as its own id', () {
@@ -149,6 +153,7 @@ void main() {
       final encoded = payload.withAction(AlertActions.done).encode();
       final r = readResponse(payload: encoded, actionId: encoded);
       expect(r.payload!.signature, 'abc');
+      expect(r.payload!.ringsAt, payload.ringsAt);
       expect(r.action, AlertActions.done);
     });
 

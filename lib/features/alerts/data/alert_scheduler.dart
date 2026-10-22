@@ -8,6 +8,12 @@ abstract interface class AlertScheduler {
   Future<void> schedule(PlannedAlert alert);
 
   Future<void> cancel(int id);
+
+  /// Names how the system currently times alerts, such as whether Android
+  /// allows exact alarms. A change means the whole queue is queued again:
+  /// revoking exact alarms drops them, and granting it leaves alerts queued
+  /// in the meantime ringing late.
+  Future<String> timing();
 }
 
 /// Used where the platform has no notification support wired up yet.
@@ -22,4 +28,7 @@ class NoopAlertScheduler implements AlertScheduler {
 
   @override
   Future<void> cancel(int id) async {}
+
+  @override
+  Future<String> timing() async => 'none';
 }

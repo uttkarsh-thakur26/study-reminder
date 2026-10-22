@@ -26,8 +26,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen> {
     setState(() => _busy = true);
     final navigator = Navigator.of(context);
     await ref.read(localNotificationsProvider)?.dismiss(widget.payload);
+    final alerts = ref.read(alertServiceProvider);
     if (action != null) {
-      await ref.read(alertServiceProvider).handleAction(action, widget.payload);
+      await alerts.handleAction(action, widget.payload);
+    } else if (!widget.payload.isTest) {
+      // Dismissing shares the occurrence's id with any snooze set from the
+      // notification meanwhile, so queue that snooze again.
+      await alerts.replan();
     }
     if (navigator.canPop()) navigator.pop();
   }

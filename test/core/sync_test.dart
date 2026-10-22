@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:study_reminder/core/sync/field_clock.dart';
 import 'package:study_reminder/core/sync/hlc.dart';
+import 'package:study_reminder/core/sync/stamped_write.dart';
 
 void main() {
   group('Hlc', () {
@@ -134,5 +135,23 @@ void main() {
       );
       expect(result.values, {'title': 'A', 'notes': 'n'});
     });
+  });
+
+  test('an edit sorts after stamps another isolate already stored', () {
+    // The background isolate stamped 'status' with a counter this clock
+    // never saw, while the wall clock sits behind that stamp.
+    const stored = Hlc(1761100000000, 2, 'phone');
+    final clock = HlcClock(
+      'phone',
+      wallClock: () => DateTime.fromMillisecondsSinceEpoch(1761099990000),
+      last: const Hlc(1761100000000, 0, 'phone'),
+    );
+    final write = stampLocalEdit(
+      before: {'status': 'done'},
+      beforeClock: FieldClock({'status': stored}).encode(),
+      after: {'status': 'pending'},
+      clock: clock,
+    )!;
+    expect(write.clock.stamps['status']! > stored, isTrue);
   });
 }

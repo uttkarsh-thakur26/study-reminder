@@ -18,6 +18,10 @@ import 'package:timezone/timezone.dart' as tz;
 class FakeScheduler implements AlertScheduler {
   final queued = <int, PlannedAlert>{};
   var calls = 0;
+  var mode = 'exact';
+
+  @override
+  Future<String> timing() async => mode;
 
   @override
   Future<List<ScheduledAlert>> pending() async => [
@@ -45,7 +49,8 @@ void main() {
   late AlertService service;
   late ReminderRepository repo;
   // Thursday 22 Oct 2026, 10:00 in India.
-  final now = DateTime.utc(2026, 10, 22, 4, 30);
+  final start = DateTime.utc(2026, 10, 22, 4, 30);
+  var now = start;
 
   setUpAll(() {
     tzdata.initializeTimeZones();
@@ -53,6 +58,7 @@ void main() {
   });
 
   setUp(() {
+    now = start;
     db = AppDatabase(NativeDatabase.memory());
     clock = HlcClock('test');
     scheduler = FakeScheduler();
@@ -181,8 +187,77 @@ void main() {
         ScheduledAlert(1, AlertPayload.of(keep)),
         const ScheduledAlert(2, null),
       ],
+      now: DateTime.utc(2025),
     );
     expect(diff.toSchedule, isEmpty);
     expect(diff.toCancel, [2]);
+  });
+
+  group('when the system queue is not what it reports', () {
+    test('the first replan after a start queues the next day again', () async {
+      await repo.save(reminder(recurrence: const Recurrence.daily()));
+      await service.replan();
+
+      // Force stop: Android dropped the alarms but still lists them.
+      scheduler.calls = 0;
+      final diff = await service.replan(verify: true);
+      expect(diff.toSchedule.length, 1); // today 19:00 is within a day
+      expect(
+        diff.toSchedule.single.at.isBefore(now.add(AlertService.verifyWindow)),
+        isTrue,
+      );
+      expect(diff.toCancel, isEmpty);
+      expect(scheduler.queued.length, 14);
+    });
+
+    test('an alert that never rang queues everything again', () async {
+      await repo.save(reminder(recurrence: const Recurrence.daily()));
+      await service.replan();
+
+      // Two hours past the first ring time, and it is still listed.
+      now = DateTime.utc(2026, 10, 22, 15, 30);
+      final diff = await service.replan();
+      expect(diff.missed, 1);
+      expect(diff.toSchedule.length, 14); // every day of the next two weeks
+      expect(diff.toCancel.length, 1); // the stale entry
+      expect(scheduler.queued.length, 14);
+    });
+
+    test('a late alert is left for the system to deliver', () async {
+      await repo.save(reminder());
+      await service.replan();
+      final id = scheduler.queued.keys.single;
+
+      // Five minutes past 19:00 and not delivered yet (inexact timing).
+      now = DateTime.utc(2026, 10, 22, 13, 35);
+      final diff = await service.replan();
+      expect(diff.toCancel, isEmpty);
+      expect(diff.missed, 0);
+      expect(scheduler.queued.keys, [id]);
+    });
+
+    test('a change in exact-alarm access queues everything again', () async {
+      await repo.save(reminder(recurrence: const Recurrence.daily()));
+      await service.replan();
+      expect((await service.replan()).isEmpty, isTrue);
+
+      scheduler.mode = 'inexact';
+      expect((await service.replan()).toSchedule.length, 14);
+      expect((await service.replan()).isEmpty, isTrue);
+
+      scheduler.mode = 'exact';
+      expect((await service.replan()).toSchedule.length, 14);
+    });
+
+    test('a snoozed payload knows when it rings', () async {
+      await repo.save(reminder());
+      await service.replan();
+      final payload = AlertPayload.of(scheduler.queued.values.single);
+      await service.handleAction(AlertActions.snooze, payload);
+      final snoozed = AlertPayload.of(scheduler.queued.values.single);
+      expect(snoozed.occurrenceKey, payload.occurrenceKey);
+      expect(snoozed.ringsAt, now.add(defaultSnooze));
+      expect(AlertPayload.decode(snoozed.encode())!.ringsAt, snoozed.ringsAt);
+    });
   });
 }

@@ -49,6 +49,9 @@ class PayloadTrackingScheduler implements AlertScheduler {
     if (ledger.remove(id) != null) await _write(ledger);
   }
 
+  @override
+  Future<String> timing() => inner.timing();
+
   Map<int, String>? _ledger;
 
   Future<Map<int, String>> _read() async =>
