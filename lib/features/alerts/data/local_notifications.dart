@@ -228,7 +228,8 @@ WindowsInitializationSettings _windowsSettings() =>
 
 /// Windows hands back only the clicked button's text, so each button carries
 /// the whole payload plus its action. Reminders and alarms stay on screen
-/// until answered; alarms loop the alarm sound.
+/// until answered. The alarm scenario loops Windows' alarm sound by itself
+/// (the plugin's "Alarm1" preset names a sound Windows does not have).
 WindowsNotificationDetails windowsDetails(AlertPayload payload) {
   final alarm = payload.style == ReminderStyle.alarm;
   WindowsAction button(String label, String action) => WindowsAction(
@@ -239,12 +240,6 @@ WindowsNotificationDetails windowsDetails(AlertPayload payload) {
     scenario: alarm
         ? WindowsNotificationScenario.alarm
         : WindowsNotificationScenario.reminder,
-    audio: alarm
-        ? WindowsNotificationAudio.preset(
-            sound: WindowsNotificationSound.alarm1,
-            shouldLoop: true,
-          )
-        : null,
     timestamp: payload.occurrenceAt,
     actions: payload.isTest
         ? [button(alarm ? 'Stop' : 'Got it', AlertActions.stop)]

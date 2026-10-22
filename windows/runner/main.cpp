@@ -15,8 +15,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   // One copy at a time. A second launch brings the running window forward,
   // unless it is the sign-in launch, which should stay quiet in the tray.
-  HANDLE instance_lock =
-      ::CreateMutexW(nullptr, FALSE, L"Local\\UttkarshStudyReminder");
+#ifdef _DEBUG
+  // A debug run must not hand over to an installed copy in the tray.
+  const wchar_t* lock_name = L"Local\\UttkarshStudyReminder.Debug";
+#else
+  const wchar_t* lock_name = L"Local\\UttkarshStudyReminder";
+#endif
+  HANDLE instance_lock = ::CreateMutexW(nullptr, FALSE, lock_name);
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
     HWND running =
         ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Study Reminder");

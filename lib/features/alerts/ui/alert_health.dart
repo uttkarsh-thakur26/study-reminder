@@ -98,7 +98,8 @@ class AlertHealthCard extends ConsumerWidget {
               title: Text('Rings from the tray'),
               subtitle: Text(
                 'Closing the window keeps Study Reminder running, so '
-                'reminders still ring. Quit from the tray icon menu.',
+                'reminders still ring. Quit from the tray icon stops them '
+                'until you open the app again.',
               ),
             ),
             const Divider(indent: 56),

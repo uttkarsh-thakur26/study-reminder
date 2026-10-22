@@ -83,7 +83,12 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
   void onTrayIconMouseDown() => unawaited(showDesktopWindow());
 
   @override
-  void onTrayIconRightMouseDown() => unawaited(trayManager.popUpContextMenu());
+  void onTrayIconRightMouseDown() => unawaited(
+    // Without bringing the app forward first, Windows leaves the menu open
+    // after a click elsewhere.
+    // ignore: deprecated_member_use
+    trayManager.popUpContextMenu(bringAppToFront: true),
+  );
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
@@ -119,7 +124,15 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
         );
   }
 
+  /// Quitting stops reminders on this laptop until the app opens again.
+  /// Queued toasts are withdrawn, since their buttons need the app running;
+  /// the next start queues them again.
   Future<void> _quit() async {
+    try {
+      await ref.read(localNotificationsProvider)?.plugin.cancelAll();
+    } on Object catch (e) {
+      debugPrint('could not withdraw queued reminders: $e');
+    }
     await trayManager.destroy();
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
