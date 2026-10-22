@@ -17,8 +17,16 @@ jobs:
   test:
     name: Analyze and test
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+      - name: Name this build
+        id: version
+        # The version in pubspec.yaml, marked as a CI build: 1.2.0-ci.57.
+        run: |
+          version=$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml)
+          echo "version=$version-ci.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -73,25 +81,15 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - name: Set up release signing
+      - uses: ./.github/actions/android-signing
+        with:
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - run: flutter build apk --release "--dart-define=APP_VERSION=$APP_VERSION"
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::No signing secrets set. The APK is signed with a temporary debug key, so it cannot update a previous install."
-            exit 0
-          fi
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
-          {
-            echo "storeFile=release.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
-          } > android/key.properties
-      - run: flutter build apk --release
+          APP_VERSION: ${{ needs.test.outputs.version }}
       - name: Name the APK
         run: mv build/app/outputs/flutter-apk/app-release.apk "study-reminder-${GITHUB_SHA::7}.apk"
       - uses: actions/upload-artifact@v7
@@ -111,12 +109,19 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - run: flutter build windows --release
-      - name: Package
+      - run: flutter build windows --release "--dart-define=APP_VERSION=$env:APP_VERSION"
         shell: pwsh
-        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath study-reminder-windows.zip
+        env:
+          APP_VERSION: ${{ needs.test.outputs.version }}
+      - id: package
+        uses: ./.github/actions/windows-package
+        with:
+          version: ${{ needs.test.outputs.version }}
+          zip-name: study-reminder-windows.zip
       - uses: actions/upload-artifact@v7
         with:
           name: study-reminder-windows
-          path: study-reminder-windows.zip
+          path: |
+            study-reminder-windows.zip
+            ${{ steps.package.outputs.installer }}
           retention-days: 30

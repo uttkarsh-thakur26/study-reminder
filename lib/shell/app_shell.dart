@@ -9,7 +9,7 @@ import '../features/reminders/ui/today_screen.dart';
 import '../features/reminders/ui/upcoming_screen.dart';
 import '../features/settings/ui/settings_screen.dart';
 import '../features/stats/ui/study_screen.dart';
-import 'quick_add_request.dart';
+import 'shell_requests.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -33,6 +33,8 @@ const _destinations = [
 /// Bottom navigation on phones, a side rail on laptops.
 ///
 /// Keyboard: Ctrl+N new reminder, Ctrl+K quick add, Ctrl+1..5 switch pages.
+/// Global shortcuts on Windows and the home screen widget on Android reach
+/// it through [shellRequestsProvider].
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -69,10 +71,21 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
+  /// From outside the pages, like a global shortcut on Windows.
+  void _onRequest(NumberedShellRequest? _, NumberedShellRequest? next) {
+    switch (next?.request) {
+      case ShellRequest.quickAdd:
+        _focusQuickAdd();
+      case ShellRequest.focus:
+        _select(_destinations.indexWhere((d) => d.label == 'Focus'));
+      case null:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // The home screen widget's "+".
-    ref.listen(quickAddRequestsProvider, (_, _) => _focusQuickAdd());
+    ref.listen<NumberedShellRequest?>(shellRequestsProvider, _onRequest);
     final wide = isWide(context);
     final scheme = Theme.of(context).colorScheme;
     final body = IndexedStack(index: _index, children: _pages);

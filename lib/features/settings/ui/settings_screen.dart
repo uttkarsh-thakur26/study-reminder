@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
+import '../../../desktop/desktop_shortcuts_card.dart';
 import '../../alerts/ui/alert_health.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../sync/ui/sync_card.dart';
 import '../settings_controller.dart';
+import 'about_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -115,6 +117,7 @@ class SettingsScreen extends ConsumerWidget {
             const SyncCard(),
             const SectionHeader('ALERTS'),
             const AlertHealthCard(),
+            const DesktopShortcutsSection(),
             const SectionHeader('THIS DEVICE'),
             Card(
               child: Column(
@@ -144,13 +147,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SectionHeader('ABOUT'),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.school_rounded),
-                title: Text('Study Reminder'),
-                subtitle: Text('Version 0.1.0'),
-              ),
-            ),
+            const AboutCard(),
           ],
         ),
       ),

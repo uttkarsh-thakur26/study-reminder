@@ -29,6 +29,8 @@ flutter test
 flutter run -d windows        # or an Android device
 ```
 
+To publish a release with the APK and the Windows installer, see [RELEASING.md](RELEASING.md).
+
 ## Project layout
 
 ```

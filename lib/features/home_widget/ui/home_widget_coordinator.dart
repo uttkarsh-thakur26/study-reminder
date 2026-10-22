@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:study_widget/study_widget.dart';
 
-import '../../../shell/quick_add_request.dart';
+import '../../../shell/shell_requests.dart';
 import '../application/home_widget_providers.dart';
 
 /// Keeps the home screen widget in step while the app runs: sends it the
@@ -92,7 +92,7 @@ class _HomeWidgetCoordinatorState extends ConsumerState<HomeWidgetCoordinator> {
     }
     if (!mounted) return;
     if (request == StudyWidgetRequest.quickAdd) {
-      ref.read(quickAddRequestsProvider.notifier).request();
+      ref.read(shellRequestsProvider.notifier).send(ShellRequest.quickAdd);
     }
   }
 
