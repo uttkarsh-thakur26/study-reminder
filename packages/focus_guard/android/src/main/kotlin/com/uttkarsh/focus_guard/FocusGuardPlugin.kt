@@ -14,6 +14,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -89,6 +90,16 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
                 result.success(null)
             }
             "isRunning" -> result.success(FocusController.isRunning(context))
+            "running" -> result.success(running())
+            "setBlocklist" -> {
+                FocusState.saveBlocklist(
+                    context,
+                    call.argument<List<String>>("packages")?.toSet() ?: emptySet(),
+                    call.argument<Boolean>("blockGames") == true,
+                )
+                result.success(null)
+            }
+            "pushToken" -> pushToken(result)
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }
@@ -107,6 +118,24 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
         packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet(),
         startedBy = call.argument<String>("startedBy") ?: "",
     )
+
+    /** The session running here, which may have come from another device. */
+    private fun running(): Map<String, Any>? {
+        val state = FocusState.load(context) ?: return null
+        if (state.isOver()) return null
+        return mapOf("startedAt" to state.startedAt, "endsAt" to state.endsAt)
+    }
+
+    /** This phone's Firebase token, or null when there is none to be had. */
+    private fun pushToken(result: MethodChannel.Result) {
+        if (!FocusRemote.available(context)) {
+            result.success(null)
+            return
+        }
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            result.success(if (task.isSuccessful) task.result else null)
+        }
+    }
 
     /** Which of the grants Focus mode uses the user has given. */
     private fun access(): Map<String, Boolean> {

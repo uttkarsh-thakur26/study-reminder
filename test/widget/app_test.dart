@@ -147,10 +147,37 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.text('Accent colour'), findsOneWidget);
+    await tearDownApp(tester);
+  });
+
+  testWidgets('a focus session starts, counts down and stops', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.text('Focus').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start focus'));
+    await tester.pumpAndSettle();
+    expect(find.text('left'), findsOneWidget);
+    expect(
+      find.textContaining('25:00').evaluate().isNotEmpty ||
+          find.textContaining('24:5').evaluate().isNotEmpty,
+      isTrue,
+    );
+
+    await tester.tap(find.text('5 min'));
+    await tester.pumpAndSettle();
+    final row = await real(
+      tester,
+      () => db.select(db.focusSessions).getSingle(),
+    );
+    expect(row.endsAt! - row.startedAt!, 30 * 60 * 1000);
+
+    await tester.tap(find.text('Stop'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start focus'), findsOneWidget);
     await tearDownApp(tester);
   });
 

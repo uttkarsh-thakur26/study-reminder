@@ -44,7 +44,10 @@ class FocusGuardSession {
   @override
   bool operator ==(Object other) =>
       other is FocusGuardSession &&
-      mapEquals(other.toMap()..remove('packages'), toMap()..remove('packages')) &&
+      mapEquals(
+        other.toMap()..remove('packages'),
+        toMap()..remove('packages'),
+      ) &&
       setEquals(other.packages, packages);
 
   @override
@@ -117,6 +120,29 @@ class FocusGuard {
 
   Future<bool> isRunning() async =>
       await _channel.invokeMethod<bool>('isRunning') ?? false;
+
+  /// When the session running on this phone started, or null when none is.
+  /// A session pushed from another device can be running before the app
+  /// has synced it.
+  Future<DateTime?> runningSince() async {
+    final m = await _channel.invokeMapMethod<String, Object?>('running');
+    final at = m?['startedAt'];
+    return at is int
+        ? DateTime.fromMillisecondsSinceEpoch(at, isUtc: true)
+        : null;
+  }
+
+  /// What to block when a session arrives from another device while the app
+  /// is closed.
+  Future<void> setBlocklist(Set<String> packages, {required bool blockGames}) =>
+      _channel.invokeMethod('setBlocklist', {
+        'packages': packages.toList()..sort(),
+        'blockGames': blockGames,
+      });
+
+  /// This phone's push token, so other devices can wake it. Null when the app
+  /// was built without Firebase or the phone has no Google Play services.
+  Future<String?> pushToken() => _channel.invokeMethod<String>('pushToken');
 
   Future<FocusGuardAccess> access() async => FocusGuardAccess.fromMap(
     await _channel.invokeMethod<Map<Object?, Object?>>('access') ?? const {},

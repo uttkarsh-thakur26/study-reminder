@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:postgrest/postgrest.dart';
@@ -13,6 +14,7 @@ class SupabaseSyncApi implements SyncApi {
   SupabaseSyncApi({required String url, required String publicKey})
     : _http = http.Client(),
       _publicKey = publicKey,
+      _functionsUrl = '$url/functions/v1',
       _realtimeUrl = '$url/realtime/v1'.replaceFirst('http', 'ws') {
     _rest = PostgrestClient(
       '$url/rest/v1',
@@ -24,6 +26,7 @@ class SupabaseSyncApi implements SyncApi {
 
   final http.Client _http;
   final String _publicKey;
+  final String _functionsUrl;
   final String _realtimeUrl;
   late final PostgrestClient _rest;
   RealtimeClient? _realtime;
@@ -129,6 +132,33 @@ class SupabaseSyncApi implements SyncApi {
     ))
       SyncRecord.fromJson(row),
   ];
+
+  @override
+  Future<void> setPushToken(String secret, String? token) =>
+      _call('set_push_token', {'p_secret': secret, 'p_token': token ?? ''});
+
+  @override
+  Future<void> wakeOtherDevices(String secret) async {
+    final http.Response res;
+    try {
+      res = await _http
+          .post(
+            Uri.parse('$_functionsUrl/focus-push'),
+            headers: {
+              'apikey': _publicKey,
+              'Authorization': 'Bearer $_publicKey',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'secret': secret}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } on Object catch (e) {
+      throw SyncUnavailable(e);
+    }
+    if (res.statusCode >= 300) {
+      throw SyncUnavailable('focus-push ${res.statusCode}: ${res.body}');
+    }
+  }
 
   @override
   Stream<void> changes(String spaceId) {

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../focus/application/focus_providers.dart';
 import '../../reminders/domain/reminder.dart';
 import '../data/sync_api.dart';
 import 'sync_service.dart';
@@ -21,6 +22,7 @@ final syncServiceProvider = Provider<SyncService?>((ref) {
     api: api,
     isPhone: ref.watch(deviceKindProvider) == DeviceKind.phone,
     deviceName: ref.watch(deviceNameProvider),
+    pushToken: ref.watch(focusGuardProvider)?.pushToken,
   );
 });
 

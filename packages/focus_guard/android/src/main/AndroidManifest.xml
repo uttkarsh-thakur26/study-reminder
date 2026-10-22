@@ -42,6 +42,16 @@
             android:taskAffinity="com.uttkarsh.focus_guard.block"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar"/>
 
+        <!-- Sessions started or stopped on another device, pushed through
+             Firebase so they apply while the app is closed. -->
+        <service
+            android:name=".FocusMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".FocusReceiver"
             android:exported="false">

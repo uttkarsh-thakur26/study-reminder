@@ -5,6 +5,11 @@ import '../../../app/core_services.dart';
 import '../../alerts/application/alert_service.dart';
 import '../../alerts/application/background_actions.dart';
 import '../../alerts/data/local_notifications.dart';
+import '../../focus/data/android_focus_enforcer.dart';
+import '../../focus/data/focus_repository.dart';
+
+import 'package:focus_guard/focus_guard.dart';
+
 import '../../reminders/domain/reminder.dart';
 import '../data/supabase_sync_api.dart';
 import '../data/sync_api.dart';
@@ -48,6 +53,7 @@ void backgroundRefresh() {
               final String name when name.isNotEmpty => name,
               _ => 'Phone',
             },
+            pushToken: const FocusGuard().pushToken,
           ).sync();
         } on SyncUnavailable {
           // Offline: alarms still get topped up below.
@@ -56,6 +62,17 @@ void backgroundRefresh() {
         } finally {
           await api.close();
         }
+      }
+      // Picks up a session started on another device when push is not set
+      // up or a message was missed.
+      try {
+        final focus = FocusRepository(core.db, core.clock);
+        await AndroidFocusEnforcer().apply(
+          await focus.current(),
+          await focus.prefs(),
+        );
+      } on Object catch (e) {
+        debugPrint('background focus check failed: $e');
       }
       final scheduler = LocalNotificationsScheduler();
       await scheduler.initialize(onBackgroundAction: onBackgroundAlertAction);

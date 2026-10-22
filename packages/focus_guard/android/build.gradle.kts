@@ -53,3 +53,10 @@ kotlin {
     }
 }
 
+
+dependencies {
+    // Wakes the phone when a session starts on another device. Firebase
+    // stays off when the app has no Firebase settings (see FocusRemote).
+    implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
+    implementation("com.google.firebase:firebase-messaging")
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/focus/ui/focus_screen.dart';
 import '../features/reminders/ui/reminder_editor.dart';
 import '../features/reminders/ui/today_screen.dart';
 import '../features/reminders/ui/upcoming_screen.dart';
@@ -22,13 +23,14 @@ const _destinations = [
     Icons.calendar_month_outlined,
     Icons.calendar_month_rounded,
   ),
+  _Destination('Focus', Icons.timer_outlined, Icons.timer_rounded),
   _Destination('Subjects', Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination('Settings', Icons.settings_outlined, Icons.settings_rounded),
 ];
 
 /// Bottom navigation on phones, a side rail on laptops.
 ///
-/// Keyboard: Ctrl+N new reminder, Ctrl+K quick add, Ctrl+1..4 switch pages.
+/// Keyboard: Ctrl+N new reminder, Ctrl+K quick add, Ctrl+1..5 switch pages.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -43,6 +45,7 @@ class _AppShellState extends State<AppShell> {
   late final _pages = [
     TodayScreen(quickAddFocus: _quickAddFocus),
     const UpcomingScreen(),
+    const FocusScreen(),
     const SubjectsScreen(),
     const SettingsScreen(),
   ];

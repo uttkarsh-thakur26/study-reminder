@@ -23,6 +23,7 @@ object FocusController {
     private const val DONE_CHANNEL = "focus_guard_done"
     const val SESSION_NOTIFICATION = 7301
     private const val DONE_NOTIFICATION = 7302
+    private const val STOPPED_NOTIFICATION = 7303
 
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
@@ -211,5 +212,19 @@ object FocusController {
             .setContentIntent(openApp(context))
             .build()
         notifications(context).notify(DONE_NOTIFICATION, notification)
+    }
+
+    /** A short note that another device ended the session, gone after 10 s. */
+    fun postStopped(context: Context) {
+        ensureChannels(context)
+        val notification = Notification.Builder(context, SESSION_CHANNEL)
+            .setSmallIcon(R.drawable.focus_guard_stat)
+            .setContentTitle("Focus ended")
+            .setContentText("Stopped from your other device.")
+            .setAutoCancel(true)
+            .setTimeoutAfter(10_000)
+            .setContentIntent(openApp(context))
+            .build()
+        notifications(context).notify(STOPPED_NOTIFICATION, notification)
     }
 }

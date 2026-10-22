@@ -58,6 +58,23 @@ data class FocusState(
             prefs(context).edit().putBoolean("active", false).apply()
         }
 
+        /**
+         * What to block when a session arrives from another device: this
+         * phone's own picks, saved by the app whenever the user changes them.
+         */
+        fun blocklist(context: Context): Pair<Set<String>, Boolean> {
+            val p = prefs(context)
+            val packages = p.getStringSet("blocklistPackages", emptySet())?.toSet() ?: emptySet()
+            return packages to p.getBoolean("blocklistGames", false)
+        }
+
+        fun saveBlocklist(context: Context, packages: Set<String>, games: Boolean) {
+            prefs(context).edit()
+                .putStringSet("blocklistPackages", packages)
+                .putBoolean("blocklistGames", games)
+                .apply()
+        }
+
         /** Whether this app turned Do Not Disturb on, so only then it turns it off. */
         fun quietedByUs(context: Context) = prefs(context).getBoolean("quietedByUs", false)
 
