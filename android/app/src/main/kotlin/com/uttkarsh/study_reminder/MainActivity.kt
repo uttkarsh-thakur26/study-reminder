@@ -31,6 +31,20 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "study_reminder/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    // What paired devices call this phone, for example "Google Pixel 8".
+                    "name" -> {
+                        val maker = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+                        val model = Build.MODEL
+                        result.success(
+                            if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     // A ringing alarm opens the app through its full-screen intent, which can

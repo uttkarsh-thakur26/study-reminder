@@ -1,0 +1,330 @@
+import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:study_reminder/core/db/app_database.dart';
+import 'package:study_reminder/core/sync/hlc.dart';
+import 'package:study_reminder/core/time/calendar_date.dart';
+import 'package:study_reminder/features/reminders/data/reminder_repository.dart';
+import 'package:study_reminder/features/reminders/domain/recurrence.dart';
+import 'package:study_reminder/features/reminders/domain/reminder.dart';
+import 'package:study_reminder/features/subjects/data/subject_repository.dart';
+import 'package:study_reminder/features/subjects/domain/subject.dart';
+import 'package:study_reminder/features/sync/application/sync_service.dart';
+import 'package:study_reminder/features/sync/data/sync_api.dart';
+
+import 'fake_sync_api.dart';
+
+/// One app install: its own database, clock and sync service, all talking
+/// to the same fake server.
+class _Device {
+  _Device(
+    String name,
+    FakeSyncApi api, {
+    required bool phone,
+    required int Function() wall,
+    int skewMs = 0,
+  }) {
+    db = AppDatabase(NativeDatabase.memory());
+    clock = HlcClock(
+      name,
+      wallClock: () => DateTime.fromMillisecondsSinceEpoch(wall() + skewMs),
+    );
+    reminders = ReminderRepository(db, clock);
+    subjects = SubjectRepository(db, clock);
+    sync = SyncService(
+      db: db,
+      clock: clock,
+      api: api,
+      isPhone: phone,
+      deviceName: name,
+    );
+  }
+
+  late final AppDatabase db;
+  late final HlcClock clock;
+  late final ReminderRepository reminders;
+  late final SubjectRepository subjects;
+  late final SyncService sync;
+
+  Future<String> title(String id) async => (await reminders.byId(id))!.title;
+
+  Future<int> waiting() async => (await sync.store.dirty()).length;
+}
+
+void main() {
+  late FakeSyncApi api;
+  late _Device laptop;
+  late _Device phone;
+  late int wall;
+
+  int tick() => wall += 1000;
+
+  setUpAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = true);
+  setUp(() {
+    wall = DateTime.utc(2026, 10, 22, 9).millisecondsSinceEpoch;
+    api = FakeSyncApi(now: () => DateTime.fromMillisecondsSinceEpoch(wall));
+    laptop = _Device('Laptop', api, phone: false, wall: tick);
+    phone = _Device('Pixel', api, phone: true, wall: tick);
+  });
+  tearDown(() async {
+    await laptop.db.close();
+    await phone.db.close();
+  });
+
+  final physics = Reminder(
+    id: 'r1',
+    title: 'Physics',
+    createdAt: DateTime.utc(2026, 10, 22),
+    schedule: const ReminderSchedule(
+      anchor: CalendarDate(2026, 10, 22),
+      minuteOfDay: 19 * 60,
+      timeZone: 'Asia/Kolkata',
+      recurrence: Recurrence.weekly({1, 3}),
+    ),
+  );
+
+  /// Pairs the phone with the laptop the way the app does: the laptop has
+  /// synced (it does on start), and both sync once more afterwards.
+  Future<void> pair() async {
+    await laptop.sync.sync();
+    final code = await laptop.sync.createPairingCode();
+    await phone.sync.joinWithCode(code.display);
+    await laptop.sync.sync();
+    await phone.sync.sync();
+  }
+
+  test('pairing brings both devices together and keeps both sides', () async {
+    await laptop.reminders.save(physics);
+    await phone.subjects.save(
+      const Subject(id: 's1', name: 'Maths', color: 0xFF2255AA),
+    );
+    await laptop.sync.sync();
+    await phone.sync.sync();
+
+    await pair();
+
+    expect(await phone.title('r1'), 'Physics');
+    expect(
+      (await laptop.db.select(laptop.db.subjects).getSingle()).name,
+      'Maths',
+    );
+    expect(api.spaceCount, 1, reason: "the phone's old space is gone");
+    expect(await laptop.waiting(), 0);
+    expect(await phone.waiting(), 0);
+    expect(await laptop.sync.spaceId(), await phone.sync.spaceId());
+    final devices = await laptop.sync.devices();
+    expect(devices.map((d) => d.name), unorderedEquals(['Laptop', 'Pixel']));
+  });
+
+  test('a fresh code already carries this device\'s data', () async {
+    await laptop.reminders.save(physics);
+    final code = await laptop.sync.createPairingCode();
+    await phone.sync.joinWithCode(code.code);
+    expect(await phone.title('r1'), 'Physics');
+  });
+
+  test('a sync with nothing new sends nothing', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+    await phone.sync.sync();
+    final before = api.pushedRecords;
+    await laptop.sync.sync();
+    await phone.sync.sync();
+    expect(api.pushedRecords, before);
+  });
+
+  test('offline edits to different fields both survive', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+
+    final base = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(base.copyWith(title: 'Physics ch. 4'));
+    await phone.reminders.save(base.copyWith(notes: 'Bring formula sheet'));
+
+    await laptop.sync.sync();
+    await phone.sync.sync();
+    await laptop.sync.sync();
+
+    for (final d in [laptop, phone]) {
+      final r = (await d.reminders.byId('r1'))!;
+      expect(r.title, 'Physics ch. 4');
+      expect(r.notes, 'Bring formula sheet');
+      expect(await d.waiting(), 0);
+    }
+  });
+
+  test('the later edit to the same field wins everywhere', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+
+    final base = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(base.copyWith(title: 'Earlier'));
+    await phone.reminders.save(base.copyWith(title: 'Later'));
+
+    // The device with the older edit syncs last; it still loses.
+    await phone.sync.sync();
+    await laptop.sync.sync();
+    await phone.sync.sync();
+
+    expect(await laptop.title('r1'), 'Later');
+    expect(await phone.title('r1'), 'Later');
+  });
+
+  test('deletes and done marks reach the other device', () async {
+    await laptop.reminders.save(physics);
+    await laptop.reminders.save(
+      Reminder(
+        id: 'r2',
+        title: 'Chem',
+        createdAt: physics.createdAt,
+        schedule: physics.schedule,
+      ),
+    );
+    await pair();
+
+    await laptop.reminders.delete('r1');
+    final at = DateTime.utc(2026, 10, 26, 13, 30);
+    await phone.reminders.markDone('r2', at);
+    await laptop.sync.sync();
+    await phone.sync.sync();
+    await laptop.sync.sync();
+
+    expect((await phone.reminders.byId('r1'))!.deleted, isTrue);
+    final occurrences = await laptop.db.select(laptop.db.occurrences).get();
+    expect(occurrences, hasLength(1));
+    expect(occurrences.single.reminderId, 'r2');
+  });
+
+  test('an edit made while uploading is not lost', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+
+    final base = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(base.copyWith(title: 'Before upload'));
+    api.duringPush = () async {
+      api.duringPush = null;
+      await laptop.reminders.save(base.copyWith(title: 'During upload'));
+    };
+    await laptop.sync.sync();
+    await phone.sync.sync();
+
+    expect(await laptop.title('r1'), 'During upload');
+    expect(await phone.title('r1'), 'During upload');
+    expect(await laptop.waiting(), 0);
+  });
+
+  test('a device whose clock runs ahead cannot block later edits', () async {
+    // The phone's clock is an hour fast.
+    final fastPhone = _Device(
+      'Fast phone',
+      api,
+      phone: true,
+      wall: tick,
+      skewMs: const Duration(hours: 1).inMilliseconds,
+    );
+    addTearDown(fastPhone.db.close);
+    await laptop.reminders.save(physics);
+    await laptop.sync.sync();
+    final code = await laptop.sync.createPairingCode();
+    await fastPhone.sync.joinWithCode(code.code);
+
+    final base = (await fastPhone.reminders.byId('r1'))!;
+    await fastPhone.reminders.save(base.copyWith(title: 'From the phone'));
+    await fastPhone.sync.sync();
+    await laptop.sync.sync();
+    // Seconds later by the laptop's clock, but after the phone's edit.
+    final seen = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(seen.copyWith(title: 'From the laptop'));
+    await laptop.sync.sync();
+    await fastPhone.sync.sync();
+
+    expect(await fastPhone.title('r1'), 'From the laptop');
+  });
+
+  test('a server that forgot this device gets everything again', () async {
+    await laptop.reminders.save(physics);
+    await laptop.subjects.save(
+      const Subject(id: 's1', name: 'Maths', color: 0xFF2255AA),
+    );
+    await laptop.sync.sync();
+    final oldSpace = await laptop.sync.spaceId();
+
+    api.reset();
+    final before = api.pushedRecords;
+    await laptop.sync.sync();
+
+    expect(await laptop.sync.spaceId(), isNot(oldSpace));
+    expect(api.pushedRecords - before, 2);
+    expect(await laptop.waiting(), 0);
+  });
+
+  test('unpairing stops changes but keeps everything', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+
+    await phone.sync.unpair();
+    final base = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(base.copyWith(title: 'Laptop only'));
+    await laptop.sync.sync();
+    await phone.sync.sync();
+
+    expect(await phone.title('r1'), 'Physics');
+    expect(await laptop.sync.devices(), hasLength(1));
+    expect(await phone.sync.devices(), hasLength(1));
+  });
+
+  test('a wrong or already used code is refused', () async {
+    await laptop.sync.sync();
+    await expectLater(
+      phone.sync.joinWithCode('NOPE0000'),
+      throwsA(
+        isA<PairingException>().having(
+          (e) => e.problem,
+          'problem',
+          PairingProblem.wrongCode,
+        ),
+      ),
+    );
+
+    final code = await laptop.sync.createPairingCode();
+    await phone.sync.joinWithCode(code.code);
+    final tablet = _Device('Tablet', api, phone: true, wall: tick);
+    addTearDown(tablet.db.close);
+    await expectLater(
+      tablet.sync.joinWithCode(code.code),
+      throwsA(isA<PairingException>()),
+    );
+  });
+
+  test('offline syncs fail cleanly and catch up later', () async {
+    await laptop.reminders.save(physics);
+    await pair();
+    final base = (await laptop.reminders.byId('r1'))!;
+    await laptop.reminders.save(base.copyWith(title: 'Written offline'));
+
+    api.offline = true;
+    await expectLater(laptop.sync.sync(), throwsA(isA<SyncUnavailable>()));
+    expect(await laptop.waiting(), 1);
+
+    api.offline = false;
+    await laptop.sync.sync();
+    await phone.sync.sync();
+    expect(await phone.title('r1'), 'Written offline');
+  });
+
+  test('a large backlog goes up and comes down in pages', () async {
+    for (var i = 0; i < 650; i++) {
+      await laptop.subjects.save(
+        Subject(id: 's$i', name: 'Subject $i', color: 0xFF000000 + i),
+      );
+    }
+    await laptop.sync.sync();
+    expect(await laptop.waiting(), 0);
+    expect(api.pushes, greaterThanOrEqualTo(4), reason: 'batches of 200');
+
+    final code = await laptop.sync.createPairingCode();
+    await phone.sync.joinWithCode(code.code);
+    expect(await phone.db.select(phone.db.subjects).get(), hasLength(650));
+    expect(await phone.waiting(), 0);
+  });
+}
