@@ -60,6 +60,7 @@ class FocusGuardAccess {
   const FocusGuardAccess({
     required this.usage,
     required this.overlay,
+    required this.media,
     required this.quiet,
     required this.notifications,
     required this.battery,
@@ -70,6 +71,10 @@ class FocusGuardAccess {
 
   /// Display over other apps: lets the block screen appear over them.
   final bool overlay;
+
+  /// Notification access: lets Focus mode pause blocked apps playing in the
+  /// background or in a floating window.
+  final bool media;
 
   /// Do Not Disturb access.
   final bool quiet;
@@ -84,6 +89,7 @@ class FocusGuardAccess {
   factory FocusGuardAccess.fromMap(Map<Object?, Object?> m) => FocusGuardAccess(
     usage: m['usage'] == true,
     overlay: m['overlay'] == true,
+    media: m['media'] == true,
     quiet: m['quiet'] == true,
     notifications: m['notifications'] == true,
     battery: m['battery'] == true,
@@ -91,7 +97,7 @@ class FocusGuardAccess {
 }
 
 /// System pages where the user grants what Focus mode needs.
-enum FocusGuardPage { usage, overlay, quiet, battery, appInfo }
+enum FocusGuardPage { usage, overlay, media, quiet, battery, appInfo }
 
 /// An app the user can block.
 @immutable

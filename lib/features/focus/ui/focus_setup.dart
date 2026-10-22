@@ -79,7 +79,7 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             ),
     );
 
-    final restricted = !access.usage || !access.overlay;
+    final restricted = !access.usage || !access.overlay || !access.media;
     return Card(
       child: Column(
         children: [
@@ -96,6 +96,13 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             'Cover a blocked app',
             access.overlay,
             FocusGuardPage.overlay,
+          ),
+          row(
+            Icons.music_off_rounded,
+            'Notification access',
+            'Pause blocked apps playing in the background',
+            access.media,
+            FocusGuardPage.media,
           ),
           row(
             Icons.do_not_disturb_on_rounded,

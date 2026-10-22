@@ -17,7 +17,8 @@ import android.provider.Settings
 /**
  * Runs while a session is on. Shows the countdown notification and, when the
  * session blocks apps, checks about once a second which app is in front and
- * covers a blocked one with [BlockActivity].
+ * covers a blocked one with [BlockActivity], and keeps blocked apps from
+ * playing in the background ([MediaGuard]).
  */
 class FocusService : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -30,6 +31,9 @@ class FocusService : Service() {
     private var lastBlockedAt = 0L
     private val games = HashMap<String, Boolean>()
     private var neverBlock: Set<String> = emptySet()
+    private val media by lazy {
+        MediaGuard(this, handler) { app -> state?.let { it.blockApps && isBlocked(it, app) } == true }
+    }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -71,6 +75,12 @@ class FocusService : Service() {
         }
         state = current
         neverBlock = protectedPackages()
+        if (current.blockApps) {
+            media.start()
+            media.recheck()
+        } else {
+            media.stop()
+        }
         if (checkedUntil == 0L) checkedUntil = System.currentTimeMillis() - LOOK_BACK_MS
         handler.removeCallbacks(tick)
         handler.post(tick)
@@ -79,6 +89,7 @@ class FocusService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        media.stop()
         super.onDestroy()
     }
 
@@ -93,6 +104,8 @@ class FocusService : Service() {
         if (!s.blockApps) return
         val power = getSystemService(PowerManager::class.java)
         if (!power.isInteractive) return
+        // Notification access may have been given since the session began.
+        media.start()
         val app = currentApp() ?: return
         if (app == packageName || app in neverBlock || !isBlocked(s, app)) return
         val now = System.currentTimeMillis()
@@ -104,7 +117,12 @@ class FocusService : Service() {
         foreground = packageName
         startActivity(
             Intent(this, BlockActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                // Not as if the user left the app: then video apps would carry
+                // on in a floating window above the block screen.
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_USER_ACTION,
+                )
                 .putExtra(BlockActivity.EXTRA_APP, label(app))
                 .putExtra(BlockActivity.EXTRA_ENDS_AT, s.endsAt)
                 .putExtra(BlockActivity.EXTRA_STRICT, s.strict),

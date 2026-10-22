@@ -42,6 +42,18 @@
             android:taskAffinity="com.uttkarsh.focus_guard.block"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar"/>
 
+        <!-- Notification access, which Android asks for before an app may
+             pause other apps' media: blocked apps are kept from playing in
+             the background. Notifications themselves are not read. -->
+        <service
+            android:name=".FocusMediaListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>
+
         <!-- Sessions started or stopped on another device, pushed through
              Firebase so they apply while the app is closed. -->
         <service

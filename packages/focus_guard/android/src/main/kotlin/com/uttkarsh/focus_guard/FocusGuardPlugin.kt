@@ -2,6 +2,7 @@ package com.uttkarsh.focus_guard
 
 import android.app.Activity
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -138,6 +139,7 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
         return mapOf(
             "usage" to hasUsageAccess(),
             "overlay" to Settings.canDrawOverlays(context),
+            "media" to MediaGuard.granted(context),
             "quiet" to nm.isNotificationPolicyAccessGranted,
             "notifications" to nm.areNotificationsEnabled(),
             "battery" to power.isIgnoringBatteryOptimizations(context.packageName),
@@ -169,6 +171,18 @@ class FocusGuardPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activit
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
             )
             "overlay" -> listOf(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg))
+            "media" -> buildList {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val listener = ComponentName(context, FocusMediaListener::class.java)
+                    add(
+                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                            Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                            listener.flattenToString(),
+                        ),
+                    )
+                }
+                add(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
             "quiet" -> listOf(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
             "battery" -> listOf(
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
