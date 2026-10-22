@@ -113,10 +113,14 @@ void main() {
   });
 
   test('every 2 weeks and every other day', () {
-    expect(parse('Water plants every 2 weeks').recurrence,
-        const Recurrence.weekly({}, every: 2));
-    expect(parse('Stretch every other day').recurrence,
-        const Recurrence.daily(every: 2));
+    expect(
+      parse('Water plants every 2 weeks').recurrence,
+      const Recurrence.weekly({}, every: 2),
+    );
+    expect(
+      parse('Stretch every other day').recurrence,
+      const Recurrence.daily(every: 2),
+    );
     expect(parse('Pay rent monthly').recurrence, const Recurrence.monthly());
   });
 

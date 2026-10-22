@@ -59,8 +59,8 @@ class Hlc implements Comparable<Hlc> {
 /// Issues increasing [Hlc] timestamps for one device.
 class HlcClock {
   HlcClock(this.node, {DateTime Function()? wallClock, Hlc? last})
-      : _wall = wallClock ?? DateTime.now,
-        _last = last ?? Hlc(0, 0, node);
+    : _wall = wallClock ?? DateTime.now,
+      _last = last ?? Hlc(0, 0, node);
 
   final String node;
   final DateTime Function() _wall;
@@ -83,9 +83,15 @@ class HlcClock {
   /// next local edit sorts after it.
   void receive(Hlc remote) {
     final wall = _wall().millisecondsSinceEpoch;
-    final top = [wall, _last.millis, remote.millis].reduce((a, b) => a > b ? a : b);
+    final top = [
+      wall,
+      _last.millis,
+      remote.millis,
+    ].reduce((a, b) => a > b ? a : b);
     if (top == _last.millis && top == remote.millis) {
-      final counter = _last.counter > remote.counter ? _last.counter : remote.counter;
+      final counter = _last.counter > remote.counter
+          ? _last.counter
+          : remote.counter;
       _last = _bump(top, counter);
     } else if (top == _last.millis) {
       _last = _bump(top, _last.counter);

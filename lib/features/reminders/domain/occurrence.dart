@@ -22,20 +22,21 @@ class OccurrenceState {
   String get id => occurrenceId(reminderId, occurrenceAt);
 
   Map<String, Object?> toFields() => {
-        'reminder_id': reminderId,
-        'occurrence_at': occurrenceAt.toUtc().millisecondsSinceEpoch,
-        'status': status.name,
-        'snooze_until': snoozeUntil?.toUtc().millisecondsSinceEpoch,
-        'deleted': deleted,
-      };
+    'reminder_id': reminderId,
+    'occurrence_at': occurrenceAt.toUtc().millisecondsSinceEpoch,
+    'status': status.name,
+    'snooze_until': snoozeUntil?.toUtc().millisecondsSinceEpoch,
+    'deleted': deleted,
+  };
 
   factory OccurrenceState.fromFields(Map<String, Object?> f) {
     final snooze = f['snooze_until'] as num?;
     return OccurrenceState(
       reminderId: f['reminder_id'] as String,
       occurrenceAt: DateTime.fromMillisecondsSinceEpoch(
-          (f['occurrence_at'] as num).toInt(),
-          isUtc: true),
+        (f['occurrence_at'] as num).toInt(),
+        isUtc: true,
+      ),
       status: OccurrenceStatus.values.firstWhere(
         (s) => s.name == f['status'],
         orElse: () => OccurrenceStatus.pending,

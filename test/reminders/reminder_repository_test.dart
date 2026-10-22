@@ -19,7 +19,10 @@ void main() {
     wall = 1000;
     repo = ReminderRepository(
       db,
-      HlcClock('dev1', wallClock: () => DateTime.fromMillisecondsSinceEpoch(wall += 1000)),
+      HlcClock(
+        'dev1',
+        wallClock: () => DateTime.fromMillisecondsSinceEpoch(wall += 1000),
+      ),
     );
   });
   tearDown(() => db.close());
@@ -37,40 +40,52 @@ void main() {
   );
 
   test('saves and reads back every field', () async {
-    await repo.save(reminder.copyWith(notes: 'Chapter 4', style: ReminderStyle.alarm));
+    await repo.save(
+      reminder.copyWith(notes: 'Chapter 4', style: ReminderStyle.alarm),
+    );
     final back = (await repo.byId('r1'))!;
-    expect(back.toFields(),
-        reminder.copyWith(notes: 'Chapter 4', style: ReminderStyle.alarm).toFields());
+    expect(
+      back.toFields(),
+      reminder
+          .copyWith(notes: 'Chapter 4', style: ReminderStyle.alarm)
+          .toFields(),
+    );
     final row = await db.select(db.reminders).getSingle();
     expect(row.dirty, isTrue);
   });
 
-  test('edits stamp only the changed fields; unchanged saves write nothing', () async {
-    await repo.save(reminder);
-    final first = await db.select(db.reminders).getSingle();
-    final firstClock = FieldClock.decode(first.fieldClock);
+  test(
+    'edits stamp only the changed fields; unchanged saves write nothing',
+    () async {
+      await repo.save(reminder);
+      final first = await db.select(db.reminders).getSingle();
+      final firstClock = FieldClock.decode(first.fieldClock);
 
-    await repo.save(reminder.copyWith(title: 'Physics revision'));
-    final second = await db.select(db.reminders).getSingle();
-    final secondClock = FieldClock.decode(second.fieldClock);
-    expect(secondClock.of('title') > firstClock.of('title'), isTrue);
-    expect(secondClock.of('minute_of_day'), firstClock.of('minute_of_day'));
-    expect(Hlc.parse(second.hlc), secondClock.latest);
+      await repo.save(reminder.copyWith(title: 'Physics revision'));
+      final second = await db.select(db.reminders).getSingle();
+      final secondClock = FieldClock.decode(second.fieldClock);
+      expect(secondClock.of('title') > firstClock.of('title'), isTrue);
+      expect(secondClock.of('minute_of_day'), firstClock.of('minute_of_day'));
+      expect(Hlc.parse(second.hlc), secondClock.latest);
 
-    await repo.save(reminder.copyWith(title: 'Physics revision'));
-    final third = await db.select(db.reminders).getSingle();
-    expect(third.hlc, second.hlc);
-  });
+      await repo.save(reminder.copyWith(title: 'Physics revision'));
+      final third = await db.select(db.reminders).getSingle();
+      expect(third.hlc, second.hlc);
+    },
+  );
 
-  test('delete is a soft delete that hides the reminder, restore brings it back', () async {
-    await repo.save(reminder);
-    await repo.delete('r1');
-    expect(await repo.watchAll().first, isEmpty);
-    final row = await db.select(db.reminders).getSingle();
-    expect(row.deleted, isTrue);
-    await repo.restore('r1');
-    expect((await repo.watchAll().first).single.id, 'r1');
-  });
+  test(
+    'delete is a soft delete that hides the reminder, restore brings it back',
+    () async {
+      await repo.save(reminder);
+      await repo.delete('r1');
+      expect(await repo.watchAll().first, isEmpty);
+      final row = await db.select(db.reminders).getSingle();
+      expect(row.deleted, isTrue);
+      await repo.restore('r1');
+      expect((await repo.watchAll().first).single.id, 'r1');
+    },
+  );
 
   test('occurrence actions share one record per occurrence', () async {
     final at = DateTime.utc(2026, 10, 22, 13, 30);

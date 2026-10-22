@@ -31,29 +31,59 @@ class QuickAddResult {
 }
 
 const _weekdayWords = {
-  'mon': 1, 'monday': 1,
-  'tue': 2, 'tues': 2, 'tuesday': 2,
-  'wed': 3, 'weds': 3, 'wednesday': 3,
-  'thu': 4, 'thur': 4, 'thurs': 4, 'thursday': 4,
-  'fri': 5, 'friday': 5,
-  'sat': 6, 'saturday': 6,
-  'sun': 7, 'sunday': 7,
+  'mon': 1,
+  'monday': 1,
+  'tue': 2,
+  'tues': 2,
+  'tuesday': 2,
+  'wed': 3,
+  'weds': 3,
+  'wednesday': 3,
+  'thu': 4,
+  'thur': 4,
+  'thurs': 4,
+  'thursday': 4,
+  'fri': 5,
+  'friday': 5,
+  'sat': 6,
+  'saturday': 6,
+  'sun': 7,
+  'sunday': 7,
 };
 
 const _monthWords = {
-  'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
-  'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
-  'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9,
-  'oct': 10, 'october': 10, 'nov': 11, 'november': 11,
-  'dec': 12, 'december': 12,
+  'jan': 1,
+  'january': 1,
+  'feb': 2,
+  'february': 2,
+  'mar': 3,
+  'march': 3,
+  'apr': 4,
+  'april': 4,
+  'may': 5,
+  'jun': 6,
+  'june': 6,
+  'jul': 7,
+  'july': 7,
+  'aug': 8,
+  'august': 8,
+  'sep': 9,
+  'sept': 9,
+  'september': 9,
+  'oct': 10,
+  'october': 10,
+  'nov': 11,
+  'november': 11,
+  'dec': 12,
+  'december': 12,
 };
 
-final _weekdayAlt = (_weekdayWords.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length)))
-    .join('|');
-final _monthAlt = (_monthWords.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length)))
-    .join('|');
+final _weekdayAlt =
+    (_weekdayWords.keys.toList()..sort((a, b) => b.length.compareTo(a.length)))
+        .join('|');
+final _monthAlt =
+    (_monthWords.keys.toList()..sort((a, b) => b.length.compareTo(a.length)))
+        .join('|');
 
 RegExp _re(String pattern) => RegExp(pattern, caseSensitive: false);
 
@@ -74,9 +104,9 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
 
   /// Removes the first match of [re] from the text after passing it to [use].
   void take(RegExp re, void Function(Match m) use) => takeIf(re, (m) {
-        use(m);
-        return true;
-      });
+    use(m);
+    return true;
+  });
 
   var style = ReminderStyle.notification;
   String? subjectTag;
@@ -88,7 +118,10 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
 
   // Style: "!alarm", or "alarm" as the first or last word.
   take(_re(r'\s!a(larm)?(?=[\s,.!?;])'), (_) => style = ReminderStyle.alarm);
-  take(_re(r'^\s+alarm(\s+(for|to))?(?=[\s,.!?;])'), (_) => style = ReminderStyle.alarm);
+  take(
+    _re(r'^\s+alarm(\s+(for|to))?(?=[\s,.!?;])'),
+    (_) => style = ReminderStyle.alarm,
+  );
   take(_re(r'\s(as\s+an?\s+)?alarm\s+$'), (_) => style = ReminderStyle.alarm);
 
   // Subject tag.
@@ -96,7 +129,9 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
 
   // Relative times: "in 30 min", "in 2 hours", "in an hour", "in 3 days".
   take(
-    _re(r'\sin\s+(\d+|an?|half\s+an?)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)(?=[\s,.!?;])'),
+    _re(
+      r'\sin\s+(\d+|an?|half\s+an?)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)(?=[\s,.!?;])',
+    ),
     (m) {
       final amountText = m.group(1)!.toLowerCase();
       final unit = m.group(2)!.toLowerCase();
@@ -112,8 +147,13 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
       } else {
         d = Duration(days: 7 * amount);
       }
-      final at = DateTime(now.year, now.month, now.day, now.hour, now.minute)
-          .add(d);
+      final at = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        now.hour,
+        now.minute,
+      ).add(d);
       date = CalendarDate(at.year, at.month, at.day);
       dateIsExplicit = true;
       if (!unit.startsWith('d') && !unit.startsWith('w')) {
@@ -123,15 +163,21 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
   );
 
   // Repeats.
-  take(_re(r'\s(every\s+weekday|(on\s+)?weekdays)(?=[\s,.!?;])'),
-      (_) => recurrence = Recurrence.weekdaysOnly);
+  take(
+    _re(r'\s(every\s+weekday|(on\s+)?weekdays)(?=[\s,.!?;])'),
+    (_) => recurrence = Recurrence.weekdaysOnly,
+  );
   if (!recurrence.repeats) {
-    take(_re(r'\s(every\s+weekends?|weekends)(?=[\s,.!?;])'),
-        (_) => recurrence = Recurrence.weekends);
+    take(
+      _re(r'\s(every\s+weekends?|weekends)(?=[\s,.!?;])'),
+      (_) => recurrence = Recurrence.weekends,
+    );
   }
   if (!recurrence.repeats) {
     take(
-      _re('\\s(?:every|on)\\s+((?:$_weekdayAlt)s?(?:\\s*(?:,|and|&|/)\\s*(?:$_weekdayAlt)s?)*)(?=[\\s,.!?;])'),
+      _re(
+        '\\s(?:every|on)\\s+((?:$_weekdayAlt)s?(?:\\s*(?:,|and|&|/)\\s*(?:$_weekdayAlt)s?)*)(?=[\\s,.!?;])',
+      ),
       (m) {
         final t = m.group(0)!.toLowerCase();
         final days = _re(_weekdayAlt)
@@ -161,22 +207,28 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
         recurrence = unit.startsWith('day')
             ? Recurrence.daily(every: n)
             : unit.startsWith('week')
-                ? Recurrence.weekly(const {}, every: n)
-                : Recurrence.monthly(every: n);
+            ? Recurrence.weekly(const {}, every: n)
+            : Recurrence.monthly(every: n);
       },
     );
   }
   if (!recurrence.repeats) {
-    take(_re(r'\s(daily|everyday|each\s+day)(?=[\s,.!?;])'),
-        (_) => recurrence = const Recurrence.daily());
+    take(
+      _re(r'\s(daily|everyday|each\s+day)(?=[\s,.!?;])'),
+      (_) => recurrence = const Recurrence.daily(),
+    );
   }
   if (!recurrence.repeats) {
-    take(_re(r'\sweekly(?=[\s,.!?;])'),
-        (_) => recurrence = const Recurrence.weekly({}));
+    take(
+      _re(r'\sweekly(?=[\s,.!?;])'),
+      (_) => recurrence = const Recurrence.weekly({}),
+    );
   }
   if (!recurrence.repeats) {
-    take(_re(r'\smonthly(?=[\s,.!?;])'),
-        (_) => recurrence = const Recurrence.monthly());
+    take(
+      _re(r'\smonthly(?=[\s,.!?;])'),
+      (_) => recurrence = const Recurrence.monthly(),
+    );
   }
 
   // Dates.
@@ -206,13 +258,17 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     });
   }
   if (date == null && !recurrence.repeats) {
-    take(_re('\\s(next\\s+|this\\s+)?(?:on\\s+)?($_weekdayAlt)(?=[\\s,.!?;])'), (m) {
-      final day = _weekdayWords[m.group(2)!.toLowerCase()]!;
-      final next = m.group(1)?.trim().toLowerCase() == 'next';
-      date = _nextWeekday(today, day, includeToday: !next);
-      dateIsExplicit = true;
-    });
+    take(
+      _re('\\s(next\\s+|this\\s+)?(?:on\\s+)?($_weekdayAlt)(?=[\\s,.!?;])'),
+      (m) {
+        final day = _weekdayWords[m.group(2)!.toLowerCase()]!;
+        final next = m.group(1)?.trim().toLowerCase() == 'next';
+        date = _nextWeekday(today, day, includeToday: !next);
+        dateIsExplicit = true;
+      },
+    );
   }
+
   /// Takes a calendar date only when it is a real date.
   void takeDate(RegExp re, CalendarDate? Function(Match m) read) {
     if (date != null) return;
@@ -226,7 +282,9 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
   }
 
   takeDate(
-    _re('\\s(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+($_monthAlt)\\.?(?:\\s+(\\d{4}))?(?=[\\s,.!?;])'),
+    _re(
+      '\\s(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+($_monthAlt)\\.?(?:\\s+(\\d{4}))?(?=[\\s,.!?;])',
+    ),
     (m) => _dateOrNextYear(
       today,
       int.parse(m.group(1)!),
@@ -235,7 +293,9 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     ),
   );
   takeDate(
-    _re('\\s(?:on\\s+)?($_monthAlt)\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?(?=[\\s,.!?;])'),
+    _re(
+      '\\s(?:on\\s+)?($_monthAlt)\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?(?=[\\s,.!?;])',
+    ),
     (m) => _dateOrNextYear(
       today,
       int.parse(m.group(2)!),
@@ -249,14 +309,20 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
       var year = int.tryParse(m.group(3) ?? '');
       if (year != null && year < 100) year += 2000;
       return _dateOrNextYear(
-          today, int.parse(m.group(1)!), int.parse(m.group(2)!), year);
+        today,
+        int.parse(m.group(1)!),
+        int.parse(m.group(2)!),
+        year,
+      );
     },
   );
 
   // Times. "7.30" only counts with "at" or am/pm, so "chapter 3.14" stays text.
   if (minute == null) {
     takeIf(
-      _re(r'\s(at\s+|@\s*)?(\d{1,2})([:.])(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?(?=[\s,.!?;])'),
+      _re(
+        r'\s(at\s+|@\s*)?(\d{1,2})([:.])(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?(?=[\s,.!?;])',
+      ),
       (m) {
         if (m.group(3) == '.' && m.group(1) == null && m.group(5) == null) {
           return false;
@@ -270,12 +336,15 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
     );
   }
   if (minute == null) {
-    takeIf(_re(r'\s(?:at\s+|@\s*)?(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)(?=[\s,.!?;])'), (m) {
-      final hour = _hour24(int.parse(m.group(1)!), m.group(2));
-      if (hour == null) return false;
-      minute = hour * 60;
-      return true;
-    });
+    takeIf(
+      _re(r'\s(?:at\s+|@\s*)?(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)(?=[\s,.!?;])'),
+      (m) {
+        final hour = _hour24(int.parse(m.group(1)!), m.group(2));
+        if (hour == null) return false;
+        minute = hour * 60;
+        return true;
+      },
+    );
   }
   if (minute == null) {
     takeIf(_re(r'\s(?:at\s+|@\s*)(\d{1,2})(?=[\s,.!?;])'), (m) {
@@ -294,15 +363,21 @@ QuickAddResult parseQuickAdd(String input, {required DateTime now}) {
       'evening': 18 * 60,
       'night': 21 * 60,
     };
-    take(_re(r'\s(?:at\s+|in\s+the\s+|this\s+)?(noon|midday|morning|afternoon|evening|night)(?=[\s,.!?;])'),
-        (m) => minute = named[m.group(1)!.toLowerCase()]);
+    take(
+      _re(
+        r'\s(?:at\s+|in\s+the\s+|this\s+)?(noon|midday|morning|afternoon|evening|night)(?=[\s,.!?;])',
+      ),
+      (m) => minute = named[m.group(1)!.toLowerCase()],
+    );
   }
   if (bareHour >= 0) {
     if (bareHour == 0 || bareHour > 12) {
       minute = bareHour * 60;
     } else if (date != null || recurrence.repeats) {
       // A study reminder "at 5" means 5 pm; "at 9" means 9 am.
-      final h = bareHour == 12 ? 12 : (bareHour <= 6 ? bareHour + 12 : bareHour);
+      final h = bareHour == 12
+          ? 12
+          : (bareHour <= 6 ? bareHour + 12 : bareHour);
       minute = h * 60;
     } else {
       // No day given: the next time the clock shows that hour.
@@ -363,15 +438,22 @@ int? _hour24(int h, String? meridiem) {
   return pm ? h + 12 : h;
 }
 
-CalendarDate _nextWeekday(CalendarDate from, int weekday,
-    {required bool includeToday}) {
+CalendarDate _nextWeekday(
+  CalendarDate from,
+  int weekday, {
+  required bool includeToday,
+}) {
   var delta = (weekday - from.weekday) % 7;
   if (delta == 0 && !includeToday) delta = 7;
   return from.addDays(delta);
 }
 
 CalendarDate? _dateOrNextYear(
-    CalendarDate today, int day, int month, int? year) {
+  CalendarDate today,
+  int day,
+  int month,
+  int? year,
+) {
   if (month < 1 || month > 12 || day < 1) return null;
   final y = year ?? today.year;
   if (day > CalendarDate.daysInMonth(y, month)) return null;
@@ -383,7 +465,9 @@ CalendarDate? _dateOrNextYear(
   return d;
 }
 
-final _danglingStart = _re(r'^(?:(?:at|on|by|for|to|in|every|the|and|,|-)\s+)+');
+final _danglingStart = _re(
+  r'^(?:(?:at|on|by|for|to|in|every|the|and|,|-)\s+)+',
+);
 final _danglingEnd = _re(r'(?:\s+(?:at|on|by|for|to|in|every|the|and|,|-))+$');
 
 String _cleanTitle(String text) {

@@ -28,8 +28,8 @@ class AgendaItem {
   /// When it next needs attention: the snooze end if snoozed.
   DateTime get dueAt =>
       status == OccurrenceStatus.snoozed && snoozeUntil != null
-          ? snoozeUntil!
-          : at;
+      ? snoozeUntil!
+      : at;
 
   bool isMissed(DateTime now) => !isDone && dueAt.isBefore(now);
 }
@@ -77,11 +77,19 @@ Agenda buildAgenda({
 }) {
   final localNow = tz.TZDateTime.from(now, here);
   final todayDate = CalendarDate(localNow.year, localNow.month, localNow.day);
-  final startOfToday =
-      tz.TZDateTime(here, localNow.year, localNow.month, localNow.day);
+  final startOfToday = tz.TZDateTime(
+    here,
+    localNow.year,
+    localNow.month,
+    localNow.day,
+  );
   final tomorrow = todayDate.addDays(1);
-  final end = tz.TZDateTime(here, tomorrow.year, tomorrow.month, tomorrow.day)
-      .add(Duration(days: horizonDays));
+  final end = tz.TZDateTime(
+    here,
+    tomorrow.year,
+    tomorrow.month,
+    tomorrow.day,
+  ).add(Duration(days: horizonDays));
 
   final overdue = <AgendaItem>[];
   final today = <AgendaItem>[];
@@ -132,9 +140,7 @@ Agenda buildAgenda({
   return Agenda(
     overdue: overdue,
     today: today,
-    upcoming: [
-      for (final d in days) AgendaDay(d, byDay[d]!..sort(byTime)),
-    ],
+    upcoming: [for (final d in days) AgendaDay(d, byDay[d]!..sort(byTime))],
     todayDate: todayDate,
   );
 }

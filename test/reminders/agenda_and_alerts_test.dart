@@ -27,21 +27,20 @@ void main() {
     DeliveryTarget deliverTo = DeliveryTarget.everywhere,
     bool enabled = true,
     bool deleted = false,
-  }) =>
-      Reminder(
-        id: id,
-        title: 'R $id',
-        createdAt: DateTime.utc(2026),
-        deliverTo: deliverTo,
-        enabled: enabled,
-        deleted: deleted,
-        schedule: ReminderSchedule(
-          anchor: CalendarDate.parse(anchor),
-          minuteOfDay: minute,
-          timeZone: 'Asia/Kolkata',
-          recurrence: recurrence,
-        ),
-      );
+  }) => Reminder(
+    id: id,
+    title: 'R $id',
+    createdAt: DateTime.utc(2026),
+    deliverTo: deliverTo,
+    enabled: enabled,
+    deleted: deleted,
+    schedule: ReminderSchedule(
+      anchor: CalendarDate.parse(anchor),
+      minuteOfDay: minute,
+      timeZone: 'Asia/Kolkata',
+      recurrence: recurrence,
+    ),
+  );
 
   group('buildAgenda', () {
     test('sorts today, keeps missed earlier items, groups upcoming days', () {
@@ -49,7 +48,11 @@ void main() {
         reminders: [
           reminder('evening', minute: 19 * 60),
           reminder('morning', minute: 8 * 60),
-          reminder('daily', minute: 7 * 60, recurrence: const Recurrence.daily()),
+          reminder(
+            'daily',
+            minute: 7 * 60,
+            recurrence: const Recurrence.daily(),
+          ),
           reminder('nextweek', anchor: '2026-10-27'),
           reminder('far', anchor: '2026-12-25'),
         ],
@@ -58,16 +61,23 @@ void main() {
         here: india,
       );
       expect(agenda.todayDate, const CalendarDate(2026, 10, 22));
-      expect(agenda.today.map((i) => i.reminder.id), ['daily', 'morning', 'evening']);
+      expect(agenda.today.map((i) => i.reminder.id), [
+        'daily',
+        'morning',
+        'evening',
+      ]);
       expect(agenda.today.first.isMissed(nowIst()), isTrue);
       expect(agenda.today.last.isMissed(nowIst()), isFalse);
       // Daily shows on each of the next 14 days; the one-off on the 27th too.
       expect(agenda.upcoming.length, 14);
       final day27 = agenda.upcoming.firstWhere(
-          (d) => d.date == const CalendarDate(2026, 10, 27));
+        (d) => d.date == const CalendarDate(2026, 10, 27),
+      );
       expect(day27.items.map((i) => i.reminder.id), ['daily', 'nextweek']);
-      expect(agenda.upcoming.any((d) => d.items.any((i) => i.reminder.id == 'far')),
-          isFalse);
+      expect(
+        agenda.upcoming.any((d) => d.items.any((i) => i.reminder.id == 'far')),
+        isFalse,
+      );
     });
 
     test('unhandled one-offs from earlier days are overdue until done', () {
@@ -75,10 +85,17 @@ void main() {
       final done = reminder('done', anchor: '2026-10-19');
       final doneAt = done.schedule.at(done.schedule.anchor);
       final agenda = buildAgenda(
-        reminders: [old, done, reminder('gone', anchor: '2026-10-18', deleted: true)],
+        reminders: [
+          old,
+          done,
+          reminder('gone', anchor: '2026-10-18', deleted: true),
+        ],
         states: {
           occurrenceId('done', doneAt): OccurrenceState(
-              reminderId: 'done', occurrenceAt: doneAt, status: OccurrenceStatus.done),
+            reminderId: 'done',
+            occurrenceAt: doneAt,
+            status: OccurrenceStatus.done,
+          ),
         },
         now: nowIst(),
         here: india,
@@ -142,7 +159,11 @@ void main() {
     });
 
     test('done occurrences are skipped, snoozes ring at the snooze end', () {
-      final r = reminder('d', minute: 8 * 60, recurrence: const Recurrence.daily());
+      final r = reminder(
+        'd',
+        minute: 8 * 60,
+        recurrence: const Recurrence.daily(),
+      );
       final today8 = r.schedule.at(const CalendarDate(2026, 10, 22));
       final tomorrow8 = r.schedule.at(const CalendarDate(2026, 10, 23));
       final snoozeEnd = nowIst().add(const Duration(minutes: 10));
@@ -167,14 +188,20 @@ void main() {
       );
       expect(alerts.first.at, snoozeEnd.toUtc());
       expect(alerts.first.occurrenceAt, today8.toUtc());
-      expect(alerts.map((a) => a.occurrenceAt),
-          isNot(contains(tomorrow8.toUtc())));
+      expect(
+        alerts.map((a) => a.occurrenceAt),
+        isNot(contains(tomorrow8.toUtc())),
+      );
       // Snooze, then the 24th and 25th (the 23rd is already done).
       expect(alerts.length, 3);
     });
 
     test('respects the limit and gives stable positive ids', () {
-      final r = reminder('many', minute: 0, recurrence: const Recurrence.daily());
+      final r = reminder(
+        'many',
+        minute: 0,
+        recurrence: const Recurrence.daily(),
+      );
       final alerts = planAlerts(
         reminders: [r],
         states: const {},
@@ -192,7 +219,10 @@ void main() {
         horizon: const Duration(days: 30),
         limit: 5,
       );
-      expect(again.map((a) => a.notificationId), alerts.map((a) => a.notificationId));
+      expect(
+        again.map((a) => a.notificationId),
+        alerts.map((a) => a.notificationId),
+      );
       expect(alerts.every((a) => a.notificationId >= 0), isTrue);
       expect(alerts.map((a) => a.notificationId).toSet().length, 5);
     });

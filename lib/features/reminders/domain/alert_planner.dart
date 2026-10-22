@@ -94,7 +94,8 @@ List<PlannedAlert> planAlerts({
     for (final t in r.schedule.occurrencesAfter(now)) {
       if (!t.isBefore(end)) break;
       final state = states[occurrenceId(r.id, t)];
-      if (state != null && !state.deleted &&
+      if (state != null &&
+          !state.deleted &&
           state.status != OccurrenceStatus.pending) {
         continue; // done, skipped, or snoozed (handled above)
       }

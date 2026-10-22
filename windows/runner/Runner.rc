@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.uttkarsh" "\0"
-            VALUE "FileDescription", "study_reminder" "\0"
+            VALUE "FileDescription", "Study Reminder" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "study_reminder" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.uttkarsh. All rights reserved." "\0"
             VALUE "OriginalFilename", "study_reminder.exe" "\0"
-            VALUE "ProductName", "study_reminder" "\0"
+            VALUE "ProductName", "Study Reminder" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
