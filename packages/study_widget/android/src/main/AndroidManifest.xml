@@ -1,0 +1,30 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Redraws the widget after a restart, when its refresh alarm is gone. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <application>
+        <!-- The "Next up" home screen widget. Besides the system's widget
+             updates it redraws on its own refresh alarm, after a reboot or
+             an app update, and when the clock, time zone or language
+             changes, so times and "Tomorrow" stay right. -->
+        <receiver
+            android:name=".StudyWidgetProvider"
+            android:exported="false"
+            android:label="@string/study_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action android:name="android.intent.action.LOCALE_CHANGED"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/study_widget_info"/>
+        </receiver>
+    </application>
+</manifest>

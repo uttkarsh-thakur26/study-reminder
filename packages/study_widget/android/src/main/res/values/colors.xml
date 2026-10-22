@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light theme. Android 12 and later use the system's dynamic colours
+     instead (values-v31). -->
+<resources>
+    <color name="study_widget_surface">#FFFAFAFE</color>
+    <color name="study_widget_on_surface">#FF1B1B21</color>
+    <color name="study_widget_on_surface_variant">#FF5E5E6B</color>
+    <color name="study_widget_accent">#FF4F46E5</color>
+    <color name="study_widget_on_accent">#FFFFFFFF</color>
+    <color name="study_widget_accent_container">#FFE6E6FF</color>
+    <color name="study_widget_on_accent_container">#FF1E1A6B</color>
+    <color name="study_widget_ripple">#33000000</color>
+</resources>

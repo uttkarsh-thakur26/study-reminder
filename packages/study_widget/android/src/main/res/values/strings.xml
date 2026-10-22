@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="study_widget_name">Next up</string>
+    <string name="study_widget_description">Your next study reminders, with a button to add one.</string>
+    <string name="study_widget_header">Next up</string>
+    <string name="study_widget_add">Add a reminder</string>
+    <string name="study_widget_empty_title">Nothing coming up</string>
+    <string name="study_widget_empty_message">Tap + to plan your next study session.</string>
+    <!-- %1$s is a time, such as 10:30 PM. -->
+    <string name="study_widget_focusing">Focusing until %1$s</string>
+    <!-- %1$s is a time, such as 9:00 AM. -->
+    <string name="study_widget_tomorrow">Tomorrow %1$s</string>
+    <!-- %1$s is a day, such as Fri, and %2$s a time, such as 6:30 PM. -->
+    <string name="study_widget_day_time">%1$s %2$s</string>
+
+    <!-- Sample reminders for the widget picker's preview. -->
+    <string name="study_widget_preview_title_1">Revise organic chemistry</string>
+    <string name="study_widget_preview_time_1">7:00 PM</string>
+    <string name="study_widget_preview_title_2">Physics problem set</string>
+    <string name="study_widget_preview_time_2">Tomorrow 9:00 AM</string>
+    <string name="study_widget_preview_title_3">Maths mock test</string>
+    <string name="study_widget_preview_time_3">Fri 6:30 PM</string>
+</resources>
