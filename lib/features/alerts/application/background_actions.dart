@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../../app/core_services.dart';
+import '../../home_widget/application/home_widget_refresh.dart';
 import '../../reminders/domain/reminder.dart';
 import '../data/local_notifications.dart';
 import '../domain/alert_sync.dart';
@@ -28,6 +29,8 @@ Future<void> onBackgroundAlertAction(NotificationResponse response) async {
       scheduler: scheduler,
       device: DeviceKind.phone,
     ).handleAction(action, payload);
+    // A snoozed reminder moves on the home screen widget too.
+    await refreshHomeWidget(core);
   } finally {
     await core.db.close();
   }

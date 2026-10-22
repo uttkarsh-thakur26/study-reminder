@@ -56,6 +56,8 @@ dependencies:
   http: ^1.6.0
   focus_guard:
     path: packages/focus_guard
+  study_widget:
+    path: packages/study_widget
 
 dev_dependencies:
   flutter_test:

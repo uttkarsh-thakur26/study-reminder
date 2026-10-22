@@ -876,6 +876,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  study_widget:
+    dependency: "direct main"
+    description:
+      path: "packages/study_widget"
+      relative: true
+    source: path
+    version: "1.0.0"
   supabase_common:
     dependency: transitive
     description:
