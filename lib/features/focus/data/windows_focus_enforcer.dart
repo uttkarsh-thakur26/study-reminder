@@ -110,6 +110,9 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     final hit = rules.match(window.exePath, window.title);
     if (hit == null) return;
     if (hit.isSite) {
+      // A sweep may be closing this very tab; pressing Ctrl+W as well would
+      // close the one next to it. Tried again next second.
+      if (_sweeping) return;
       if (!_windows.closeTab(window.handle)) return;
     } else if (session.strict) {
       _windows.close(window.handle);

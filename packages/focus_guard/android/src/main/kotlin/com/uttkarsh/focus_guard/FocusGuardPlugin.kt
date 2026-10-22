@@ -101,11 +101,18 @@ class FocusGuardPlugin :
         activity = null
     }
 
-    /** Keeps a request from the notification, once: the intent may be seen again. */
+    /**
+     * Keeps a request from the notification, once. Android hands the same
+     * intent back when the app is reopened from Recents or after its process
+     * was stopped, so a request already taken is remembered and ignored.
+     */
     private fun read(intent: Intent?) {
-        val until = intent?.getLongExtra(FocusController.EXTRA_FOCUS_UNTIL, 0L) ?: 0L
+        if (intent == null) return
+        val until = intent.getLongExtra(FocusController.EXTRA_FOCUS_UNTIL, 0L)
         if (until == 0L) return
-        intent?.removeExtra(FocusController.EXTRA_FOCUS_UNTIL)
+        intent.removeExtra(FocusController.EXTRA_FOCUS_UNTIL)
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+        if (!FocusState.takeRequest(context, until)) return
         focusUntil = until
         FocusController.notifications(context).cancel(FocusController.LEFT_NOTIFICATION)
     }

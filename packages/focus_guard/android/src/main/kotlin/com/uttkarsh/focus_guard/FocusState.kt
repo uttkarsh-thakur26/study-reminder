@@ -85,6 +85,17 @@ data class FocusState(
             prefs(context).edit().putString("version", version).apply()
         }
 
+        /**
+         * Notes that the "Focus here" request ending at [until] was taken.
+         * False if it was already, so it starts no second session.
+         */
+        fun takeRequest(context: Context, until: Long): Boolean {
+            val p = prefs(context)
+            if (p.getLong("request", 0L) == until) return false
+            p.edit().putLong("request", until).commit()
+            return true
+        }
+
         /** Whether this app turned Do Not Disturb on, so only then it turns it off. */
         fun quietedByUs(context: Context) = prefs(context).getBoolean("quietedByUs", false)
 

@@ -44,6 +44,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     super.initState();
     final repo = ref.read(focusRepositoryProvider);
     final here = ref.read(deviceKindProvider);
+    unawaited(repo.adoptLegacy());
     _sessions = repo.watch().listen((s) {
       _all = s;
       _session = s.of(here);
@@ -142,6 +143,9 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       here: ref.read(deviceKindProvider),
       paired: ref.read(syncApiProvider) != null,
       now: now,
+      // Nothing the user did not choose: after a laptop-only flip, the next
+      // one must not start the phone.
+      orFree: false,
     );
     if (on.isEmpty) return;
     await HapticFeedback.heavyImpact();
@@ -175,7 +179,12 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     final repo = ref.read(focusRepositoryProvider);
     final length = until.difference(now);
     if (length < const Duration(minutes: 1)) return;
-    if ((await repo.current()).phone.runningAt(now)) return;
+    final phone = (await repo.current()).phone;
+    if (phone.runningAt(now)) {
+      final short = until.difference(phone.endsAt!);
+      if (short > Duration.zero) await repo.extend({DeviceKind.phone}, short);
+      return;
+    }
     final prefs = await repo.prefs();
     await repo.start(
       on: {DeviceKind.phone},

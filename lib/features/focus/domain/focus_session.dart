@@ -158,17 +158,19 @@ class FocusSessions {
   };
 
   /// Where a session the user wants on [wanted] can start: the devices among
-  /// those with none running. With no paired device, only [here].
+  /// those with none running, or with [orFree] any free one when none of
+  /// those is. With no paired device, only [here].
   Set<DeviceKind> startable(
     FocusTarget wanted, {
     required DeviceKind here,
     required bool paired,
     required DateTime now,
+    bool orFree = true,
   }) {
     final free = (paired ? DeviceKind.values.toSet() : {here}).difference(
       busyAt(now),
     );
-    final both = wanted.kinds.intersection(free);
-    return both.isNotEmpty ? both : free;
+    final both = paired ? wanted.kinds.intersection(free) : free;
+    return both.isNotEmpty || !orFree ? both : free;
   }
 }

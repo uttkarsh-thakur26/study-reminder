@@ -67,6 +67,7 @@ void backgroundRefresh() {
       // up or a message was missed.
       try {
         final focus = FocusRepository(core.db, core.clock);
+        await focus.adoptLegacy();
         await AndroidFocusEnforcer().apply(
           (await focus.current()).phone,
           await focus.prefs(),

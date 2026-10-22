@@ -373,16 +373,35 @@ class _StartElsewhere extends ConsumerWidget {
             isScrollControlled: true,
             showDragHandle: true,
             builder: (sheet) => Consumer(
-              builder: (context, ref, _) => SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.l),
-                child: _StartForm(
-                  prefs:
-                      ref.watch(focusPrefsProvider).value ?? const FocusPrefs(),
-                  free: free,
-                  flat: true,
-                  onStarted: () => Navigator.of(sheet).pop(),
-                ),
-              ),
+              builder: (context, ref, _) {
+                // A session may start there while the sheet is open.
+                final sessions =
+                    ref.watch(focusSessionsProvider).value ??
+                    FocusSessions.idle;
+                final stillFree = free.difference(
+                  sessions.busyAt(DateTime.now()),
+                );
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.l),
+                  child: stillFree.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(Gap.l),
+                          child: Text(
+                            'A session started there meanwhile.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                        )
+                      : _StartForm(
+                          prefs:
+                              ref.watch(focusPrefsProvider).value ??
+                              const FocusPrefs(),
+                          free: stillFree,
+                          flat: true,
+                          onStarted: () => Navigator.of(sheet).pop(),
+                        ),
+                );
+              },
             ),
           ),
           child: const Text('Start'),

@@ -235,8 +235,13 @@ class SyncService {
   /// Records of a kind this version does not know are skipped while the
   /// cursor moves past them. Once an update teaches the app a new kind,
   /// pull everything again so the skipped ones arrive.
+  /// Moves on when records of a known kind change shape, so the ones an
+  /// older version skipped are pulled again. 2: each device has its own
+  /// focus session.
+  static const _layout = 2;
+
   Future<void> _pullAgainIfKindsChanged(String? space) async {
-    final kinds = _store.kinds.join(',');
+    final kinds = '${_store.kinds.join(',')};$_layout';
     if (await _db.readSetting(SyncKeys.kinds) == kinds) return;
     await _inSpace(space, () async {
       await _db.writeSetting(SyncKeys.cursor, '0');

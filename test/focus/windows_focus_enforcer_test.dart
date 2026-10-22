@@ -210,6 +210,23 @@ void main() {
     await alone.dispose();
   });
 
+  test('waits with Ctrl+W while a sweep may close the same tab', () async {
+    await enforcer.apply(session(), prefs);
+    final hold = tabs.hold = Completer<void>();
+    final sweep = enforcer.sweepTabs();
+    windows.front = const DesktopWindow(
+      1,
+      r'C:\x\chrome.exe',
+      'Song - YouTube - Google Chrome',
+    );
+    enforcer.check();
+    expect(windows.actions, isEmpty);
+    hold.complete();
+    await sweep;
+    enforcer.check();
+    expect(windows.actions, ['tab 1']);
+  });
+
   test('never runs two sweeps at once', () async {
     await enforcer.apply(session(), prefs);
     final hold = tabs.hold = Completer<void>();

@@ -294,17 +294,23 @@ object FocusController {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
+        // Already focusing here at least as long: nothing to offer.
+        val mine = FocusState.load(context)
+        val covered = mine != null && !mine.isOver() && mine.endsAt >= endsAt
         val text = "Its strict session had $left min left, until $until."
         val builder = Notification.Builder(context, ALERT_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
             .setContentTitle("Focus was quit on $name")
             .setContentText(text)
-            .setStyle(Notification.BigTextStyle().bigText("$text Keep going on this phone?"))
+            .setStyle(
+                Notification.BigTextStyle()
+                    .bigText(if (covered) text else "$text Keep going on this phone?"),
+            )
             .setCategory(Notification.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setTimeoutAfter(endsAt - now)
             .setContentIntent(openApp(context))
-        if (focusHere != null) {
+        if (focusHere != null && !covered) {
             builder.addAction(
                 Notification.Action.Builder(null as Icon?, "Focus here until $until", focusHere).build(),
             )

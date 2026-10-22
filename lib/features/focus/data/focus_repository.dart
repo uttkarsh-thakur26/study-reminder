@@ -36,8 +36,9 @@ class FocusRepository {
     );
   }
 
-  /// Starts a session of [length] from [now] on each of [on], replacing
-  /// what runs there. Devices started together get the same session.
+  /// Starts a session of [length] from [now] on each of [on] that has none
+  /// running, so one that began meanwhile (on the other device, say) is
+  /// kept. Devices started together get the same session.
   Future<void> start({
     required Set<DeviceKind> on,
     required Duration length,
@@ -53,16 +54,18 @@ class FocusRepository {
     return _update(
       on,
       whole: true,
-      (kind, _) => FocusSession(
-        active: true,
-        startedAt: at,
-        endsAt: at.add(length),
-        target: FocusTarget.only(kind),
-        blockApps: blockApps,
-        quiet: quiet,
-        strict: strict,
-        startedBy: startedBy,
-      ),
+      (kind, current) => current.runningAt(at)
+          ? null
+          : FocusSession(
+              active: true,
+              startedAt: at,
+              endsAt: at.add(length),
+              target: FocusTarget.only(kind),
+              blockApps: blockApps,
+              quiet: quiet,
+              strict: strict,
+              startedBy: startedBy,
+            ),
     );
   }
 
@@ -77,9 +80,50 @@ class FocusRepository {
         return s.copyWith(endsAt: s.endsAt!.add(by));
       });
 
+  /// Before each device had its own session there was one shared record.
+  /// One still running here becomes the sessions of the devices it covered,
+  /// stamped after it, and the old record goes.
+  Future<void> adoptLegacy({DateTime? now}) => _db.transaction(() async {
+    final legacy = await (_db.select(
+      _db.focusSessions,
+    )..where((f) => f.id.equals(_legacyId))).getSingleOrNull();
+    if (legacy == null) return;
+    final old = focusSessionFromRow(legacy);
+    // Newer than every version the phone already acted on.
+    try {
+      _clock.receive(Hlc.parse(legacy.hlc));
+    } on FormatException {
+      // Unreadable; the clock is past it in practice.
+    }
+    await (_db.delete(
+      _db.focusSessions,
+    )..where((f) => f.id.equals(_legacyId))).go();
+    final at = (now ?? DateTime.now()).toUtc();
+    if (!old.runningAt(at)) return;
+    for (final kind in old.target.kinds) {
+      final id = FocusSession.idFor(kind);
+      final existing = await (_db.select(
+        _db.focusSessions,
+      )..where((f) => f.id.equals(id))).getSingleOrNull();
+      if (existing != null) continue;
+      final write = stampLocalEdit(
+        before: null,
+        beforeClock: '',
+        after: old.copyWith(target: FocusTarget.only(kind)).toFields(),
+        clock: _clock,
+      );
+      if (write == null) continue;
+      await _db
+          .into(_db.focusSessions)
+          .insertOnConflictUpdate(focusSessionCompanion(id, write));
+    }
+  });
+
+  static const _legacyId = 'current';
+
   Future<void> _update(
     Set<DeviceKind> on,
-    FocusSession Function(DeviceKind kind, FocusSession current) change, {
+    FocusSession? Function(DeviceKind kind, FocusSession current) change, {
     bool whole = false,
   }) => _db.transaction(() async {
     for (final kind in on) {
@@ -88,7 +132,9 @@ class FocusRepository {
         _db.focusSessions,
       )..where((f) => f.id.equals(id))).getSingleOrNull();
       final current = existing == null ? null : focusSessionFromRow(existing);
-      final after = change(kind, current ?? FocusSession.idle).toFields();
+      final changed = change(kind, current ?? FocusSession.idle);
+      if (changed == null) continue;
+      final after = changed.toFields();
       final write = stampLocalEdit(
         before: whole ? null : current?.toFields(),
         beforeClock: existing?.fieldClock ?? '',
