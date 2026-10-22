@@ -60,6 +60,23 @@ class Occurrences extends Table with SyncColumns {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// The shared focus session; one row, id `current`. Times are epoch ms.
+@DataClassName('FocusSessionRow')
+class FocusSessions extends Table with SyncColumns {
+  TextColumn get id => text()();
+  BoolColumn get active => boolean().withDefault(const Constant(false))();
+  IntColumn get startedAt => integer().nullable()();
+  IntColumn get endsAt => integer().nullable()();
+  TextColumn get target => text().withDefault(const Constant('both'))();
+  BoolColumn get blockApps => boolean().withDefault(const Constant(true))();
+  BoolColumn get quiet => boolean().withDefault(const Constant(true))();
+  BoolColumn get strict => boolean().withDefault(const Constant(false))();
+  TextColumn get startedBy => text().withDefault(const Constant(''))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 /// Device-local settings and identity. Never synced.
 @DataClassName('LocalSetting')
 class LocalSettings extends Table {
