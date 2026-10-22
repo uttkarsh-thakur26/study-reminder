@@ -81,8 +81,10 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
 
   void _open(NotificationResponse response) {
     if (!mounted) return;
-    final payload = AlertPayload.decode(response.payload);
-    final action = response.actionId;
+    final (:payload, :action) = readResponse(
+      payload: response.payload,
+      actionId: response.actionId,
+    );
     final ringing =
         payload != null &&
         action == null &&

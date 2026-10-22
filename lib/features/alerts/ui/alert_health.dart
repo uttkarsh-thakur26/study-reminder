@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../desktop/start_with_windows.dart';
 import '../../reminders/domain/reminder.dart';
 import '../application/alert_providers.dart';
+import '../data/local_notifications.dart';
 
 /// Asks for the notification permission on Today when it is missing.
 class AlertPermissionBanner extends ConsumerWidget {
@@ -74,17 +76,50 @@ class AlertHealthCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifications = ref.watch(localNotificationsProvider);
-    final health = ref.watch(alertHealthProvider).value;
-    if (notifications == null || health == null) {
+    if (notifications == null) {
       return const Card(
         child: ListTile(
           leading: Icon(Icons.notifications_paused_rounded),
           title: Text('Alerts on this device'),
-          subtitle: Text('Coming with the desktop app update.'),
+          subtitle: Text('Not available here. Reminders still sync.'),
         ),
       );
     }
     final android = notifications.android;
+    final tests = _TestButtons(notifications);
+    if (android == null) {
+      return Card(
+        child: Column(
+          children: [
+            const _StartWithWindowsRow(),
+            const Divider(indent: 56),
+            const ListTile(
+              leading: Icon(Icons.desktop_windows_rounded),
+              title: Text('Rings from the tray'),
+              subtitle: Text(
+                'Closing the window keeps Study Reminder running, so '
+                'reminders still ring. Quit from the tray icon stops them '
+                'until you open the app again.',
+              ),
+            ),
+            const Divider(indent: 56),
+            const ListTile(
+              leading: Icon(Icons.do_not_disturb_on_outlined),
+              title: Text('Do not disturb'),
+              subtitle: Text(
+                'Windows holds back reminders while Do not disturb is on. '
+                'To let them through, add Study Reminder to the priority '
+                'list in Settings > System > Notifications.',
+              ),
+            ),
+            const Divider(indent: 56),
+            tests,
+          ],
+        ),
+      );
+    }
+    final health = ref.watch(alertHealthProvider).value;
+    if (health == null) return const SizedBox.shrink();
 
     return Card(
       child: Column(
@@ -105,7 +140,7 @@ class AlertHealthCard extends ConsumerWidget {
             badText: 'Off. Reminders may ring a few minutes late.',
             fixLabel: 'Fix',
             onFix: () async {
-              await android?.requestExactAlarmsPermission();
+              await android.requestExactAlarmsPermission();
               ref.invalidate(alertHealthProvider);
             },
           ),
@@ -118,40 +153,68 @@ class AlertHealthCard extends ConsumerWidget {
               'allow this in settings.',
             ),
             trailing: TextButton(
-              onPressed: () => android?.requestFullScreenIntentPermission(),
+              onPressed: () => android.requestFullScreenIntentPermission(),
               child: const Text('Open'),
             ),
           ),
           const Divider(indent: 56),
-          Padding(
-            padding: const EdgeInsets.all(Gap.l),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => notifications.showTest(
-                      style: ReminderStyle.notification,
-                    ),
-                    icon: const Icon(Icons.notifications_active_outlined),
-                    label: const Text('Test reminder'),
-                  ),
-                ),
-                const SizedBox(width: Gap.m),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        notifications.showTest(style: ReminderStyle.alarm),
-                    icon: const Icon(Icons.alarm_rounded),
-                    label: const Text('Test alarm'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          tests,
         ],
       ),
     );
   }
+}
+
+class _StartWithWindowsRow extends ConsumerWidget {
+  const _StartWithWindowsRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(startWithWindowsProvider);
+    return SwitchListTile(
+      secondary: const Icon(Icons.power_settings_new_rounded),
+      title: const Text('Start with Windows'),
+      subtitle: const Text(
+        'Opens quietly in the tray when you sign in, so reminders ring.',
+      ),
+      value: enabled.value ?? false,
+      onChanged: enabled.isLoading
+          ? null
+          : (on) => ref.read(startWithWindowsProvider.notifier).set(on),
+    );
+  }
+}
+
+/// Rings a sample reminder and alarm right away.
+class _TestButtons extends StatelessWidget {
+  const _TestButtons(this.notifications);
+
+  final LocalNotificationsScheduler notifications;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(Gap.l),
+    child: Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                notifications.showTest(style: ReminderStyle.notification),
+            icon: const Icon(Icons.notifications_active_outlined),
+            label: const Text('Test reminder'),
+          ),
+        ),
+        const SizedBox(width: Gap.m),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => notifications.showTest(style: ReminderStyle.alarm),
+            icon: const Icon(Icons.alarm_rounded),
+            label: const Text('Test alarm'),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _CheckRow extends StatelessWidget {

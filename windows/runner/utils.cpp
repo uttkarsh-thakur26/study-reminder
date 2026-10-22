@@ -67,3 +67,10 @@ std::string Utf8FromUtf16(const wchar_t* utf16_string) {
   }
   return utf8_string;
 }
+
+bool StartsMinimized() {
+  for (const std::string& arg : GetCommandLineArguments()) {
+    if (arg == "--minimized") return true;
+  }
+  return false;
+}

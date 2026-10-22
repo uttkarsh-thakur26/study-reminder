@@ -12,8 +12,10 @@ import 'alert_service.dart';
 /// connection to the shared database and replans alerts itself.
 @pragma('vm:entry-point')
 Future<void> onBackgroundAlertAction(NotificationResponse response) async {
-  final payload = AlertPayload.decode(response.payload);
-  final action = response.actionId;
+  final (:payload, :action) = readResponse(
+    payload: response.payload,
+    actionId: response.actionId,
+  );
   if (payload == null || payload.isTest || action == null) return;
 
   final core = await CoreServices.open();
