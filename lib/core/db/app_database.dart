@@ -7,8 +7,16 @@ part 'app_database.g.dart';
 
 @DriftDatabase(tables: [Subjects, Reminders, Occurrences, LocalSettings])
 class AppDatabase extends _$AppDatabase {
+  /// Shared across isolates so notification actions handled in the
+  /// background write through the same connection and the UI sees them.
   AppDatabase([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'study_reminder'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: 'study_reminder',
+              native: const DriftNativeOptions(shareAcrossIsolates: true),
+            ),
+      );
 
   @override
   int get schemaVersion => 1;

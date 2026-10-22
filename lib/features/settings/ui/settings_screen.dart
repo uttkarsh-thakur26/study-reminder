@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
+import '../../alerts/ui/alert_health.dart';
 import '../../reminders/domain/reminder.dart';
 import '../settings_controller.dart';
 
@@ -109,6 +110,8 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SectionHeader('ALERTS'),
+            const AlertHealthCard(),
             const SectionHeader('THIS DEVICE'),
             Card(
               child: Column(

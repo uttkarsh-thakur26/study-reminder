@@ -6,6 +6,7 @@ import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
+import '../../alerts/ui/alert_health.dart';
 import '../application/reminder_providers.dart';
 import '../domain/agenda.dart';
 import 'widgets/quick_add_bar.dart';
@@ -56,6 +57,7 @@ class TodayScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: Gap.l),
                     QuickAddBar(focusNode: quickAddFocus),
+                    const AlertPermissionBanner(),
                   ],
                 ),
               ),

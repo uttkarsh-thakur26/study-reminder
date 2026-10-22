@@ -1,61 +1,43 @@
-import 'package:drift/drift.dart' show Variable;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:timezone/data/latest_all.dart' as tzdata;
-import 'package:timezone/timezone.dart' as tz;
-import 'package:uuid/uuid.dart';
 
-import '../core/db/app_database.dart';
-import '../core/sync/hlc.dart';
-import '../core/time/device_zone.dart';
+import '../features/alerts/application/alert_providers.dart';
+import '../features/alerts/application/background_actions.dart';
+import '../features/alerts/data/local_notifications.dart';
 import '../features/settings/settings_controller.dart';
+import 'core_services.dart';
 import 'providers.dart';
 
 /// Everything the app needs before the first frame: time zones, the
-/// database, this device's identity and the saved appearance settings.
+/// database, this device's identity, notifications and saved settings.
 Future<List<Override>> bootstrap() async {
-  tzdata.initializeTimeZones();
-  final zone = await readDeviceTimeZone();
-  tz.setLocalLocation(tz.getLocation(zone));
-
-  final db = AppDatabase();
-  var deviceId = await db.readSetting(SettingKeys.deviceId);
-  if (deviceId == null) {
-    deviceId = const Uuid().v4();
-    await db.writeSetting(SettingKeys.deviceId, deviceId);
-  }
-
-  final clock = HlcClock(
-    deviceId.replaceAll('-', '').substring(0, 12),
-    last: await _latestStamp(db),
-  );
-  final settings = await AppSettings.load(db);
+  final core = await CoreServices.open();
+  final settings = await AppSettings.load(core.db);
 
   return [
-    databaseProvider.overrideWithValue(db),
-    deviceIdProvider.overrideWithValue(deviceId),
-    hlcClockProvider.overrideWithValue(clock),
-    initialTimeZoneProvider.overrideWithValue(zone),
+    databaseProvider.overrideWithValue(core.db),
+    deviceIdProvider.overrideWithValue(core.deviceId),
+    hlcClockProvider.overrideWithValue(core.clock),
+    initialTimeZoneProvider.overrideWithValue(core.timeZone),
     initialSettingsProvider.overrideWithValue(settings),
+    ...await _notifications(),
   ];
 }
 
-/// The newest stamp already written on this device, so the clock never
-/// issues an older one even if the system clock was moved back.
-Future<Hlc?> _latestStamp(AppDatabase db) async {
-  final row = await db
-      .customSelect(
-        'SELECT MAX(h) AS h FROM ('
-        'SELECT MAX(hlc) AS h FROM reminders UNION ALL '
-        'SELECT MAX(hlc) FROM subjects UNION ALL '
-        'SELECT MAX(hlc) FROM occurrences)',
-        variables: const <Variable<Object>>[],
-      )
-      .getSingleOrNull();
-  final packed = row?.read<String?>('h');
-  if (packed == null || packed.isEmpty) return null;
+Future<List<Override>> _notifications() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return [];
   try {
-    return Hlc.parse(packed);
-  } on FormatException {
-    return null;
+    final notifications = LocalNotificationsScheduler();
+    await notifications.initialize(onBackgroundAction: onBackgroundAlertAction);
+    return [
+      localNotificationsProvider.overrideWithValue(notifications),
+      launchResponseProvider.overrideWithValue(
+        await notifications.launchResponse(),
+      ),
+    ];
+  } catch (e) {
+    // The app still works without alerts; Settings shows what is missing.
+    debugPrint('notifications unavailable: $e');
+    return [];
   }
 }
