@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:io' show File, Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -10,7 +11,8 @@ import '../../reminders/domain/reminder.dart';
 import '../domain/alert_sync.dart';
 import 'alert_scheduler.dart';
 
-/// Android notifications and alarms through flutter_local_notifications.
+/// Notifications and alarms on Android and Windows, through
+/// flutter_local_notifications.
 class LocalNotificationsScheduler implements AlertScheduler {
   LocalNotificationsScheduler([FlutterLocalNotificationsPlugin? plugin])
     : plugin = plugin ?? FlutterLocalNotificationsPlugin();
@@ -34,8 +36,11 @@ class LocalNotificationsScheduler implements AlertScheduler {
     onBackgroundAction,
   }) async {
     await plugin.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_stat_reminder'),
+      settings: InitializationSettings(
+        android: const AndroidInitializationSettings('ic_stat_reminder'),
+        windows: defaultTargetPlatform == TargetPlatform.windows
+            ? _windowsSettings()
+            : null,
       ),
       onDidReceiveNotificationResponse: _taps.add,
       onDidReceiveBackgroundNotificationResponse: onBackgroundAction,
@@ -59,6 +64,7 @@ class LocalNotificationsScheduler implements AlertScheduler {
   @override
   Future<void> schedule(PlannedAlert alert) async {
     final alarm = alert.style == ReminderStyle.alarm;
+    final payload = AlertPayload.of(alert);
     Future<void> queue(AndroidScheduleMode mode) => plugin.zonedSchedule(
       id: alert.notificationId,
       title: alert.title,
@@ -68,9 +74,10 @@ class LocalNotificationsScheduler implements AlertScheduler {
         android: alarm
             ? alarmDetails(alert.occurrenceAt)
             : reminderDetails(alert.occurrenceAt),
+        windows: windowsDetails(payload),
       ),
       androidScheduleMode: mode,
-      payload: AlertPayload.of(alert).encode(),
+      payload: payload.encode(),
     );
 
     try {
@@ -92,23 +99,40 @@ class LocalNotificationsScheduler implements AlertScheduler {
   /// Shows a sample right away, so the user can check sound and style.
   Future<void> showTest({required ReminderStyle style}) {
     final now = DateTime.now();
+    final payload = AlertPayload(
+      reminderId: AlertPayload.testReminderId,
+      occurrenceAt: now,
+      style: style,
+      signature: '',
+    );
+    final windows = defaultTargetPlatform == TargetPlatform.windows;
     return plugin.show(
       id: testNotificationId,
       title: style == ReminderStyle.alarm ? 'Test alarm' : 'Test reminder',
-      body: 'This is how reminders will look on this phone.',
+      body:
+          'This is how reminders will look on this '
+          '${windows ? 'laptop' : 'phone'}.',
       notificationDetails: NotificationDetails(
         android: style == ReminderStyle.alarm
             ? alarmDetails(now, actions: const [_stopAction])
             : reminderDetails(now, actions: const []),
+        windows: windowsDetails(payload),
       ),
-      payload: AlertPayload(
-        reminderId: AlertPayload.testReminderId,
-        occurrenceAt: now,
-        style: style,
-        signature: '',
-      ).encode(),
+      payload: payload.encode(),
     );
   }
+
+  /// A plain message with no buttons, such as the hint that the app keeps
+  /// running in the tray.
+  Future<void> showInfo({required String title, required String body}) =>
+      plugin.show(
+        id: infoNotificationId,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          windows: WindowsNotificationDetails(),
+        ),
+      );
 
   /// Stops whatever is ringing for [payload] and clears it from the shade.
   Future<void> dismiss(AlertPayload payload) => plugin.cancel(
@@ -119,6 +143,7 @@ class LocalNotificationsScheduler implements AlertScheduler {
 }
 
 const testNotificationId = 1;
+const infoNotificationId = 2;
 
 const _doneAction = AndroidNotificationAction(
   AlertActions.done,
@@ -179,3 +204,48 @@ AndroidNotificationDetails alarmDetails(
 
 /// `Notification.FLAG_INSISTENT`: repeat the sound until the user responds.
 const _flagInsistent = 4;
+
+WindowsInitializationSettings _windowsSettings() =>
+    WindowsInitializationSettings(
+      appName: 'Study Reminder',
+      appUserModelId: 'Uttkarsh.StudyReminder',
+      // Fixed for good: Windows files the app's notifications under it.
+      guid: '0a05c837-23e9-4a00-8d98-eb2a4c632f35',
+      iconPath: [
+        File(Platform.resolvedExecutable).parent.path,
+        'data',
+        'flutter_assets',
+        'assets',
+        'icons',
+        'app_icon.png',
+      ].join(Platform.pathSeparator),
+    );
+
+/// Windows hands back only the clicked button's text, so each button carries
+/// the whole payload plus its action. Reminders and alarms stay on screen
+/// until answered; alarms loop the alarm sound.
+WindowsNotificationDetails windowsDetails(AlertPayload payload) {
+  final alarm = payload.style == ReminderStyle.alarm;
+  WindowsAction button(String label, String action) => WindowsAction(
+    content: label,
+    arguments: payload.withAction(action).encode(),
+  );
+  return WindowsNotificationDetails(
+    scenario: alarm
+        ? WindowsNotificationScenario.alarm
+        : WindowsNotificationScenario.reminder,
+    audio: alarm
+        ? WindowsNotificationAudio.preset(
+            sound: WindowsNotificationSound.alarm1,
+            shouldLoop: true,
+          )
+        : null,
+    timestamp: payload.occurrenceAt,
+    actions: payload.isTest
+        ? [button(alarm ? 'Stop' : 'Got it', AlertActions.stop)]
+        : [
+            button('Snooze 10 min', AlertActions.snooze),
+            button('Done', AlertActions.done),
+          ],
+  );
+}

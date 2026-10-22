@@ -1,12 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../data/alert_scheduler.dart';
 import '../data/local_notifications.dart';
+import '../data/payload_tracking_scheduler.dart';
 import 'alert_service.dart';
 
-/// Set at startup on platforms with notifications wired up (Android for now).
+/// Set at startup on platforms with notifications wired up (Android and
+/// Windows).
 final localNotificationsProvider = Provider<LocalNotificationsScheduler?>(
   (ref) => null,
 );
@@ -14,9 +17,14 @@ final localNotificationsProvider = Provider<LocalNotificationsScheduler?>(
 /// The notification tap or full-screen alarm that launched the app, if any.
 final launchResponseProvider = Provider<NotificationResponse?>((ref) => null);
 
-final alertSchedulerProvider = Provider<AlertScheduler>(
-  (ref) => ref.watch(localNotificationsProvider) ?? const NoopAlertScheduler(),
-);
+final alertSchedulerProvider = Provider<AlertScheduler>((ref) {
+  final notifications = ref.watch(localNotificationsProvider);
+  if (notifications == null) return const NoopAlertScheduler();
+  // Windows reports queued alerts by id only.
+  return defaultTargetPlatform == TargetPlatform.windows
+      ? PayloadTrackingScheduler(notifications, ref.watch(databaseProvider))
+      : notifications;
+});
 
 final alertServiceProvider = Provider<AlertService>(
   (ref) => AlertService(

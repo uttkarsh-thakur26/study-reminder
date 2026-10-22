@@ -5,6 +5,8 @@ import '../features/alerts/application/alert_providers.dart';
 import '../features/alerts/application/background_actions.dart';
 import '../features/alerts/data/local_notifications.dart';
 import '../features/settings/settings_controller.dart';
+import '../desktop/desktop_window.dart';
+import '../desktop/start_with_windows.dart';
 import 'core_services.dart';
 import 'providers.dart';
 
@@ -13,6 +15,7 @@ import 'providers.dart';
 Future<List<Override>> bootstrap() async {
   final core = await CoreServices.open();
   final settings = await AppSettings.load(core.db);
+  if (isWindowsApp) await setUpStartWithWindows(core.db);
 
   return [
     databaseProvider.overrideWithValue(core.db),
@@ -25,7 +28,11 @@ Future<List<Override>> bootstrap() async {
 }
 
 Future<List<Override>> _notifications() async {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return [];
+  if (kIsWeb ||
+      (defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.windows)) {
+    return [];
+  }
   try {
     final notifications = LocalNotificationsScheduler();
     await notifications.initialize(onBackgroundAction: onBackgroundAlertAction);

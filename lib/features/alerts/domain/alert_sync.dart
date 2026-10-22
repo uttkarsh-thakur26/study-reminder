@@ -19,6 +19,7 @@ class AlertPayload {
     required this.occurrenceAt,
     required this.style,
     required this.signature,
+    this.action,
   });
 
   factory AlertPayload.of(PlannedAlert alert) => AlertPayload(
@@ -40,6 +41,18 @@ class AlertPayload {
   /// Fingerprint of everything the notification shows and when it rings.
   final String signature;
 
+  /// Set on the copy carried by a button. Windows hands back only the
+  /// clicked button's text, so the button has to carry the whole payload.
+  final String? action;
+
+  AlertPayload withAction(String action) => AlertPayload(
+    reminderId: reminderId,
+    occurrenceAt: occurrenceAt,
+    style: style,
+    signature: signature,
+    action: action,
+  );
+
   String get occurrenceKey => occurrenceId(reminderId, occurrenceAt);
 
   String encode() => jsonEncode({
@@ -47,6 +60,7 @@ class AlertPayload {
     'o': occurrenceAt.toUtc().millisecondsSinceEpoch,
     's': style.name,
     'k': signature,
+    'a': ?action,
   });
 
   /// Null for anything this app did not write, such as a test notification.
@@ -62,11 +76,25 @@ class AlertPayload {
         ),
         style: ReminderStyle.values.byName(map['s']! as String),
         signature: map['k']! as String,
+        action: map['a'] as String?,
       );
     } catch (_) {
       return null;
     }
   }
+}
+
+/// What a tap on a notification asks for: which occurrence, and which button
+/// if any. Android reports the button id separately; on Windows it arrives
+/// inside the payload and the reported "action" is the payload itself.
+({AlertPayload? payload, String? action}) readResponse({
+  required String? payload,
+  required String? actionId,
+}) {
+  final p = AlertPayload.decode(payload);
+  final action =
+      p?.action ?? (actionId == null || actionId == payload ? null : actionId);
+  return (payload: p, action: action);
 }
 
 /// A notification the operating system currently has queued.

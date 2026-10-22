@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
+import '../desktop/desktop_integration.dart';
 import '../features/alerts/ui/alert_coordinator.dart';
 import '../features/settings/settings_controller.dart';
 import '../shell/app_shell.dart';
@@ -40,7 +41,9 @@ class _StudyReminderAppState extends ConsumerState<StudyReminderApp> {
       themeMode: settings.themeMode,
       theme: buildTheme(settings.accent, Brightness.light),
       darkTheme: buildTheme(settings.accent, Brightness.dark),
-      home: const AlertCoordinator(child: AppShell()),
+      home: const AlertCoordinator(
+        child: DesktopIntegration(child: AppShell()),
+      ),
     );
   }
 }

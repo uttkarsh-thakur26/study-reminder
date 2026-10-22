@@ -70,9 +70,12 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
   }
 
   void _open(NotificationResponse response) {
-    final payload = AlertPayload.decode(response.payload);
+    final (:payload, :action) = readResponse(
+      payload: response.payload,
+      actionId: response.actionId,
+    );
     if (payload == null || !mounted) return;
-    if (response.actionId case final action?) {
+    if (action != null) {
       unawaited(ref.read(alertServiceProvider).handleAction(action, payload));
       return;
     }
