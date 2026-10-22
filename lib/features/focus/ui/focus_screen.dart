@@ -8,6 +8,8 @@ import '../../../app/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
+import '../../../desktop/desktop_window.dart';
+import '../../../desktop/mini_timer.dart';
 import '../../reminders/application/reminder_providers.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../subjects/domain/subject.dart';
@@ -363,6 +365,13 @@ class _RunningSession extends ConsumerWidget {
                     onPressed: () => repo.stop(on),
                     icon: const Icon(Icons.stop_rounded),
                     label: const Text('Stop'),
+                  ),
+                if (isWindowsApp && on.contains(here))
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        ref.read(miniTimerProvider.notifier).enter(),
+                    icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                    label: const Text('Mini timer'),
                   ),
               ],
             ),

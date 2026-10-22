@@ -34,13 +34,32 @@ const wideBreakpoint = 720.0;
 bool isWide(BuildContext context) =>
     MediaQuery.sizeOf(context).width >= wideBreakpoint;
 
-ThemeData buildTheme(Color accent, Brightness brightness) {
-  final scheme = ColorScheme.fromSeed(
+/// The app's theme from [accent]. With [pureBlack], the dark theme sits on
+/// black, with surfaces just above it, which OLED screens show for less.
+ThemeData buildTheme(
+  Color accent,
+  Brightness brightness, {
+  bool pureBlack = false,
+}) {
+  final dark = brightness == Brightness.dark;
+  var scheme = ColorScheme.fromSeed(
     seedColor: accent,
     brightness: brightness,
     dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
   );
-  final dark = brightness == Brightness.dark;
+  if (dark && pureBlack) {
+    Color lift(double amount) =>
+        Color.lerp(Colors.black, scheme.surfaceContainer, amount)!;
+    scheme = scheme.copyWith(
+      surface: Colors.black,
+      surfaceDim: Colors.black,
+      surfaceContainerLowest: Colors.black,
+      surfaceContainerLow: lift(0.45),
+      surfaceContainer: lift(0.65),
+      surfaceContainerHigh: lift(0.85),
+      surfaceContainerHighest: scheme.surfaceContainerHigh,
+    );
+  }
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
