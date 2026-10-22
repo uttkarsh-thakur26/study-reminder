@@ -66,10 +66,14 @@ class SupabaseSyncApi implements SyncApi {
 
   @override
   Future<PairingCode> createPairingCode(String secret) async {
+    // Codes last 10 minutes on the server. Count them down from when this
+    // device asked, by its own clock, so a clock that is off cannot show a
+    // fresh code as expired.
+    final asked = DateTime.now().toUtc();
     final map = _map(await _call('create_pairing_code', {'p_secret': secret}));
     return PairingCode(
       map['code']! as String,
-      DateTime.parse(map['expires_at']! as String).toUtc(),
+      asked.add(const Duration(minutes: 10)),
     );
   }
 

@@ -25,6 +25,19 @@ class FakeSyncApi implements SyncApi {
   /// While true, every call fails as if offline.
   bool offline = false;
 
+  /// Makes the next join or leave happen on the server but fail on the way
+  /// back, as when the connection drops before the reply arrives.
+  bool loseNextReply = false;
+
+  /// How many of the next pulls fail as if offline.
+  int failPulls = 0;
+
+  /// The `after` of every pull, oldest first.
+  final pullsAfter = <int>[];
+
+  /// Runs inside [pull] before the rows are read, once.
+  Future<void> Function()? duringPull;
+
   /// Runs inside [push] before the records are stored, to act out an edit
   /// that lands while an upload is in flight.
   Future<void> Function()? duringPush;
@@ -96,7 +109,29 @@ class FakeSyncApi implements SyncApi {
     d.space = entry.$1;
     _dropIfEmpty(old);
     _ping(d.space);
+    _maybeLoseReply();
     return d.space;
+  }
+
+  void _maybeLoseReply() {
+    if (!loseNextReply) return;
+    loseNextReply = false;
+    throw const SyncUnavailable('reply lost');
+  }
+
+  /// The stamps stored for one record, or null if there is none.
+  Map<String, String>? storedClock(String space, String kind, String id) =>
+      _spaces[space]?['$kind/$id']?.clock;
+
+  /// Stores a record as a device of a newer app version would.
+  void storeAsNewerApp(String space, SyncRecord r) {
+    _spaces[space]!['${r.kind}/${r.id}'] = _Stored(
+      r.kind,
+      r.id,
+      {...r.fields},
+      r.clock.toJson(),
+      ++_seq,
+    );
   }
 
   @override
@@ -107,6 +142,7 @@ class FakeSyncApi implements SyncApi {
     _spaces[d.space] = {};
     _dropIfEmpty(old);
     _ping(old);
+    _maybeLoseReply();
     return d.space;
   }
 
@@ -168,6 +204,14 @@ class FakeSyncApi implements SyncApi {
     int limit = 500,
   }) async {
     final d = _device(secret);
+    if (failPulls > 0) {
+      failPulls--;
+      throw const SyncUnavailable('offline');
+    }
+    pullsAfter.add(after);
+    final hook = duringPull;
+    duringPull = null;
+    await hook?.call();
     final rows = _spaces[d.space]!.values.where((s) => s.seq > after).toList()
       ..sort((a, b) => a.seq.compareTo(b.seq));
     return [

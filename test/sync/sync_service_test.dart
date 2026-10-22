@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:study_reminder/core/db/app_database.dart';
+import 'package:study_reminder/core/sync/field_clock.dart';
 import 'package:study_reminder/core/sync/hlc.dart';
 import 'package:study_reminder/core/time/calendar_date.dart';
 import 'package:study_reminder/features/reminders/data/reminder_repository.dart';
@@ -11,6 +12,7 @@ import 'package:study_reminder/features/subjects/data/subject_repository.dart';
 import 'package:study_reminder/features/subjects/domain/subject.dart';
 import 'package:study_reminder/features/sync/application/sync_service.dart';
 import 'package:study_reminder/features/sync/data/sync_api.dart';
+import 'package:study_reminder/features/sync/domain/sync_record.dart';
 
 import 'fake_sync_api.dart';
 
@@ -326,5 +328,109 @@ void main() {
     await phone.sync.joinWithCode(code.code);
     expect(await phone.db.select(phone.db.subjects).get(), hasLength(650));
     expect(await phone.waiting(), 0);
+  });
+
+  test('a join whose reply is lost is finished by the next sync', () async {
+    await laptop.reminders.save(physics);
+    await laptop.sync.sync();
+    await phone.subjects.save(
+      const Subject(id: 's1', name: 'Maths', color: 0xFF2255AA),
+    );
+    await phone.sync.sync();
+    final code = await laptop.sync.createPairingCode();
+
+    api.loseNextReply = true;
+    await expectLater(
+      phone.sync.joinWithCode(code.code),
+      throwsA(isA<SyncUnavailable>()),
+    );
+    // The server moved the phone; the phone learns it on its next sync.
+    await phone.sync.sync();
+    await laptop.sync.sync();
+
+    expect(await phone.sync.spaceId(), await laptop.sync.spaceId());
+    expect(await phone.title('r1'), 'Physics');
+    expect(await laptop.db.select(laptop.db.subjects).get(), hasLength(1));
+  });
+
+  test('pairing succeeds even if the first sync after it fails', () async {
+    await laptop.reminders.save(physics);
+    final code = await laptop.sync.createPairingCode();
+    api.failPulls = 1;
+    await phone.sync.joinWithCode(code.code);
+    expect(await phone.sync.spaceId(), await laptop.sync.spaceId());
+    await phone.sync.sync();
+    expect(await phone.title('r1'), 'Physics');
+  });
+
+  test('a background sync cannot undo a move made meanwhile', () async {
+    await laptop.reminders.save(physics);
+    await laptop.sync.sync();
+    await phone.subjects.save(
+      const Subject(id: 's1', name: 'Maths', color: 0xFF2255AA),
+    );
+    await phone.sync.sync();
+    final code = await laptop.sync.createPairingCode();
+
+    // The Android background task: same database, its own service.
+    final background = SyncService(
+      db: phone.db,
+      clock: phone.clock,
+      api: api,
+      isPhone: true,
+      deviceName: 'Pixel',
+    );
+    // While it waits on its pull, the app joins the laptop, and the app's
+    // own first pull fails.
+    api.duringPull = () async {
+      api.failPulls = 1;
+      await phone.sync.joinWithCode(code.code);
+    };
+    await background.sync();
+
+    // The background task's pull saw only the new space's newest records;
+    // saving its cursor would hide the laptop's older ones for good.
+    await phone.sync.sync();
+    expect(await phone.title('r1'), 'Physics');
+  });
+
+  test('records of a newly known kind are fetched after an update', () async {
+    await laptop.sync.sync();
+    await laptop.db.writeSetting(SyncKeys.kinds, 'subject,reminder');
+    final pulls = api.pullsAfter.length;
+    await laptop.sync.sync();
+    expect(api.pullsAfter.sublist(pulls), [0]);
+  });
+
+  test('stamps of fields this version does not know are not sent', () async {
+    await laptop.sync.sync();
+    final space = (await laptop.sync.spaceId())!;
+    const fields = {
+      'name': 'Maths',
+      'color': 0xFF2255AA,
+      'sort_order': 0,
+      'deleted': false,
+    };
+    final stamp = laptop.clock.now();
+    api.storeAsNewerApp(
+      space,
+      SyncRecord(
+        kind: RecordKinds.subject,
+        id: 's1',
+        fields: {...fields, 'icon': 'calculator'},
+        clock: FieldClock({
+          for (final f in [...fields.keys, 'icon']) f: stamp,
+        }),
+      ),
+    );
+    await laptop.sync.sync();
+    expect(await laptop.db.select(laptop.db.subjects).get(), hasLength(1));
+
+    // Unpairing pushes everything into a new space.
+    await laptop.sync.unpair();
+    final fresh = (await laptop.sync.spaceId())!;
+    final sent = api.storedClock(fresh, RecordKinds.subject, 's1')!;
+    expect(sent.keys, isNot(contains('icon')));
+    expect(sent.keys, contains('name'));
   });
 }

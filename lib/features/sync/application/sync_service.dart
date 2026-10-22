@@ -20,6 +20,10 @@ abstract final class SyncKeys {
   /// The name the server has for this device, so a rename re-registers.
   static const registeredName = 'sync_registered_name';
   static const lastSynced = 'sync_last_synced';
+
+  /// The record kinds the cursor was moved with; see
+  /// [SyncService._pullAgainIfKindsChanged].
+  static const kinds = 'sync_kinds';
 }
 
 /// Keeps this device's records in step with the other devices in its space,
@@ -81,19 +85,47 @@ class SyncService {
     } on UnknownDeviceException {
       // The server lost us (for example the project was reset): start over
       // in a new space and send it everything.
-      await _db.writeSetting(SyncKeys.registeredName, '');
+      await _forgetRegistration();
       await _ensureRegistered(secret);
       return _exchange(secret);
     }
   }
 
+  /// Makes the next call register again and so learn which space the server
+  /// has this device in. Set before any call that moves the device, in case
+  /// the reply is lost or the app stops before the move is saved here.
+  Future<void> _forgetRegistration() =>
+      _db.writeSetting(SyncKeys.registeredName, '');
+
   Future<int> _exchange(String secret) async {
+    final space = await spaceId();
+    try {
+      return await _exchangeIn(space, secret);
+    } on _SpaceChanged {
+      // Moved meanwhile by the other isolate, whose own sync takes over.
+      return 0;
+    }
+  }
+
+  /// Saves what [body] writes in one transaction, unless this device has
+  /// moved since [space] was read: then it belongs to the old space and is
+  /// dropped. The Android background task syncs from another isolate, so a
+  /// move can land in the middle of an exchange.
+  Future<void> _inSpace(String? space, Future<void> Function() body) =>
+      _db.transaction(() async {
+        if (await spaceId() != space) throw const _SpaceChanged();
+        await body();
+      });
+
+  Future<int> _exchangeIn(String? space, String secret) async {
+    await _pullAgainIfKindsChanged(space);
+
     // Bounded, so rows edited faster than they upload cannot keep this going.
     for (var round = 0; round < 50; round++) {
       final batch = await _store.dirty();
       if (batch.isEmpty) break;
       await api.push(secret, [for (final p in batch) p.record]);
-      await _store.markPushed(batch);
+      await _inSpace(space, () => _store.markPushed(batch));
       if (batch.length < 200) break;
     }
 
@@ -103,10 +135,13 @@ class SyncService {
     while (true) {
       final page = await api.pull(secret, after: cursor, limit: 500);
       if (page.isEmpty) break;
-      await _store.apply(page);
+      final next = page.map((r) => r.seq).reduce(max);
+      await _inSpace(space, () async {
+        await _store.apply(page);
+        await _db.writeSetting(SyncKeys.cursor, '$next');
+      });
+      cursor = next;
       received += page.length;
-      cursor = page.map((r) => r.seq).reduce(max);
-      await _db.writeSetting(SyncKeys.cursor, '$cursor');
       if (page.length < 500) break;
     }
 
@@ -114,13 +149,25 @@ class SyncService {
     final leftover = await _store.dirty(limit: 200);
     if (leftover.isNotEmpty) {
       await api.push(secret, [for (final p in leftover) p.record]);
-      await _store.markPushed(leftover);
+      await _inSpace(space, () => _store.markPushed(leftover));
     }
     await _db.writeSetting(
       SyncKeys.lastSynced,
       _now().toUtc().toIso8601String(),
     );
     return received;
+  }
+
+  /// Records of a kind this version does not know are skipped while the
+  /// cursor moves past them. Once an update teaches the app a new kind,
+  /// pull everything again so the skipped ones arrive.
+  Future<void> _pullAgainIfKindsChanged(String? space) async {
+    final kinds = _store.kinds.join(',');
+    if (await _db.readSetting(SyncKeys.kinds) == kinds) return;
+    await _inSpace(space, () async {
+      await _db.writeSetting(SyncKeys.cursor, '0');
+      await _db.writeSetting(SyncKeys.kinds, kinds);
+    });
   }
 
   /// A code for another device to join this device's space. Syncs first, so
@@ -137,18 +184,36 @@ class SyncService {
   Future<void> joinWithCode(String code) => _serial(() async {
     final secret = await _secret();
     await _ensureRegistered(secret);
-    final space = await api.joinSpace(secret, code);
+    await _forgetRegistration();
+    final String space;
+    try {
+      space = await api.joinSpace(secret, code);
+    } on PairingException {
+      await _db.writeSetting(SyncKeys.registeredName, deviceName);
+      rethrow;
+    }
     await _moveTo(space);
-    await _exchange(secret);
+    await _exchangeAfterMove(secret);
   });
 
   /// Stops syncing with the other devices. Everything stays on this device.
   Future<void> unpair() => _serial(() async {
     final secret = await _secret();
     await _ensureRegistered(secret);
+    await _forgetRegistration();
     await _moveTo(await api.leaveSpace(secret));
-    await _exchange(secret);
+    await _exchangeAfterMove(secret);
   });
+
+  /// The move is done once saved here. If the first exchange in the new
+  /// space fails, the next sync does it.
+  Future<void> _exchangeAfterMove(String secret) async {
+    try {
+      await _exchange(secret);
+    } on SyncUnavailable {
+      // Offline again; nothing is lost.
+    }
+  }
 
   Future<List<SyncedDevice>> devices() => _serial(() async {
     final secret = await _secret();
@@ -171,16 +236,21 @@ class SyncService {
       name: deviceName,
       isPhone: isPhone,
     );
-    if (r.spaceId != space) await _moveTo(r.spaceId);
-    await _db.writeSetting(SyncKeys.registeredName, deviceName);
+    if (r.spaceId != space) {
+      await _moveTo(r.spaceId);
+    } else {
+      await _db.writeSetting(SyncKeys.registeredName, deviceName);
+    }
   }
 
-  /// Starts over in [space]: pull from the beginning, push everything.
-  Future<void> _moveTo(String space) async {
+  /// Starts over in [space]: pull from the beginning, push everything. One
+  /// transaction, so a crash cannot leave half a move.
+  Future<void> _moveTo(String space) => _db.transaction(() async {
     await _db.writeSetting(SyncKeys.space, space);
     await _db.writeSetting(SyncKeys.cursor, '0');
     await _store.markAllDirty();
-  }
+    await _db.writeSetting(SyncKeys.registeredName, deviceName);
+  });
 
   /// This device's secret, made once. Two isolates may ask at the same time,
   /// so it is written only if still missing and then read back.
@@ -197,4 +267,9 @@ class SyncService {
 
   @visibleForTesting
   RecordStore get store => _store;
+}
+
+/// The device moved to another space while an exchange was running.
+class _SpaceChanged implements Exception {
+  const _SpaceChanged();
 }

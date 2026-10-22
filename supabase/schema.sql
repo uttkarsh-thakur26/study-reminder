@@ -148,10 +148,15 @@ begin
   where secret_hash = hash
   returning * into d;
   if not found then
-    insert into public.spaces default values returning id into new_space;
-    insert into public.devices (secret_hash, space_id, name, kind)
-    values (hash, new_space, left(coalesce(nullif(trim(p_name), ''), 'Device'), 60), p_kind)
-    returning * into d;
+    begin
+      insert into public.spaces default values returning id into new_space;
+      insert into public.devices (secret_hash, space_id, name, kind)
+      values (hash, new_space, left(coalesce(nullif(trim(p_name), ''), 'Device'), 60), p_kind)
+      returning * into d;
+    exception when unique_violation then
+      -- The app's background task registered the same device a moment ago.
+      select * into d from public.devices where secret_hash = hash;
+    end;
   end if;
   return jsonb_build_object('device_id', d.id, 'space_id', d.space_id);
 end;
@@ -300,12 +305,14 @@ declare
   f record;
   changed_rows int := 0;
   changed boolean;
+  space_full boolean;
 begin
   if jsonb_typeof(p_records) <> 'array' or jsonb_array_length(p_records) > 500 then
     raise exception 'send at most 500 records at a time' using errcode = 'SR400';
   end if;
   -- One writer per space at a time, so sequence numbers follow commit order.
   perform pg_advisory_xact_lock(hashtextextended(d.space_id::text, 0));
+  space_full := (select count(*) from public.records where space_id = d.space_id) >= 50000;
 
   for r in
     select x.kind, x.id, x.fields, x.clock
@@ -315,11 +322,20 @@ begin
     if jsonb_typeof(r.fields) <> 'object' or jsonb_typeof(r.clock) <> 'object' then
       raise exception 'bad record %', r.id using errcode = 'SR400';
     end if;
+    -- Real records are a few hundred bytes. Oversized ones are skipped
+    -- rather than refused, so one bad record cannot stop a device syncing.
+    if length(r.kind) > 30 or length(r.id) not between 1 and 100
+       or pg_column_size(r.fields) > 65536 or pg_column_size(r.clock) > 16384 then
+      continue;
+    end if;
     select * into cur from public.records
     where space_id = d.space_id and kind = r.kind and id = r.id
     for update;
 
     if not found then
+      if space_full then
+        continue;
+      end if;
       insert into public.records
         (space_id, kind, id, fields, clock, hlc, seq, updated_by)
       values (

@@ -140,6 +140,7 @@ class _ShowCodeState extends ConsumerState<_ShowCode> {
   SyncedDevice? _joined;
   Timer? _tick;
   int _polls = 0;
+  bool _polling = false;
 
   @override
   void initState() {
@@ -179,8 +180,9 @@ class _ShowCodeState extends ConsumerState<_ShowCode> {
     setState(() {}); // the countdown
     final code = _code;
     if (code == null || _joined != null || _expired(code)) return;
-    // Every 3 seconds, look for a device that was not there before.
-    if (++_polls % 3 == 0) unawaited(_lookForNewDevice());
+    // Every 3 seconds, look for a device that was not there before. One
+    // look at a time, so a slow connection cannot pile them up.
+    if (++_polls % 3 == 0 && !_polling) unawaited(_lookForNewDevice());
   }
 
   bool _expired(PairingCode code) => !DateTime.now().isBefore(code.expiresAt);
@@ -189,6 +191,7 @@ class _ShowCodeState extends ConsumerState<_ShowCode> {
     final known = _known;
     final service = ref.read(syncServiceProvider);
     if (known == null || service == null) return;
+    _polling = true;
     try {
       final devices = await service.devices();
       final fresh = devices.where((d) => !known.contains(d.id)).firstOrNull;
@@ -198,6 +201,8 @@ class _ShowCodeState extends ConsumerState<_ShowCode> {
       unawaited(ref.read(syncStatusProvider.notifier).syncNow());
     } on SyncUnavailable {
       // Try again on the next poll.
+    } finally {
+      _polling = false;
     }
   }
 

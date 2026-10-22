@@ -104,5 +104,12 @@ class _SyncCoordinatorState extends ConsumerState<SyncCoordinator> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // Any finished sync, including one the pairing sheet started, may have
+    // moved this device to another space; follow it with the listener.
+    ref.listen(syncStatusProvider.select((s) => s.phase), (_, phase) {
+      if (phase == SyncPhase.idle) unawaited(_listenForPings());
+    });
+    return widget.child;
+  }
 }

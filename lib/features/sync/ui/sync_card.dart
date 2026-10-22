@@ -111,15 +111,18 @@ class SyncCard extends ConsumerWidget {
     );
     if (ok != true || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    final service = ref.read(syncServiceProvider);
     try {
-      await ref.read(syncServiceProvider)?.unpair();
-      ref.invalidate(syncedDevicesProvider);
-      messenger.showSnackBar(const SnackBar(content: Text('Unpaired')));
-    } on SyncUnavailable {
+      await service?.unpair();
+    } on Object catch (e) {
+      if (e is! SyncUnavailable) debugPrint('unpair failed: $e');
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not reach the sync server')),
       );
+      return;
     }
+    messenger.showSnackBar(const SnackBar(content: Text('Unpaired')));
+    if (context.mounted) ref.invalidate(syncedDevicesProvider);
   }
 }
 

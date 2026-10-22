@@ -115,6 +115,23 @@ begin
   end if;
 end $$;
 
+-- Oversized or odd records are skipped, and the rest of the push still lands.
+do $$ begin
+  if public.push_records('laptop-secret-0123456789abcdef0123456789', jsonb_build_array(
+    jsonb_build_object('kind', 'subject', 'id', 'big',
+      'fields', jsonb_build_object('name', repeat(md5(random()::text), 3000)),
+      'clock', '{"name":"000000000000400-0000-l"}'::jsonb),
+    jsonb_build_object('kind', 'subject', 'id', repeat('x', 101),
+      'fields', '{"name":"long id"}'::jsonb,
+      'clock', '{"name":"000000000000400-0000-l"}'::jsonb),
+    jsonb_build_object('kind', 'subject', 'id', 'ok',
+      'fields', '{"name":"fine"}'::jsonb,
+      'clock', '{"name":"000000000000400-0000-l"}'::jsonb)
+  )) <> 1 then raise exception 'oversized records were not skipped'; end if;
+  perform public.push_records('laptop-secret-0123456789abcdef0123456789', '[
+    {"kind":"subject","id":"ok","fields":{"name":"gone"},"clock":{"name":"000000000000500-0000-l"}}]');
+end $$;
+
 -- Pull pages by sequence number. The phone's subject from before pairing
 -- went with its old space; the app pushes it again after joining.
 do $$
@@ -129,9 +146,9 @@ begin
   from public.pull_records('laptop-secret-0123456789abcdef0123456789', 0, 1);
   select count(*) into n
   from public.pull_records('laptop-secret-0123456789abcdef0123456789', first_page);
-  if n <> 1 then raise exception 'second page has % rows', n; end if;
-  if (select count(*) from public.pull_records('laptop-secret-0123456789abcdef0123456789', 0)) <> 2 then
-    raise exception 'space should hold r1 and s1';
+  if n <> 2 then raise exception 'second page has % rows', n; end if;
+  if (select count(*) from public.pull_records('laptop-secret-0123456789abcdef0123456789', 0)) <> 3 then
+    raise exception 'space should hold r1, ok and s1';
   end if;
 end $$;
 

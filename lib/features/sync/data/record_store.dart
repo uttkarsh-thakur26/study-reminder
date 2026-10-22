@@ -96,6 +96,9 @@ class RecordStore {
 
   _Kind? _kind(String name) => _kinds.where((k) => k.name == name).firstOrNull;
 
+  /// The record kinds this version of the app stores.
+  List<String> get kinds => [for (final k in _kinds) k.name];
+
   /// Up to [limit] records with local edits not yet on the server.
   Future<List<PendingPush>> dirty({int limit = 200}) async {
     final out = <PendingPush>[];
@@ -108,7 +111,7 @@ class RecordStore {
               kind: kind.name,
               id: row.id,
               fields: row.fields,
-              clock: FieldClock.decode(row.clock),
+              clock: _sentClock(row),
             ),
             row.hlc,
           ),
@@ -116,6 +119,17 @@ class RecordStore {
       }
     }
     return out;
+  }
+
+  /// The stamps of the fields being sent. A stamp kept for a field this
+  /// version does not know stays here: sent without its value, it would
+  /// blank that field for newer devices.
+  static FieldClock _sentClock(_Row row) {
+    final clock = FieldClock.decode(row.clock);
+    return FieldClock({
+      for (final e in clock.stamps.entries)
+        if (row.fields.containsKey(e.key)) e.key: e.value,
+    });
   }
 
   /// Marks pushed records clean, unless they were edited again meanwhile.
