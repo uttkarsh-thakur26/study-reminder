@@ -73,9 +73,15 @@ class _SyncCoordinatorState extends ConsumerState<SyncCoordinator> {
         .customSelect(
           'SELECT (SELECT COUNT(*) FROM reminders WHERE dirty = 1)'
           ' + (SELECT COUNT(*) FROM subjects WHERE dirty = 1)'
-          ' + (SELECT COUNT(*) FROM occurrences WHERE dirty = 1) AS n',
+          ' + (SELECT COUNT(*) FROM occurrences WHERE dirty = 1)'
+          ' + (SELECT COUNT(*) FROM focus_sessions WHERE dirty = 1) AS n',
           variables: const <Variable<Object>>[],
-          readsFrom: {db.reminders, db.subjects, db.occurrences},
+          readsFrom: {
+            db.reminders,
+            db.subjects,
+            db.occurrences,
+            db.focusSessions,
+          },
         )
         .watchSingle()
         .map((row) => row.read<int>('n'));

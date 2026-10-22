@@ -1,0 +1,19 @@
+name: focus_guard
+description: Focus mode on Android for Study Reminder. Do Not Disturb, app blocking and flip to focus.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.5
+  flutter: '>=3.38.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.uttkarsh.focus_guard
+        pluginClass: FocusGuardPlugin

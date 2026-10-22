@@ -44,6 +44,24 @@ class FakeSyncApi implements SyncApi {
 
   int get spaceCount => _spaces.length;
 
+  /// Every wake: the push tokens it reached and the focus session it sent.
+  final wakes =
+      <
+        (
+          List<String> tokens,
+          Map<String, Object?>? focus,
+          Map<String, Object?>? notice,
+        )
+      >[];
+
+  /// The push token the server has for [secret]'s device.
+  String? pushTokenOf(String secret) => _devices[secret]?.pushToken;
+
+  int tokenUpdates = 0;
+
+  /// Makes [setPushToken] fail, as a server without push does.
+  bool failPushTokens = false;
+
   /// Forgets every device and record, as if the project were reset.
   void reset() {
     _devices.clear();
@@ -227,6 +245,30 @@ class FakeSyncApi implements SyncApi {
   }
 
   @override
+  Future<void> setPushToken(String secret, String? token) async {
+    if (failPushTokens) throw const SyncUnavailable('no set_push_token');
+    tokenUpdates++;
+    _device(secret).pushToken = token == null || token.isEmpty ? null : token;
+  }
+
+  @override
+  Future<void> wakeOtherDevices(
+    String secret, {
+    Map<String, Object?>? notice,
+  }) async {
+    final me = _device(secret);
+    wakes.add((
+      [
+        for (final d in _devices.values)
+          if (d.space == me.space && d != me && d.pushToken != null)
+            d.pushToken!,
+      ],
+      _spaces[me.space]?['focus/phone']?.fields,
+      notice,
+    ));
+  }
+
+  @override
   Stream<void> changes(String spaceId) =>
       (_pings[spaceId] ??= StreamController<void>.broadcast()).stream;
 
@@ -245,6 +287,7 @@ class _Device {
   String space;
   String name;
   final bool isPhone;
+  String? pushToken;
 }
 
 class _Stored {

@@ -2138,6 +2138,753 @@ class OccurrencesCompanion extends UpdateCompanion<OccurrenceRow> {
   }
 }
 
+class $FocusSessionsTable extends FocusSessions
+    with TableInfo<$FocusSessionsTable, FocusSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FocusSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _hlcMeta = const VerificationMeta('hlc');
+  @override
+  late final GeneratedColumn<String> hlc = GeneratedColumn<String>(
+    'hlc',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldClockMeta = const VerificationMeta(
+    'fieldClock',
+  );
+  @override
+  late final GeneratedColumn<String> fieldClock = GeneratedColumn<String>(
+    'field_clock',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _activeMeta = const VerificationMeta('active');
+  @override
+  late final GeneratedColumn<bool> active = GeneratedColumn<bool>(
+    'active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<int> startedAt = GeneratedColumn<int>(
+    'started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _endsAtMeta = const VerificationMeta('endsAt');
+  @override
+  late final GeneratedColumn<int> endsAt = GeneratedColumn<int>(
+    'ends_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _targetMeta = const VerificationMeta('target');
+  @override
+  late final GeneratedColumn<String> target = GeneratedColumn<String>(
+    'target',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('both'),
+  );
+  static const VerificationMeta _blockAppsMeta = const VerificationMeta(
+    'blockApps',
+  );
+  @override
+  late final GeneratedColumn<bool> blockApps = GeneratedColumn<bool>(
+    'block_apps',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("block_apps" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _quietMeta = const VerificationMeta('quiet');
+  @override
+  late final GeneratedColumn<bool> quiet = GeneratedColumn<bool>(
+    'quiet',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("quiet" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _strictMeta = const VerificationMeta('strict');
+  @override
+  late final GeneratedColumn<bool> strict = GeneratedColumn<bool>(
+    'strict',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("strict" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _startedByMeta = const VerificationMeta(
+    'startedBy',
+  );
+  @override
+  late final GeneratedColumn<String> startedBy = GeneratedColumn<String>(
+    'started_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    hlc,
+    fieldClock,
+    deleted,
+    dirty,
+    id,
+    active,
+    startedAt,
+    endsAt,
+    target,
+    blockApps,
+    quiet,
+    strict,
+    startedBy,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'focus_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FocusSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('hlc')) {
+      context.handle(
+        _hlcMeta,
+        hlc.isAcceptableOrUnknown(data['hlc']!, _hlcMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hlcMeta);
+    }
+    if (data.containsKey('field_clock')) {
+      context.handle(
+        _fieldClockMeta,
+        fieldClock.isAcceptableOrUnknown(data['field_clock']!, _fieldClockMeta),
+      );
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('active')) {
+      context.handle(
+        _activeMeta,
+        active.isAcceptableOrUnknown(data['active']!, _activeMeta),
+      );
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    }
+    if (data.containsKey('ends_at')) {
+      context.handle(
+        _endsAtMeta,
+        endsAt.isAcceptableOrUnknown(data['ends_at']!, _endsAtMeta),
+      );
+    }
+    if (data.containsKey('target')) {
+      context.handle(
+        _targetMeta,
+        target.isAcceptableOrUnknown(data['target']!, _targetMeta),
+      );
+    }
+    if (data.containsKey('block_apps')) {
+      context.handle(
+        _blockAppsMeta,
+        blockApps.isAcceptableOrUnknown(data['block_apps']!, _blockAppsMeta),
+      );
+    }
+    if (data.containsKey('quiet')) {
+      context.handle(
+        _quietMeta,
+        quiet.isAcceptableOrUnknown(data['quiet']!, _quietMeta),
+      );
+    }
+    if (data.containsKey('strict')) {
+      context.handle(
+        _strictMeta,
+        strict.isAcceptableOrUnknown(data['strict']!, _strictMeta),
+      );
+    }
+    if (data.containsKey('started_by')) {
+      context.handle(
+        _startedByMeta,
+        startedBy.isAcceptableOrUnknown(data['started_by']!, _startedByMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FocusSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FocusSessionRow(
+      hlc: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hlc'],
+      )!,
+      fieldClock: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field_clock'],
+      )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      active: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}active'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}started_at'],
+      ),
+      endsAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ends_at'],
+      ),
+      target: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target'],
+      )!,
+      blockApps: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}block_apps'],
+      )!,
+      quiet: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}quiet'],
+      )!,
+      strict: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}strict'],
+      )!,
+      startedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}started_by'],
+      )!,
+    );
+  }
+
+  @override
+  $FocusSessionsTable createAlias(String alias) {
+    return $FocusSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
+  /// Newest edit stamp across all fields (packed HLC).
+  final String hlc;
+
+  /// JSON map of field name to packed HLC, see `FieldClock`.
+  final String fieldClock;
+  final bool deleted;
+
+  /// Changed locally and not yet pushed to the server.
+  final bool dirty;
+  final String id;
+  final bool active;
+  final int? startedAt;
+  final int? endsAt;
+  final String target;
+  final bool blockApps;
+  final bool quiet;
+  final bool strict;
+  final String startedBy;
+  const FocusSessionRow({
+    required this.hlc,
+    required this.fieldClock,
+    required this.deleted,
+    required this.dirty,
+    required this.id,
+    required this.active,
+    this.startedAt,
+    this.endsAt,
+    required this.target,
+    required this.blockApps,
+    required this.quiet,
+    required this.strict,
+    required this.startedBy,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['hlc'] = Variable<String>(hlc);
+    map['field_clock'] = Variable<String>(fieldClock);
+    map['deleted'] = Variable<bool>(deleted);
+    map['dirty'] = Variable<bool>(dirty);
+    map['id'] = Variable<String>(id);
+    map['active'] = Variable<bool>(active);
+    if (!nullToAbsent || startedAt != null) {
+      map['started_at'] = Variable<int>(startedAt);
+    }
+    if (!nullToAbsent || endsAt != null) {
+      map['ends_at'] = Variable<int>(endsAt);
+    }
+    map['target'] = Variable<String>(target);
+    map['block_apps'] = Variable<bool>(blockApps);
+    map['quiet'] = Variable<bool>(quiet);
+    map['strict'] = Variable<bool>(strict);
+    map['started_by'] = Variable<String>(startedBy);
+    return map;
+  }
+
+  FocusSessionsCompanion toCompanion(bool nullToAbsent) {
+    return FocusSessionsCompanion(
+      hlc: Value(hlc),
+      fieldClock: Value(fieldClock),
+      deleted: Value(deleted),
+      dirty: Value(dirty),
+      id: Value(id),
+      active: Value(active),
+      startedAt: startedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startedAt),
+      endsAt: endsAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endsAt),
+      target: Value(target),
+      blockApps: Value(blockApps),
+      quiet: Value(quiet),
+      strict: Value(strict),
+      startedBy: Value(startedBy),
+    );
+  }
+
+  factory FocusSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FocusSessionRow(
+      hlc: serializer.fromJson<String>(json['hlc']),
+      fieldClock: serializer.fromJson<String>(json['fieldClock']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+      id: serializer.fromJson<String>(json['id']),
+      active: serializer.fromJson<bool>(json['active']),
+      startedAt: serializer.fromJson<int?>(json['startedAt']),
+      endsAt: serializer.fromJson<int?>(json['endsAt']),
+      target: serializer.fromJson<String>(json['target']),
+      blockApps: serializer.fromJson<bool>(json['blockApps']),
+      quiet: serializer.fromJson<bool>(json['quiet']),
+      strict: serializer.fromJson<bool>(json['strict']),
+      startedBy: serializer.fromJson<String>(json['startedBy']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'hlc': serializer.toJson<String>(hlc),
+      'fieldClock': serializer.toJson<String>(fieldClock),
+      'deleted': serializer.toJson<bool>(deleted),
+      'dirty': serializer.toJson<bool>(dirty),
+      'id': serializer.toJson<String>(id),
+      'active': serializer.toJson<bool>(active),
+      'startedAt': serializer.toJson<int?>(startedAt),
+      'endsAt': serializer.toJson<int?>(endsAt),
+      'target': serializer.toJson<String>(target),
+      'blockApps': serializer.toJson<bool>(blockApps),
+      'quiet': serializer.toJson<bool>(quiet),
+      'strict': serializer.toJson<bool>(strict),
+      'startedBy': serializer.toJson<String>(startedBy),
+    };
+  }
+
+  FocusSessionRow copyWith({
+    String? hlc,
+    String? fieldClock,
+    bool? deleted,
+    bool? dirty,
+    String? id,
+    bool? active,
+    Value<int?> startedAt = const Value.absent(),
+    Value<int?> endsAt = const Value.absent(),
+    String? target,
+    bool? blockApps,
+    bool? quiet,
+    bool? strict,
+    String? startedBy,
+  }) => FocusSessionRow(
+    hlc: hlc ?? this.hlc,
+    fieldClock: fieldClock ?? this.fieldClock,
+    deleted: deleted ?? this.deleted,
+    dirty: dirty ?? this.dirty,
+    id: id ?? this.id,
+    active: active ?? this.active,
+    startedAt: startedAt.present ? startedAt.value : this.startedAt,
+    endsAt: endsAt.present ? endsAt.value : this.endsAt,
+    target: target ?? this.target,
+    blockApps: blockApps ?? this.blockApps,
+    quiet: quiet ?? this.quiet,
+    strict: strict ?? this.strict,
+    startedBy: startedBy ?? this.startedBy,
+  );
+  FocusSessionRow copyWithCompanion(FocusSessionsCompanion data) {
+    return FocusSessionRow(
+      hlc: data.hlc.present ? data.hlc.value : this.hlc,
+      fieldClock: data.fieldClock.present
+          ? data.fieldClock.value
+          : this.fieldClock,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+      id: data.id.present ? data.id.value : this.id,
+      active: data.active.present ? data.active.value : this.active,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endsAt: data.endsAt.present ? data.endsAt.value : this.endsAt,
+      target: data.target.present ? data.target.value : this.target,
+      blockApps: data.blockApps.present ? data.blockApps.value : this.blockApps,
+      quiet: data.quiet.present ? data.quiet.value : this.quiet,
+      strict: data.strict.present ? data.strict.value : this.strict,
+      startedBy: data.startedBy.present ? data.startedBy.value : this.startedBy,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FocusSessionRow(')
+          ..write('hlc: $hlc, ')
+          ..write('fieldClock: $fieldClock, ')
+          ..write('deleted: $deleted, ')
+          ..write('dirty: $dirty, ')
+          ..write('id: $id, ')
+          ..write('active: $active, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endsAt: $endsAt, ')
+          ..write('target: $target, ')
+          ..write('blockApps: $blockApps, ')
+          ..write('quiet: $quiet, ')
+          ..write('strict: $strict, ')
+          ..write('startedBy: $startedBy')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    hlc,
+    fieldClock,
+    deleted,
+    dirty,
+    id,
+    active,
+    startedAt,
+    endsAt,
+    target,
+    blockApps,
+    quiet,
+    strict,
+    startedBy,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FocusSessionRow &&
+          other.hlc == this.hlc &&
+          other.fieldClock == this.fieldClock &&
+          other.deleted == this.deleted &&
+          other.dirty == this.dirty &&
+          other.id == this.id &&
+          other.active == this.active &&
+          other.startedAt == this.startedAt &&
+          other.endsAt == this.endsAt &&
+          other.target == this.target &&
+          other.blockApps == this.blockApps &&
+          other.quiet == this.quiet &&
+          other.strict == this.strict &&
+          other.startedBy == this.startedBy);
+}
+
+class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
+  final Value<String> hlc;
+  final Value<String> fieldClock;
+  final Value<bool> deleted;
+  final Value<bool> dirty;
+  final Value<String> id;
+  final Value<bool> active;
+  final Value<int?> startedAt;
+  final Value<int?> endsAt;
+  final Value<String> target;
+  final Value<bool> blockApps;
+  final Value<bool> quiet;
+  final Value<bool> strict;
+  final Value<String> startedBy;
+  final Value<int> rowid;
+  const FocusSessionsCompanion({
+    this.hlc = const Value.absent(),
+    this.fieldClock = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.id = const Value.absent(),
+    this.active = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endsAt = const Value.absent(),
+    this.target = const Value.absent(),
+    this.blockApps = const Value.absent(),
+    this.quiet = const Value.absent(),
+    this.strict = const Value.absent(),
+    this.startedBy = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FocusSessionsCompanion.insert({
+    required String hlc,
+    this.fieldClock = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.dirty = const Value.absent(),
+    required String id,
+    this.active = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endsAt = const Value.absent(),
+    this.target = const Value.absent(),
+    this.blockApps = const Value.absent(),
+    this.quiet = const Value.absent(),
+    this.strict = const Value.absent(),
+    this.startedBy = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : hlc = Value(hlc),
+       id = Value(id);
+  static Insertable<FocusSessionRow> custom({
+    Expression<String>? hlc,
+    Expression<String>? fieldClock,
+    Expression<bool>? deleted,
+    Expression<bool>? dirty,
+    Expression<String>? id,
+    Expression<bool>? active,
+    Expression<int>? startedAt,
+    Expression<int>? endsAt,
+    Expression<String>? target,
+    Expression<bool>? blockApps,
+    Expression<bool>? quiet,
+    Expression<bool>? strict,
+    Expression<String>? startedBy,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (hlc != null) 'hlc': hlc,
+      if (fieldClock != null) 'field_clock': fieldClock,
+      if (deleted != null) 'deleted': deleted,
+      if (dirty != null) 'dirty': dirty,
+      if (id != null) 'id': id,
+      if (active != null) 'active': active,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endsAt != null) 'ends_at': endsAt,
+      if (target != null) 'target': target,
+      if (blockApps != null) 'block_apps': blockApps,
+      if (quiet != null) 'quiet': quiet,
+      if (strict != null) 'strict': strict,
+      if (startedBy != null) 'started_by': startedBy,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FocusSessionsCompanion copyWith({
+    Value<String>? hlc,
+    Value<String>? fieldClock,
+    Value<bool>? deleted,
+    Value<bool>? dirty,
+    Value<String>? id,
+    Value<bool>? active,
+    Value<int?>? startedAt,
+    Value<int?>? endsAt,
+    Value<String>? target,
+    Value<bool>? blockApps,
+    Value<bool>? quiet,
+    Value<bool>? strict,
+    Value<String>? startedBy,
+    Value<int>? rowid,
+  }) {
+    return FocusSessionsCompanion(
+      hlc: hlc ?? this.hlc,
+      fieldClock: fieldClock ?? this.fieldClock,
+      deleted: deleted ?? this.deleted,
+      dirty: dirty ?? this.dirty,
+      id: id ?? this.id,
+      active: active ?? this.active,
+      startedAt: startedAt ?? this.startedAt,
+      endsAt: endsAt ?? this.endsAt,
+      target: target ?? this.target,
+      blockApps: blockApps ?? this.blockApps,
+      quiet: quiet ?? this.quiet,
+      strict: strict ?? this.strict,
+      startedBy: startedBy ?? this.startedBy,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (hlc.present) {
+      map['hlc'] = Variable<String>(hlc.value);
+    }
+    if (fieldClock.present) {
+      map['field_clock'] = Variable<String>(fieldClock.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (active.present) {
+      map['active'] = Variable<bool>(active.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<int>(startedAt.value);
+    }
+    if (endsAt.present) {
+      map['ends_at'] = Variable<int>(endsAt.value);
+    }
+    if (target.present) {
+      map['target'] = Variable<String>(target.value);
+    }
+    if (blockApps.present) {
+      map['block_apps'] = Variable<bool>(blockApps.value);
+    }
+    if (quiet.present) {
+      map['quiet'] = Variable<bool>(quiet.value);
+    }
+    if (strict.present) {
+      map['strict'] = Variable<bool>(strict.value);
+    }
+    if (startedBy.present) {
+      map['started_by'] = Variable<String>(startedBy.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FocusSessionsCompanion(')
+          ..write('hlc: $hlc, ')
+          ..write('fieldClock: $fieldClock, ')
+          ..write('deleted: $deleted, ')
+          ..write('dirty: $dirty, ')
+          ..write('id: $id, ')
+          ..write('active: $active, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endsAt: $endsAt, ')
+          ..write('target: $target, ')
+          ..write('blockApps: $blockApps, ')
+          ..write('quiet: $quiet, ')
+          ..write('strict: $strict, ')
+          ..write('startedBy: $startedBy, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalSettingsTable extends LocalSettings
     with TableInfo<$LocalSettingsTable, LocalSetting> {
   @override
@@ -2352,6 +3099,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SubjectsTable subjects = $SubjectsTable(this);
   late final $RemindersTable reminders = $RemindersTable(this);
   late final $OccurrencesTable occurrences = $OccurrencesTable(this);
+  late final $FocusSessionsTable focusSessions = $FocusSessionsTable(this);
   late final $LocalSettingsTable localSettings = $LocalSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -2361,6 +3109,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     subjects,
     reminders,
     occurrences,
+    focusSessions,
     localSettings,
   ];
 }
@@ -3408,6 +4157,369 @@ typedef $$OccurrencesTableProcessedTableManager =
       OccurrenceRow,
       PrefetchHooks Function()
     >;
+typedef $$FocusSessionsTableCreateCompanionBuilder =
+    FocusSessionsCompanion Function({
+      required String hlc,
+      Value<String> fieldClock,
+      Value<bool> deleted,
+      Value<bool> dirty,
+      required String id,
+      Value<bool> active,
+      Value<int?> startedAt,
+      Value<int?> endsAt,
+      Value<String> target,
+      Value<bool> blockApps,
+      Value<bool> quiet,
+      Value<bool> strict,
+      Value<String> startedBy,
+      Value<int> rowid,
+    });
+typedef $$FocusSessionsTableUpdateCompanionBuilder =
+    FocusSessionsCompanion Function({
+      Value<String> hlc,
+      Value<String> fieldClock,
+      Value<bool> deleted,
+      Value<bool> dirty,
+      Value<String> id,
+      Value<bool> active,
+      Value<int?> startedAt,
+      Value<int?> endsAt,
+      Value<String> target,
+      Value<bool> blockApps,
+      Value<bool> quiet,
+      Value<bool> strict,
+      Value<String> startedBy,
+      Value<int> rowid,
+    });
+
+class $$FocusSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get hlc => $composableBuilder(
+    column: $table.hlc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get active => $composableBuilder(
+    column: $table.active,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endsAt => $composableBuilder(
+    column: $table.endsAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get blockApps => $composableBuilder(
+    column: $table.blockApps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get quiet => $composableBuilder(
+    column: $table.quiet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get strict => $composableBuilder(
+    column: $table.strict,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get startedBy => $composableBuilder(
+    column: $table.startedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FocusSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get hlc => $composableBuilder(
+    column: $table.hlc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get active => $composableBuilder(
+    column: $table.active,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endsAt => $composableBuilder(
+    column: $table.endsAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get blockApps => $composableBuilder(
+    column: $table.blockApps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get quiet => $composableBuilder(
+    column: $table.quiet,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get strict => $composableBuilder(
+    column: $table.strict,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get startedBy => $composableBuilder(
+    column: $table.startedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FocusSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get hlc =>
+      $composableBuilder(column: $table.hlc, builder: (column) => column);
+
+  GeneratedColumn<String> get fieldClock => $composableBuilder(
+    column: $table.fieldClock,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get active =>
+      $composableBuilder(column: $table.active, builder: (column) => column);
+
+  GeneratedColumn<int> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get endsAt =>
+      $composableBuilder(column: $table.endsAt, builder: (column) => column);
+
+  GeneratedColumn<String> get target =>
+      $composableBuilder(column: $table.target, builder: (column) => column);
+
+  GeneratedColumn<bool> get blockApps =>
+      $composableBuilder(column: $table.blockApps, builder: (column) => column);
+
+  GeneratedColumn<bool> get quiet =>
+      $composableBuilder(column: $table.quiet, builder: (column) => column);
+
+  GeneratedColumn<bool> get strict =>
+      $composableBuilder(column: $table.strict, builder: (column) => column);
+
+  GeneratedColumn<String> get startedBy =>
+      $composableBuilder(column: $table.startedBy, builder: (column) => column);
+}
+
+class $$FocusSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FocusSessionsTable,
+          FocusSessionRow,
+          $$FocusSessionsTableFilterComposer,
+          $$FocusSessionsTableOrderingComposer,
+          $$FocusSessionsTableAnnotationComposer,
+          $$FocusSessionsTableCreateCompanionBuilder,
+          $$FocusSessionsTableUpdateCompanionBuilder,
+          (
+            FocusSessionRow,
+            BaseReferences<_$AppDatabase, $FocusSessionsTable, FocusSessionRow>,
+          ),
+          FocusSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$FocusSessionsTableTableManager(_$AppDatabase db, $FocusSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FocusSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FocusSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FocusSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> hlc = const Value.absent(),
+                Value<String> fieldClock = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<bool> active = const Value.absent(),
+                Value<int?> startedAt = const Value.absent(),
+                Value<int?> endsAt = const Value.absent(),
+                Value<String> target = const Value.absent(),
+                Value<bool> blockApps = const Value.absent(),
+                Value<bool> quiet = const Value.absent(),
+                Value<bool> strict = const Value.absent(),
+                Value<String> startedBy = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FocusSessionsCompanion(
+                hlc: hlc,
+                fieldClock: fieldClock,
+                deleted: deleted,
+                dirty: dirty,
+                id: id,
+                active: active,
+                startedAt: startedAt,
+                endsAt: endsAt,
+                target: target,
+                blockApps: blockApps,
+                quiet: quiet,
+                strict: strict,
+                startedBy: startedBy,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String hlc,
+                Value<String> fieldClock = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                required String id,
+                Value<bool> active = const Value.absent(),
+                Value<int?> startedAt = const Value.absent(),
+                Value<int?> endsAt = const Value.absent(),
+                Value<String> target = const Value.absent(),
+                Value<bool> blockApps = const Value.absent(),
+                Value<bool> quiet = const Value.absent(),
+                Value<bool> strict = const Value.absent(),
+                Value<String> startedBy = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FocusSessionsCompanion.insert(
+                hlc: hlc,
+                fieldClock: fieldClock,
+                deleted: deleted,
+                dirty: dirty,
+                id: id,
+                active: active,
+                startedAt: startedAt,
+                endsAt: endsAt,
+                target: target,
+                blockApps: blockApps,
+                quiet: quiet,
+                strict: strict,
+                startedBy: startedBy,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FocusSessionsTable, FocusSessionRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $FocusSessionsTable,
+                    FocusSessionRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FocusSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FocusSessionsTable,
+      FocusSessionRow,
+      $$FocusSessionsTableFilterComposer,
+      $$FocusSessionsTableOrderingComposer,
+      $$FocusSessionsTableAnnotationComposer,
+      $$FocusSessionsTableCreateCompanionBuilder,
+      $$FocusSessionsTableUpdateCompanionBuilder,
+      (
+        FocusSessionRow,
+        BaseReferences<_$AppDatabase, $FocusSessionsTable, FocusSessionRow>,
+      ),
+      FocusSessionRow,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalSettingsTableCreateCompanionBuilder =
     LocalSettingsCompanion Function({
       required String key,
@@ -3565,6 +4677,8 @@ class $AppDatabaseManager {
       $$RemindersTableTableManager(_db, _db.reminders);
   $$OccurrencesTableTableManager get occurrences =>
       $$OccurrencesTableTableManager(_db, _db.occurrences);
+  $$FocusSessionsTableTableManager get focusSessions =>
+      $$FocusSessionsTableTableManager(_db, _db.focusSessions);
   $$LocalSettingsTableTableManager get localSettings =>
       $$LocalSettingsTableTableManager(_db, _db.localSettings);
 }

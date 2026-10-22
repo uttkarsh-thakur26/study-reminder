@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/sync/hlc.dart';
+import '../../focus/domain/focus_session.dart';
+import '../../reminders/domain/reminder.dart';
 import '../data/record_store.dart';
 import '../data/sync_api.dart';
 import '../domain/sync_record.dart';
@@ -24,6 +26,10 @@ abstract final class SyncKeys {
   /// The record kinds the cursor was moved with; see
   /// [SyncService._pullAgainIfKindsChanged].
   static const kinds = 'sync_kinds';
+
+  /// The push token last given to the server, with the space it was given
+  /// in; see [SyncService._sendPushToken].
+  static const pushTokenSent = 'sync_push_token_sent';
 }
 
 /// Keeps this device's records in step with the other devices in its space,
@@ -39,6 +45,7 @@ class SyncService {
     required this.api,
     required this.isPhone,
     required this.deviceName,
+    this._pushToken,
     DateTime Function()? now,
   }) : _db = db,
        _store = RecordStore(db, clock),
@@ -52,6 +59,9 @@ class SyncService {
 
   final AppDatabase _db;
   final RecordStore _store;
+
+  /// This phone's push token, so the others can wake it for focus sessions.
+  final Future<String?> Function()? _pushToken;
   final DateTime Function() _now;
 
   Future<void> _last = Future.value();
@@ -120,14 +130,19 @@ class SyncService {
   Future<int> _exchangeIn(String? space, String secret) async {
     await _pullAgainIfKindsChanged(space);
 
+    var pushedFocus = false;
     // Bounded, so rows edited faster than they upload cannot keep this going.
     for (var round = 0; round < 50; round++) {
       final batch = await _store.dirty();
       if (batch.isEmpty) break;
       await api.push(secret, [for (final p in batch) p.record]);
       await _inSpace(space, () => _store.markPushed(batch));
+      pushedFocus |= _hasFocus(batch);
       if (batch.length < 200) break;
     }
+    // Right away: the server has the session now, and a failed pull below
+    // must not cost the wake, which nothing would send again.
+    if (pushedFocus) await _wakeOthers(secret);
 
     var received = 0;
     var cursor =
@@ -150,19 +165,83 @@ class SyncService {
     if (leftover.isNotEmpty) {
       await api.push(secret, [for (final p in leftover) p.record]);
       await _inSpace(space, () => _store.markPushed(leftover));
+      if (_hasFocus(leftover)) await _wakeOthers(secret);
     }
     await _db.writeSetting(
       SyncKeys.lastSynced,
       _now().toUtc().toIso8601String(),
     );
+    await _sendPushToken(secret, space);
     return received;
+  }
+
+  /// The phone's session: only the phone can be woken, and its app may be
+  /// closed.
+  static bool _hasFocus(List<PendingPush> batch) => batch.any(
+    (p) =>
+        p.record.kind == RecordKinds.focus &&
+        p.record.id == FocusSession.idFor(DeviceKind.phone),
+  );
+
+  /// A phone with the app closed only hears about a focus session this way;
+  /// the next regular sync catches up if it fails.
+  Future<void> _wakeOthers(String secret) async {
+    try {
+      await api.wakeOtherDevices(secret);
+    } on SyncUnavailable catch (e) {
+      debugPrint('Could not wake the other devices: $e');
+    }
+  }
+
+  /// Hands [notice] to the other devices right away, for the phone to show.
+  /// Does not wait for a sync in progress, and gives up after [timeout]:
+  /// used while the app quits.
+  Future<void> tellOthers(
+    Map<String, Object?> notice, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final secret = await _db.readSetting(SyncKeys.secret);
+    if (secret == null || await spaceId() == null) return;
+    try {
+      await api.wakeOtherDevices(secret, notice: notice).timeout(timeout);
+    } on Object catch (e) {
+      debugPrint('Could not tell the other devices: $e');
+    }
+  }
+
+  /// Gives the server this phone's push token. Sent again when the token
+  /// changes or the device moves, since the server may then have none.
+  Future<void> _sendPushToken(String secret, String? space) async {
+    final String? token;
+    try {
+      token = await _pushToken?.call();
+    } on Object catch (e) {
+      debugPrint('No push token: $e');
+      return;
+    }
+    if (token == null || token.isEmpty) return;
+    final sent = '$space $token';
+    if (await _db.readSetting(SyncKeys.pushTokenSent) == sent) return;
+    try {
+      await api.setPushToken(secret, token);
+    } on SyncUnavailable catch (e) {
+      // Also when the server does not have push yet. Tried again next sync.
+      debugPrint('Could not send the push token: $e');
+      return;
+    }
+    await _db.writeSetting(SyncKeys.pushTokenSent, sent);
   }
 
   /// Records of a kind this version does not know are skipped while the
   /// cursor moves past them. Once an update teaches the app a new kind,
   /// pull everything again so the skipped ones arrive.
+  /// Moves on when records of a known kind change shape, so the ones an
+  /// older version skipped are pulled again. 2: each device has its own
+  /// focus session.
+  static const _layout = 2;
+
   Future<void> _pullAgainIfKindsChanged(String? space) async {
-    final kinds = _store.kinds.join(',');
+    final kinds = '${_store.kinds.join(',')};$_layout';
     if (await _db.readSetting(SyncKeys.kinds) == kinds) return;
     await _inSpace(space, () async {
       await _db.writeSetting(SyncKeys.cursor, '0');

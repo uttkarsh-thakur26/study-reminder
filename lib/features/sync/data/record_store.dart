@@ -4,6 +4,8 @@ import '../../../core/db/app_database.dart';
 import '../../../core/sync/field_clock.dart';
 import '../../../core/sync/hlc.dart';
 import '../../../core/sync/stamped_write.dart';
+import '../../focus/data/focus_repository.dart';
+import '../../focus/domain/focus_session.dart';
 import '../../reminders/data/reminder_repository.dart';
 import '../../subjects/data/subject_repository.dart';
 import '../domain/sync_record.dart';
@@ -86,6 +88,40 @@ class RecordStore {
         write: (id, w, dirty) => _db
             .into(_db.occurrences)
             .insertOnConflictUpdate(occurrenceCompanion(id, w, dirty: dirty)),
+      ),
+      _Kind(
+        name: RecordKinds.focus,
+        table: 'focus_sessions',
+        dirty: (limit) async => [
+          for (final r
+              in await (_db.select(_db.focusSessions)
+                    ..where((t) => t.dirty.equals(true))
+                    ..limit(limit))
+                  .get())
+            _Row(r.id, focusSessionFromRow(r).toFields(), r.fieldClock, r.hlc),
+        ],
+        byId: (id) async {
+          final r = await (_db.select(
+            _db.focusSessions,
+          )..where((t) => t.id.equals(id))).getSingleOrNull();
+          return r == null
+              ? null
+              : _Row(
+                  r.id,
+                  focusSessionFromRow(r).toFields(),
+                  r.fieldClock,
+                  r.hlc,
+                );
+        },
+        // Only the phone's and the laptop's sessions are stored.
+        write: (id, w, dirty) async {
+          if (!FocusSession.ids.contains(id)) return;
+          await _db
+              .into(_db.focusSessions)
+              .insertOnConflictUpdate(
+                focusSessionCompanion(id, w, dirty: dirty),
+              );
+        },
       ),
     ];
   }
@@ -209,6 +245,7 @@ class RecordStore {
   TableInfo _tableOf(_Kind kind) => switch (kind.name) {
     RecordKinds.subject => _db.subjects,
     RecordKinds.reminder => _db.reminders,
+    RecordKinds.focus => _db.focusSessions,
     _ => _db.occurrences,
   };
 }

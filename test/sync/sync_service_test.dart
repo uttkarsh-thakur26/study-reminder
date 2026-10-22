@@ -5,6 +5,7 @@ import 'package:study_reminder/core/db/app_database.dart';
 import 'package:study_reminder/core/sync/field_clock.dart';
 import 'package:study_reminder/core/sync/hlc.dart';
 import 'package:study_reminder/core/time/calendar_date.dart';
+import 'package:study_reminder/features/focus/data/focus_repository.dart';
 import 'package:study_reminder/features/reminders/data/reminder_repository.dart';
 import 'package:study_reminder/features/reminders/domain/recurrence.dart';
 import 'package:study_reminder/features/reminders/domain/reminder.dart';
@@ -33,19 +34,25 @@ class _Device {
     );
     reminders = ReminderRepository(db, clock);
     subjects = SubjectRepository(db, clock);
+    focus = FocusRepository(db, clock);
     sync = SyncService(
       db: db,
       clock: clock,
       api: api,
       isPhone: phone,
       deviceName: name,
+      pushToken: () async => token,
     );
   }
+
+  /// The push token this device has, if any.
+  String? token;
 
   late final AppDatabase db;
   late final HlcClock clock;
   late final ReminderRepository reminders;
   late final SubjectRepository subjects;
+  late final FocusRepository focus;
   late final SyncService sync;
 
   Future<String> title(String id) async => (await reminders.byId(id))!.title;
@@ -432,5 +439,153 @@ void main() {
     final sent = api.storedClock(fresh, RecordKinds.subject, 's1')!;
     expect(sent.keys, isNot(contains('icon')));
     expect(sent.keys, contains('name'));
+  });
+
+  group('focus', () {
+    const both = {DeviceKind.phone, DeviceKind.laptop};
+    Future<void> startOn(_Device d, {Set<DeviceKind> on = both}) =>
+        d.focus.start(
+          on: on,
+          length: const Duration(minutes: 25),
+          blockApps: true,
+          quiet: true,
+          strict: false,
+          startedBy: d == laptop ? 'Laptop' : 'Pixel',
+          now: DateTime.fromMillisecondsSinceEpoch(tick(), isUtc: true),
+        );
+
+    test('starting on the laptop wakes the phone with the session', () async {
+      phone.token = 'phone-token';
+      await pair();
+      expect(api.wakes, isEmpty);
+
+      await startOn(laptop);
+      await laptop.sync.sync();
+      expect(api.wakes, hasLength(1));
+      final (tokens, sent, notice) = api.wakes.single;
+      expect(tokens, ['phone-token']);
+      expect(sent?['active'], isTrue);
+      expect(sent?['started_by'], 'Laptop');
+      expect(notice, isNull);
+
+      await phone.sync.sync();
+      final there = await phone.focus.current();
+      for (final s in [there.phone, there.laptop]) {
+        expect(s.active, isTrue);
+        expect(s.startedBy, 'Laptop');
+        expect(s.length, const Duration(minutes: 25));
+      }
+      expect(there.phone.sameAs(there.laptop), isTrue);
+
+      // Stopped on the phone: the laptop has no token, so nobody to wake.
+      await phone.focus.stop(both);
+      await phone.sync.sync();
+      expect(api.wakes, hasLength(2));
+      expect(api.wakes.last.$1, isEmpty);
+      await laptop.sync.sync();
+      final after = await laptop.focus.current();
+      expect(after.phone.active, isFalse);
+      expect(after.laptop.active, isFalse);
+    });
+
+    test('each device keeps its own session', () async {
+      phone.token = 'phone-token';
+      await pair();
+      await startOn(laptop, on: {DeviceKind.laptop});
+      await laptop.sync.sync();
+      expect(api.wakes, isEmpty, reason: "the phone's session did not change");
+      await phone.sync.sync();
+      // The phone starts its own while the laptop's runs.
+      await startOn(phone, on: {DeviceKind.phone});
+      await phone.sync.sync();
+      await laptop.sync.sync();
+      final there = await laptop.focus.current();
+      expect(there.laptop.active, isTrue);
+      expect(there.laptop.startedBy, 'Laptop');
+      expect(there.phone.active, isTrue);
+      expect(there.phone.startedBy, 'Pixel');
+      expect(there.phone.sameAs(there.laptop), isFalse);
+    });
+
+    test('a notice reaches the phone with the wake', () async {
+      phone.token = 'phone-token';
+      await pair();
+      await laptop.sync.tellOthers({'kind': 'left', 'device': 'Laptop'});
+      expect(api.wakes.single.$1, ['phone-token']);
+      expect(api.wakes.single.$3, {'kind': 'left', 'device': 'Laptop'});
+    });
+
+    test('a failed pull after the upload still wakes the phone', () async {
+      phone.token = 'phone-token';
+      await pair();
+      await startOn(laptop);
+      api.failPulls = 1;
+      await expectLater(laptop.sync.sync(), throwsA(isA<SyncUnavailable>()));
+      expect(api.wakes, hasLength(1));
+    });
+
+    test('two starts made at once never mix', () async {
+      await pair();
+      // A plain session both devices know, stopped.
+      await startOn(phone);
+      await phone.focus.stop(both);
+      await phone.sync.sync();
+      await laptop.sync.sync();
+      // Offline, each starts its own kind of session.
+      await laptop.focus.start(
+        on: both,
+        length: const Duration(minutes: 50),
+        blockApps: true,
+        quiet: true,
+        strict: true,
+        startedBy: 'Laptop',
+        now: DateTime.fromMillisecondsSinceEpoch(tick(), isUtc: true),
+      );
+      await startOn(phone);
+      await laptop.sync.sync();
+      await phone.sync.sync();
+      await laptop.sync.sync();
+      final a = (await laptop.focus.current()).phone;
+      final b = (await phone.focus.current()).phone;
+      expect(a.version, b.version);
+      expect(b.startedBy, 'Pixel', reason: 'the later start wins');
+      expect(
+        b.strict,
+        isFalse,
+        reason: "nothing of the laptop's start is left",
+      );
+      expect(b.length, const Duration(minutes: 25));
+    });
+
+    test('other edits do not wake anyone', () async {
+      phone.token = 'phone-token';
+      await pair();
+      await laptop.reminders.save(physics);
+      await laptop.sync.sync();
+      expect(api.wakes, isEmpty);
+    });
+
+    test('the push token is sent once, and again after a move', () async {
+      phone.token = 't1';
+      await phone.sync.sync();
+      await phone.sync.sync();
+      expect(api.tokenUpdates, 1);
+      phone.token = 't2';
+      await phone.sync.sync();
+      expect(api.tokenUpdates, 2);
+      await pair();
+      expect(api.tokenUpdates, 3, reason: 'joined another space');
+    });
+
+    test('a server without push still syncs', () async {
+      phone.token = 't1';
+      api.failPushTokens = true;
+      await phone.reminders.save(physics);
+      await phone.sync.sync();
+      expect(await phone.waiting(), 0);
+      api.failPushTokens = false;
+      await phone.sync.sync();
+      expect(api.tokenUpdates, 1, reason: 'tried again');
+    });
   });
 }

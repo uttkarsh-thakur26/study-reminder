@@ -35,6 +35,12 @@ create table if not exists public.devices (
   pair_window_start timestamptz not null default now()
 );
 create index if not exists devices_space on public.devices (space_id);
+-- Added for focus mode: the phone's Firebase push token, and a limit on how
+-- often a device can wake the others.
+alter table public.devices add column if not exists push_token text;
+alter table public.devices add column if not exists push_count int not null default 0;
+alter table public.devices
+  add column if not exists push_window_start timestamptz not null default now();
 
 create table if not exists public.pairing_codes (
   code text primary key,
@@ -405,6 +411,76 @@ begin
 end;
 $$;
 
+-- Saves the push token Firebase gave this phone, so the other devices can
+-- wake it when a focus session starts or stops. An empty token clears it.
+create or replace function public.set_push_token(p_secret text, p_token text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  d public.devices := public.sr_device(p_secret);
+  t text := nullif(btrim(coalesce(p_token, '')), '');
+begin
+  if length(t) > 4096 then
+    raise exception 'push token too long' using errcode = 'SR400';
+  end if;
+  -- A token belongs to one install, so a device this phone used to be loses it.
+  if t is not null then
+    update public.devices set push_token = null
+    where devices.push_token = t and devices.id <> d.id;
+  end if;
+  update public.devices set push_token = t, last_seen = now() where devices.id = d.id;
+end;
+$$;
+
+-- For the focus-push function only (it runs with the project's secret key):
+-- the push tokens of the other devices in the caller's space, and the phone's
+-- focus session as the server has it, with its version (the newest field
+-- stamp). Only phones have push tokens, so only the phone's session goes out.
+-- Tokens never reach the apps. At most 30 calls in 10 minutes per device.
+create or replace function public.focus_push_targets(p_secret text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  d public.devices := public.sr_device(p_secret);
+  v_count int;
+  v_tokens jsonb;
+  v_focus public.records;
+begin
+  -- One statement on the locked row, so parallel calls cannot all pass.
+  update public.devices x set
+    push_count = case
+      when x.push_window_start < now() - interval '10 minutes' then 1
+      else x.push_count + 1
+    end,
+    push_window_start = case
+      when x.push_window_start < now() - interval '10 minutes' then now()
+      else x.push_window_start
+    end
+  where x.id = d.id
+  returning x.push_count into v_count;
+  if v_count > 30 then
+    raise exception 'too many pushes' using errcode = 'SR429';
+  end if;
+  select coalesce(jsonb_agg(distinct x.push_token), '[]'::jsonb) into v_tokens
+  from public.devices x
+  where x.space_id = d.space_id and x.id <> d.id and x.push_token is not null;
+  select * into v_focus
+  from public.records r
+  where r.space_id = d.space_id and r.kind = 'focus' and r.id = 'phone';
+  return jsonb_build_object(
+    'tokens', v_tokens,
+    'focus', v_focus.fields,
+    'version', v_focus.hlc
+  );
+end;
+$$;
+
 -- Only the app's entry points are callable from the public API.
 revoke all on function
   public.sr_device(text),
@@ -419,7 +495,8 @@ revoke all on function
   public.leave_space(text),
   public.list_devices(text),
   public.push_records(text, jsonb),
-  public.pull_records(text, bigint, int)
+  public.pull_records(text, bigint, int),
+  public.set_push_token(text, text)
 from public;
 
 grant execute on function
@@ -429,8 +506,14 @@ grant execute on function
   public.leave_space(text),
   public.list_devices(text),
   public.push_records(text, jsonb),
-  public.pull_records(text, bigint, int)
+  public.pull_records(text, bigint, int),
+  public.set_push_token(text, text)
 to anon, authenticated;
+
+-- Only the focus-push function may read push tokens.
+revoke all on function public.focus_push_targets(text)
+from public, anon, authenticated;
+grant execute on function public.focus_push_targets(text) to service_role;
 
 -- Lets the API see the new functions right away.
 notify pgrst, 'reload schema';

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_theme.dart';
 import '../desktop/desktop_integration.dart';
 import '../features/alerts/ui/alert_coordinator.dart';
+import '../features/focus/ui/focus_coordinator.dart';
 import '../features/settings/settings_controller.dart';
 import '../features/sync/ui/sync_coordinator.dart';
 import '../shell/app_shell.dart';
@@ -43,7 +44,9 @@ class _StudyReminderAppState extends ConsumerState<StudyReminderApp> {
       theme: buildTheme(settings.accent, Brightness.light),
       darkTheme: buildTheme(settings.accent, Brightness.dark),
       home: const SyncCoordinator(
-        child: AlertCoordinator(child: DesktopIntegration(child: AppShell())),
+        child: FocusCoordinator(
+          child: AlertCoordinator(child: DesktopIntegration(child: AppShell())),
+        ),
       ),
     );
   }

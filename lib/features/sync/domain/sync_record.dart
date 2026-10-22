@@ -5,6 +5,7 @@ abstract final class RecordKinds {
   static const subject = 'subject';
   static const reminder = 'reminder';
   static const occurrence = 'occurrence';
+  static const focus = 'focus';
 }
 
 /// One record as it travels to and from the server: its fields and, for

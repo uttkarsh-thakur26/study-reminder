@@ -5,7 +5,9 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Subjects, Reminders, Occurrences, LocalSettings])
+@DriftDatabase(
+  tables: [Subjects, Reminders, Occurrences, FocusSessions, LocalSettings],
+)
 class AppDatabase extends _$AppDatabase {
   /// Shared across isolates so notification actions handled in the
   /// background write through the same connection and the UI sees them.
@@ -19,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -31,6 +33,9 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX reminders_dirty ON reminders (dirty) WHERE dirty = 1',
       );
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await m.createTable(focusSessions);
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
