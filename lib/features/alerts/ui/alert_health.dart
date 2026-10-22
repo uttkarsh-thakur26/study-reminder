@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
@@ -50,7 +51,12 @@ Future<void> _requestNotifications(WidgetRef ref) async {
   final db = ref.read(databaseProvider);
   const askedKey = 'notifications_asked';
   final askedBefore = await db.readSetting(askedKey) != null;
-  final granted = await android.requestNotificationsPermission();
+  final bool? granted;
+  try {
+    granted = await android.requestNotificationsPermission();
+  } on PlatformException {
+    return; // A prompt from an earlier tap is still open.
+  }
   await db.writeSetting(askedKey, '1');
   // A "Don't allow" in the prompt is an answer. Only once Android has stopped
   // showing the prompt (after two refusals) does the user need settings.

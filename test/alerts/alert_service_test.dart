@@ -193,6 +193,66 @@ void main() {
     expect(diff.toCancel, [2]);
   });
 
+  group('alarm page', () {
+    final ringAt = DateTime.utc(2026, 10, 22, 13, 30);
+    final payload = AlertPayload(
+      reminderId: 'r1',
+      occurrenceAt: ringAt,
+      style: ReminderStyle.alarm,
+      signature: 'abc',
+    );
+    OccurrenceState state(OccurrenceStatus status, {DateTime? snoozeUntil}) =>
+        OccurrenceState(
+          reminderId: 'r1',
+          occurrenceAt: ringAt,
+          status: status,
+          snoozeUntil: snoozeUntil,
+        );
+    final soon = ringAt.add(const Duration(minutes: 2));
+
+    test('opens for a pending alarm while it rings', () {
+      expect(isStillRinging(payload, null, now: soon), isTrue);
+      expect(
+        isStillRinging(payload, state(OccurrenceStatus.pending), now: soon),
+        isTrue,
+      );
+    });
+
+    test('does not reopen an old launch or a handled alarm', () {
+      final later = ringAt.add(const Duration(minutes: 11));
+      expect(isStillRinging(payload, null, now: later), isFalse);
+      expect(
+        isStillRinging(payload, state(OccurrenceStatus.done), now: soon),
+        isFalse,
+      );
+      final snoozed = state(
+        OccurrenceStatus.snoozed,
+        snoozeUntil: ringAt.add(defaultSnooze),
+      );
+      expect(isStillRinging(payload, snoozed, now: soon), isFalse);
+    });
+
+    test('opens again when the snooze rings', () {
+      final until = ringAt.add(defaultSnooze);
+      final again = AlertPayload(
+        reminderId: 'r1',
+        occurrenceAt: ringAt,
+        style: ReminderStyle.alarm,
+        signature: 'def',
+        ringsAt: until,
+      );
+      final snoozed = state(OccurrenceStatus.snoozed, snoozeUntil: until);
+      expect(
+        isStillRinging(
+          again,
+          snoozed,
+          now: until.add(const Duration(minutes: 1)),
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('when the system queue is not what it reports', () {
     test('the first replan after a start queues the next day again', () async {
       await repo.save(reminder(recurrence: const Recurrence.daily()));

@@ -177,7 +177,7 @@ AndroidNotificationDetails alarmDetails(
   additionalFlags: Int32List.fromList(const [_flagInsistent]),
   autoCancel: false,
   ongoing: true,
-  timeoutAfter: const Duration(minutes: 10).inMilliseconds,
+  timeoutAfter: alarmRingDuration.inMilliseconds,
   when: occurrenceAt.millisecondsSinceEpoch,
   actions: actions,
 );
