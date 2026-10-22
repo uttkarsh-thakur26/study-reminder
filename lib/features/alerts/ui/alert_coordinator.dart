@@ -30,7 +30,12 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
   late final AppLifecycleListener _lifecycle;
   StreamSubscription<NotificationResponse>? _taps;
   Timer? _debounce;
-  bool _alarmOpen = false;
+
+  /// Alarms waiting for the alarm page, oldest first. Two alarms can ring at
+  /// the same minute; each gets its page in turn.
+  final _waitingAlarms = <AlertPayload>[];
+  AlertPayload? _alarmOnScreen;
+  bool _showingAlarms = false;
 
   @override
   void initState() {
@@ -85,25 +90,47 @@ class _AlertCoordinatorState extends ConsumerState<AlertCoordinator> {
         action == null &&
         payload.style == ReminderStyle.alarm;
     if (!ringing) {
-      if (!_alarmOpen) unawaited(LockScreen.release());
+      if (!_showingAlarms) unawaited(LockScreen.release());
       if (payload != null && action != null) {
         unawaited(ref.read(alertServiceProvider).handleAction(action, payload));
       }
       return;
     }
-    if (_alarmOpen) return;
-    _alarmOpen = true;
-    Navigator.of(context)
-        .push(
+    final key = payload.occurrenceKey;
+    if (_alarmOnScreen?.occurrenceKey == key ||
+        _waitingAlarms.any((p) => p.occurrenceKey == key)) {
+      return;
+    }
+    _waitingAlarms.add(payload);
+    if (!_showingAlarms) unawaited(_showAlarms());
+  }
+
+  Future<void> _showAlarms() async {
+    _showingAlarms = true;
+    try {
+      while (_waitingAlarms.isNotEmpty && mounted) {
+        final payload = _waitingAlarms.removeAt(0);
+        final states = await ref.read(occurrenceStatesProvider.future);
+        final live = isStillRinging(
+          payload,
+          states[payload.occurrenceKey],
+          now: DateTime.now(),
+        );
+        if (!live || !mounted) continue;
+        _alarmOnScreen = payload;
+        await Navigator.of(context).push(
           MaterialPageRoute<void>(
             fullscreenDialog: true,
             builder: (_) => AlarmScreen(payload: payload),
           ),
-        )
-        .whenComplete(() {
-          _alarmOpen = false;
-          unawaited(LockScreen.release());
-        });
+        );
+        _alarmOnScreen = null;
+      }
+    } finally {
+      _alarmOnScreen = null;
+      _showingAlarms = false;
+      unawaited(LockScreen.release());
+    }
   }
 
   @override

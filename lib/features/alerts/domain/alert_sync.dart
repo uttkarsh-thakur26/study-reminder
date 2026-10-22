@@ -105,6 +105,29 @@ class AlertPayload {
   return (payload: p, action: action);
 }
 
+/// How long an alarm rings before it stops on its own.
+const alarmRingDuration = Duration(minutes: 10);
+
+/// Whether the alarm in [payload] can still be ringing, given the stored
+/// state of its occurrence. A relaunch can replay an old launch, and Done or
+/// Snooze may already have been pressed in the notification shade.
+bool isStillRinging(
+  AlertPayload payload,
+  OccurrenceState? state, {
+  required DateTime now,
+}) {
+  if (payload.isTest) return true;
+  if (now.difference(payload.ringsAt) > alarmRingDuration) return false;
+  if (state == null || state.deleted) return true;
+  return switch (state.status) {
+    OccurrenceStatus.pending => true,
+    // Ringing again after a snooze, rather than the ring that was snoozed.
+    OccurrenceStatus.snoozed =>
+      state.snoozeUntil?.isAtSameMomentAs(payload.ringsAt) ?? false,
+    OccurrenceStatus.done || OccurrenceStatus.skipped => false,
+  };
+}
+
 /// A notification the operating system currently has queued.
 class ScheduledAlert {
   const ScheduledAlert(this.id, this.payload);
