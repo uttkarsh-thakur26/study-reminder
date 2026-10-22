@@ -16,14 +16,14 @@ class Recurrence {
   }) : assert(interval >= 1);
 
   const Recurrence.daily({int every = 1})
-      : this(kind: RepeatKind.daily, interval: every);
+    : this(kind: RepeatKind.daily, interval: every);
 
   /// [days] uses 1 = Monday ... 7 = Sunday. Empty means the start day's weekday.
   const Recurrence.weekly(Set<int> days, {int every = 1})
-      : this(kind: RepeatKind.weekly, interval: every, weekdays: days);
+    : this(kind: RepeatKind.weekly, interval: every, weekdays: days);
 
   const Recurrence.monthly({int every = 1})
-      : this(kind: RepeatKind.monthly, interval: every);
+    : this(kind: RepeatKind.monthly, interval: every);
 
   static const once = Recurrence();
   static const weekdaysOnly = Recurrence.weekly({1, 2, 3, 4, 5});
@@ -42,9 +42,9 @@ class Recurrence {
       weekdays.fold(0, (mask, day) => mask | (1 << (day - 1)));
 
   static Set<int> weekdaysFromMask(int mask) => {
-        for (var day = 1; day <= 7; day++)
-          if (mask & (1 << (day - 1)) != 0) day,
-      };
+    for (var day = 1; day <= 7; day++)
+      if (mask & (1 << (day - 1)) != 0) day,
+  };
 
   Recurrence copyWith({
     RepeatKind? kind,
@@ -52,13 +52,12 @@ class Recurrence {
     Set<int>? weekdays,
     CalendarDate? until,
     bool clearUntil = false,
-  }) =>
-      Recurrence(
-        kind: kind ?? this.kind,
-        interval: interval ?? this.interval,
-        weekdays: weekdays ?? this.weekdays,
-        until: clearUntil ? null : (until ?? this.until),
-      );
+  }) => Recurrence(
+    kind: kind ?? this.kind,
+    interval: interval ?? this.interval,
+    weekdays: weekdays ?? this.weekdays,
+    until: clearUntil ? null : (until ?? this.until),
+  );
 
   /// Short human label, e.g. "Every 2 days" or "Mon, Wed, Fri".
   String describe() {
@@ -133,13 +132,12 @@ class ReminderSchedule {
     int? minuteOfDay,
     String? timeZone,
     Recurrence? recurrence,
-  }) =>
-      ReminderSchedule(
-        anchor: anchor ?? this.anchor,
-        minuteOfDay: minuteOfDay ?? this.minuteOfDay,
-        timeZone: timeZone ?? this.timeZone,
-        recurrence: recurrence ?? this.recurrence,
-      );
+  }) => ReminderSchedule(
+    anchor: anchor ?? this.anchor,
+    minuteOfDay: minuteOfDay ?? this.minuteOfDay,
+    timeZone: timeZone ?? this.timeZone,
+    recurrence: recurrence ?? this.recurrence,
+  );
 
   tz.Location get location => resolveLocation(timeZone);
 
@@ -171,9 +169,9 @@ class ReminderSchedule {
         }
 
       case RepeatKind.weekly:
-        final days = (r.weekdays.isEmpty ? {anchor.weekday} : r.weekdays)
-            .toList()
-          ..sort();
+        final days =
+            (r.weekdays.isEmpty ? {anchor.weekday} : r.weekdays).toList()
+              ..sort();
         final firstWeek = anchor.startOfWeek;
         var week = firstWeek.daysUntil(start.startOfWeek) ~/ 7;
         if (week % r.interval != 0) week += r.interval - week % r.interval;

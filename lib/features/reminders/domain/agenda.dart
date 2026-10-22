@@ -28,8 +28,8 @@ class AgendaItem {
   /// When it next needs attention: the snooze end if snoozed.
   DateTime get dueAt =>
       status == OccurrenceStatus.snoozed && snoozeUntil != null
-          ? snoozeUntil!
-          : at;
+      ? snoozeUntil!
+      : at;
 
   bool isMissed(DateTime now) => !isDone && dueAt.isBefore(now);
 }
@@ -77,11 +77,19 @@ Agenda buildAgenda({
 }) {
   final localNow = tz.TZDateTime.from(now, here);
   final todayDate = CalendarDate(localNow.year, localNow.month, localNow.day);
-  final startOfToday =
-      tz.TZDateTime(here, localNow.year, localNow.month, localNow.day);
+  final startOfToday = tz.TZDateTime(
+    here,
+    localNow.year,
+    localNow.month,
+    localNow.day,
+  );
   final tomorrow = todayDate.addDays(1);
-  final end = tz.TZDateTime(here, tomorrow.year, tomorrow.month, tomorrow.day)
-      .add(Duration(days: horizonDays));
+  final end = tz.TZDateTime(
+    here,
+    tomorrow.year,
+    tomorrow.month,
+    tomorrow.day,
+  ).add(Duration(days: horizonDays));
 
   final overdue = <AgendaItem>[];
   final today = <AgendaItem>[];
@@ -98,6 +106,31 @@ Agenda buildAgenda({
     );
   }
 
+  void addByDay(AgendaItem item, DateTime when) {
+    final local = tz.TZDateTime.from(when, here);
+    final day = CalendarDate(local.year, local.month, local.day);
+    if (day == todayDate) {
+      today.add(item);
+    } else {
+      byDay.putIfAbsent(day, () => []).add(item);
+    }
+  }
+
+  // A snooze can carry an earlier day's occurrence of a repeating reminder
+  // past midnight; it still needs to be on a list to be ticked off.
+  final carriedOver = <String, List<OccurrenceState>>{};
+  for (final s in states.values) {
+    final until = s.snoozeUntil;
+    if (s.deleted || s.status != OccurrenceStatus.snoozed || until == null) {
+      continue;
+    }
+    if (s.occurrenceAt.isBefore(startOfToday) &&
+        !until.isBefore(startOfToday) &&
+        until.isBefore(end)) {
+      carriedOver.putIfAbsent(s.reminderId, () => []).add(s);
+    }
+  }
+
   for (final r in reminders) {
     if (r.deleted || !r.enabled) continue;
 
@@ -110,14 +143,16 @@ Agenda buildAgenda({
       }
     }
 
+    if (r.recurrence.repeats) {
+      for (final s in carriedOver[r.id] ?? const <OccurrenceState>[]) {
+        final item = itemFor(r, s.occurrenceAt);
+        addByDay(item, item.dueAt);
+      }
+    }
+
     for (final instant in r.schedule.occurrencesBetween(startOfToday, end)) {
       final item = itemFor(r, instant);
-      final day = CalendarDate(item.at.year, item.at.month, item.at.day);
-      if (day == todayDate) {
-        today.add(item);
-      } else {
-        byDay.putIfAbsent(day, () => []).add(item);
-      }
+      addByDay(item, item.at);
     }
   }
 
@@ -132,9 +167,7 @@ Agenda buildAgenda({
   return Agenda(
     overdue: overdue,
     today: today,
-    upcoming: [
-      for (final d in days) AgendaDay(d, byDay[d]!..sort(byTime)),
-    ],
+    upcoming: [for (final d in days) AgendaDay(d, byDay[d]!..sort(byTime))],
     todayDate: todayDate,
   );
 }

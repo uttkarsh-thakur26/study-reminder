@@ -11,10 +11,10 @@ enum DeliveryTarget {
   laptop;
 
   String get label => switch (this) {
-        everywhere => 'Phone and laptop',
-        phone => 'Phone only',
-        laptop => 'Laptop only',
-      };
+    everywhere => 'Phone and laptop',
+    phone => 'Phone only',
+    laptop => 'Laptop only',
+  };
 }
 
 /// The kind of device the app runs on.
@@ -65,39 +65,38 @@ class Reminder {
     DeliveryTarget? deliverTo,
     bool? enabled,
     bool? deleted,
-  }) =>
-      Reminder(
-        id: id,
-        title: title ?? this.title,
-        notes: notes ?? this.notes,
-        subjectId: clearSubject ? null : (subjectId ?? this.subjectId),
-        style: style ?? this.style,
-        schedule: schedule ?? this.schedule,
-        deliverTo: deliverTo ?? this.deliverTo,
-        enabled: enabled ?? this.enabled,
-        createdAt: createdAt,
-        deleted: deleted ?? this.deleted,
-      );
+  }) => Reminder(
+    id: id,
+    title: title ?? this.title,
+    notes: notes ?? this.notes,
+    subjectId: clearSubject ? null : (subjectId ?? this.subjectId),
+    style: style ?? this.style,
+    schedule: schedule ?? this.schedule,
+    deliverTo: deliverTo ?? this.deliverTo,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt,
+    deleted: deleted ?? this.deleted,
+  );
 
   /// Flat field map with stable keys. Used for per-field sync stamps and as
   /// the row shape on the server.
   Map<String, Object?> toFields() => {
-        'title': title,
-        'notes': notes,
-        'subject_id': subjectId,
-        'style': style.name,
-        'anchor_date': schedule.anchor.toIso(),
-        'minute_of_day': schedule.minuteOfDay,
-        'time_zone': schedule.timeZone,
-        'repeat_kind': recurrence.kind.name,
-        'repeat_interval': recurrence.interval,
-        'repeat_weekdays': recurrence.weekdayMask,
-        'repeat_until': recurrence.until?.toIso(),
-        'deliver_to': deliverTo.name,
-        'enabled': enabled,
-        'created_at': createdAt.toUtc().millisecondsSinceEpoch,
-        'deleted': deleted,
-      };
+    'title': title,
+    'notes': notes,
+    'subject_id': subjectId,
+    'style': style.name,
+    'anchor_date': schedule.anchor.toIso(),
+    'minute_of_day': schedule.minuteOfDay,
+    'time_zone': schedule.timeZone,
+    'repeat_kind': recurrence.kind.name,
+    'repeat_interval': recurrence.interval,
+    'repeat_weekdays': recurrence.weekdayMask,
+    'repeat_until': recurrence.until?.toIso(),
+    'deliver_to': deliverTo.name,
+    'enabled': enabled,
+    'created_at': createdAt.toUtc().millisecondsSinceEpoch,
+    'deleted': deleted,
+  };
 
   factory Reminder.fromFields(String id, Map<String, Object?> f) {
     final until = f['repeat_until'] as String?;
@@ -106,7 +105,11 @@ class Reminder {
       title: f['title'] as String? ?? '',
       notes: f['notes'] as String? ?? '',
       subjectId: f['subject_id'] as String?,
-      style: _byName(ReminderStyle.values, f['style'], ReminderStyle.notification),
+      style: _byName(
+        ReminderStyle.values,
+        f['style'],
+        ReminderStyle.notification,
+      ),
       schedule: ReminderSchedule(
         anchor: CalendarDate.parse(f['anchor_date'] as String),
         minuteOfDay: (f['minute_of_day'] as num).toInt(),
@@ -115,16 +118,21 @@ class Reminder {
           kind: _byName(RepeatKind.values, f['repeat_kind'], RepeatKind.once),
           interval: ((f['repeat_interval'] as num?) ?? 1).toInt().clamp(1, 365),
           weekdays: Recurrence.weekdaysFromMask(
-              ((f['repeat_weekdays'] as num?) ?? 0).toInt()),
+            ((f['repeat_weekdays'] as num?) ?? 0).toInt(),
+          ),
           until: until == null ? null : CalendarDate.parse(until),
         ),
       ),
       deliverTo: _byName(
-          DeliveryTarget.values, f['deliver_to'], DeliveryTarget.everywhere),
+        DeliveryTarget.values,
+        f['deliver_to'],
+        DeliveryTarget.everywhere,
+      ),
       enabled: f['enabled'] as bool? ?? true,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
-          ((f['created_at'] as num?) ?? 0).toInt(),
-          isUtc: true),
+        ((f['created_at'] as num?) ?? 0).toInt(),
+        isUtc: true,
+      ),
       deleted: f['deleted'] as bool? ?? false,
     );
   }

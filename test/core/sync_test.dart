@@ -32,17 +32,21 @@ void main() {
     });
 
     test('receiving a remote stamp moves the clock past it', () {
-      final clock = HlcClock('a',
-          wallClock: () => DateTime.fromMillisecondsSinceEpoch(1000));
+      final clock = HlcClock(
+        'a',
+        wallClock: () => DateTime.fromMillisecondsSinceEpoch(1000),
+      );
       const remote = Hlc(50000, 7, 'b');
       clock.receive(remote);
       expect(clock.now() > remote, isTrue);
     });
 
     test('counter overflow rolls into the next millisecond', () {
-      final clock = HlcClock('a',
-          wallClock: () => DateTime.fromMillisecondsSinceEpoch(1),
-          last: const Hlc(100, 36 * 36 * 36 * 36 - 1, 'a'));
+      final clock = HlcClock(
+        'a',
+        wallClock: () => DateTime.fromMillisecondsSinceEpoch(1),
+        last: const Hlc(100, 36 * 36 * 36 * 36 - 1, 'a'),
+      );
       final next = clock.now();
       expect(next.millis, 101);
       expect(next.counter, 0);

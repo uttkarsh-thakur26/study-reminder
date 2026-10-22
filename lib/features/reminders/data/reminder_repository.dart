@@ -21,52 +21,74 @@ class ReminderRepository {
   }
 
   Future<Reminder?> byId(String id) async {
-    final row = await (_db.select(_db.reminders)..where((r) => r.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.reminders,
+    )..where((r) => r.id.equals(id))).getSingleOrNull();
     return row == null ? null : reminderFromRow(row);
   }
 
-  Future<void> save(Reminder reminder) => _db.transaction(() async {
-        final existing = await (_db.select(_db.reminders)
-              ..where((r) => r.id.equals(reminder.id)))
-            .getSingleOrNull();
-        final write = stampLocalEdit(
-          before: existing == null ? null : reminderFromRow(existing).toFields(),
-          beforeClock: existing?.fieldClock ?? '',
-          after: reminder.toFields(),
-          clock: _clock,
-        );
-        if (write == null) return;
-        await _db
-            .into(_db.reminders)
-            .insertOnConflictUpdate(reminderCompanion(reminder.id, write));
-      });
+  /// Saves an edit. Pass the version the editor started from as [base] so
+  /// only the fields the user changed are written; see [applyEdit].
+  Future<void> save(Reminder edited, {Reminder? base}) => _update(
+    edited.id,
+    (current) => applyEdit(
+      current: current,
+      base: base?.toFields(),
+      edited: edited.toFields(),
+    ),
+  );
 
-  Future<void> delete(String id) async {
-    final reminder = await byId(id);
-    if (reminder == null || reminder.deleted) return;
-    await save(reminder.copyWith(deleted: true));
-  }
+  Future<void> delete(String id) => _setDeleted(id, true);
 
   /// Brings back a reminder deleted by mistake (the undo in the snackbar).
-  Future<void> restore(String id) async {
-    final reminder = await byId(id);
-    if (reminder == null || !reminder.deleted) return;
-    await save(reminder.copyWith(deleted: false));
-  }
+  Future<void> restore(String id) => _setDeleted(id, false);
+
+  Future<void> _setDeleted(String id, bool deleted) => _update(
+    id,
+    (current) => current == null ? null : {...current, 'deleted': deleted},
+  );
+
+  /// Reads the stored record, applies [change] and stamps whatever differs,
+  /// all in one transaction. [change] returns null to write nothing.
+  Future<void> _update(
+    String id,
+    Map<String, Object?>? Function(Map<String, Object?>? current) change,
+  ) => _db.transaction(() async {
+    final existing = await (_db.select(
+      _db.reminders,
+    )..where((r) => r.id.equals(id))).getSingleOrNull();
+    final current = existing == null
+        ? null
+        : reminderFromRow(existing).toFields();
+    final after = change(current);
+    if (after == null) return;
+    final write = stampLocalEdit(
+      before: current,
+      beforeClock: existing?.fieldClock ?? '',
+      after: after,
+      clock: _clock,
+    );
+    if (write == null) return;
+    await _db
+        .into(_db.reminders)
+        .insertOnConflictUpdate(reminderCompanion(id, write));
+  });
 
   /// Live occurrence states keyed by occurrence id.
-  Stream<Map<String, OccurrenceState>> watchOccurrences() =>
-      _db.select(_db.occurrences).watch().map((rows) => {
-            for (final row in rows) row.id: occurrenceFromRow(row),
-          });
+  Stream<Map<String, OccurrenceState>> watchOccurrences() => _db
+      .select(_db.occurrences)
+      .watch()
+      .map((rows) => {for (final row in rows) row.id: occurrenceFromRow(row)});
 
-  Future<void> setOccurrence(OccurrenceState state) => _db.transaction(() async {
-        final existing = await (_db.select(_db.occurrences)
-              ..where((o) => o.id.equals(state.id)))
-            .getSingleOrNull();
+  Future<void> setOccurrence(OccurrenceState state) =>
+      _db.transaction(() async {
+        final existing = await (_db.select(
+          _db.occurrences,
+        )..where((o) => o.id.equals(state.id))).getSingleOrNull();
         final write = stampLocalEdit(
-          before: existing == null ? null : occurrenceFromRow(existing).toFields(),
+          before: existing == null
+              ? null
+              : occurrenceFromRow(existing).toFields(),
           beforeClock: existing?.fieldClock ?? '',
           after: state.toFields(),
           clock: _clock,
@@ -78,61 +100,79 @@ class ReminderRepository {
       });
 
   Future<void> markDone(String reminderId, DateTime occurrenceAt) =>
-      setOccurrence(OccurrenceState(
-        reminderId: reminderId,
-        occurrenceAt: occurrenceAt,
-        status: OccurrenceStatus.done,
-      ));
+      setOccurrence(
+        OccurrenceState(
+          reminderId: reminderId,
+          occurrenceAt: occurrenceAt,
+          status: OccurrenceStatus.done,
+        ),
+      );
 
-  Future<void> snooze(String reminderId, DateTime occurrenceAt, DateTime until) =>
-      setOccurrence(OccurrenceState(
-        reminderId: reminderId,
-        occurrenceAt: occurrenceAt,
-        status: OccurrenceStatus.snoozed,
-        snoozeUntil: until,
-      ));
+  Future<void> snooze(
+    String reminderId,
+    DateTime occurrenceAt,
+    DateTime until,
+  ) => setOccurrence(
+    OccurrenceState(
+      reminderId: reminderId,
+      occurrenceAt: occurrenceAt,
+      status: OccurrenceStatus.snoozed,
+      snoozeUntil: until,
+    ),
+  );
 
-  Future<void> skip(String reminderId, DateTime occurrenceAt) =>
-      setOccurrence(OccurrenceState(
-        reminderId: reminderId,
-        occurrenceAt: occurrenceAt,
-        status: OccurrenceStatus.skipped,
-      ));
+  Future<void> skip(String reminderId, DateTime occurrenceAt) => setOccurrence(
+    OccurrenceState(
+      reminderId: reminderId,
+      occurrenceAt: occurrenceAt,
+      status: OccurrenceStatus.skipped,
+    ),
+  );
 
   /// Puts an occurrence back to pending (undo of done, skip or snooze).
   Future<void> reopen(String reminderId, DateTime occurrenceAt) =>
-      setOccurrence(OccurrenceState(
-        reminderId: reminderId,
-        occurrenceAt: occurrenceAt,
-        status: OccurrenceStatus.pending,
-      ));
+      setOccurrence(
+        OccurrenceState(
+          reminderId: reminderId,
+          occurrenceAt: occurrenceAt,
+          status: OccurrenceStatus.pending,
+        ),
+      );
 }
 
 Reminder reminderFromRow(ReminderRow row) => Reminder(
-      id: row.id,
-      title: row.title,
-      notes: row.notes,
-      subjectId: row.subjectId,
-      style: ReminderStyle.values.asNameMap()[row.style] ?? ReminderStyle.notification,
-      schedule: ReminderSchedule(
-        anchor: CalendarDate.parse(row.anchorDate),
-        minuteOfDay: row.minuteOfDay,
-        timeZone: row.timeZone,
-        recurrence: Recurrence(
-          kind: RepeatKind.values.asNameMap()[row.repeatKind] ?? RepeatKind.once,
-          interval: row.repeatInterval < 1 ? 1 : row.repeatInterval,
-          weekdays: Recurrence.weekdaysFromMask(row.repeatWeekdays),
-          until: row.repeatUntil == null ? null : CalendarDate.parse(row.repeatUntil!),
-        ),
-      ),
-      deliverTo: DeliveryTarget.values.asNameMap()[row.deliverTo] ??
-          DeliveryTarget.everywhere,
-      enabled: row.enabled,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt, isUtc: true),
-      deleted: row.deleted,
-    );
+  id: row.id,
+  title: row.title,
+  notes: row.notes,
+  subjectId: row.subjectId,
+  style:
+      ReminderStyle.values.asNameMap()[row.style] ?? ReminderStyle.notification,
+  schedule: ReminderSchedule(
+    anchor: CalendarDate.parse(row.anchorDate),
+    minuteOfDay: row.minuteOfDay,
+    timeZone: row.timeZone,
+    recurrence: Recurrence(
+      kind: RepeatKind.values.asNameMap()[row.repeatKind] ?? RepeatKind.once,
+      interval: row.repeatInterval < 1 ? 1 : row.repeatInterval,
+      weekdays: Recurrence.weekdaysFromMask(row.repeatWeekdays),
+      until: row.repeatUntil == null
+          ? null
+          : CalendarDate.parse(row.repeatUntil!),
+    ),
+  ),
+  deliverTo:
+      DeliveryTarget.values.asNameMap()[row.deliverTo] ??
+      DeliveryTarget.everywhere,
+  enabled: row.enabled,
+  createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt, isUtc: true),
+  deleted: row.deleted,
+);
 
-RemindersCompanion reminderCompanion(String id, StampedWrite w, {bool dirty = true}) {
+RemindersCompanion reminderCompanion(
+  String id,
+  StampedWrite w, {
+  bool dirty = true,
+}) {
   final r = Reminder.fromFields(id, w.fields);
   return RemindersCompanion.insert(
     id: id,
@@ -158,17 +198,25 @@ RemindersCompanion reminderCompanion(String id, StampedWrite w, {bool dirty = tr
 }
 
 OccurrenceState occurrenceFromRow(OccurrenceRow row) => OccurrenceState(
-      reminderId: row.reminderId,
-      occurrenceAt: DateTime.fromMillisecondsSinceEpoch(row.occurrenceAt, isUtc: true),
-      status: OccurrenceStatus.values.asNameMap()[row.status] ??
-          OccurrenceStatus.pending,
-      snoozeUntil: row.snoozeUntil == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(row.snoozeUntil!, isUtc: true),
-      deleted: row.deleted,
-    );
+  reminderId: row.reminderId,
+  occurrenceAt: DateTime.fromMillisecondsSinceEpoch(
+    row.occurrenceAt,
+    isUtc: true,
+  ),
+  status:
+      OccurrenceStatus.values.asNameMap()[row.status] ??
+      OccurrenceStatus.pending,
+  snoozeUntil: row.snoozeUntil == null
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(row.snoozeUntil!, isUtc: true),
+  deleted: row.deleted,
+);
 
-OccurrencesCompanion occurrenceCompanion(String id, StampedWrite w, {bool dirty = true}) {
+OccurrencesCompanion occurrenceCompanion(
+  String id,
+  StampedWrite w, {
+  bool dirty = true,
+}) {
   final s = OccurrenceState.fromFields(w.fields);
   return OccurrencesCompanion.insert(
     id: id,

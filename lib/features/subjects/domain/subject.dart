@@ -26,23 +26,37 @@ class Subject {
       );
 
   Map<String, Object?> toFields() => {
-        'name': name,
-        'color': color,
-        'sort_order': sortOrder,
-        'deleted': deleted,
-      };
+    'name': name,
+    'color': color,
+    'sort_order': sortOrder,
+    'deleted': deleted,
+  };
 
   factory Subject.fromFields(String id, Map<String, Object?> f) => Subject(
-        id: id,
-        name: f['name'] as String? ?? '',
-        color: ((f['color'] as num?) ?? 0xFF6366F1).toInt(),
-        sortOrder: ((f['sort_order'] as num?) ?? 0).toInt(),
-        deleted: f['deleted'] as bool? ?? false,
-      );
+    id: id,
+    name: f['name'] as String? ?? '',
+    color: ((f['color'] as num?) ?? 0xFF6366F1).toInt(),
+    sortOrder: ((f['sort_order'] as num?) ?? 0).toInt(),
+    deleted: f['deleted'] as bool? ?? false,
+  );
 }
 
 /// Subject colours offered in the picker, tuned to read well in light and
 /// dark themes.
+/// Names for [subjectPalette], read out by screen readers.
+const subjectPaletteNames = [
+  'Indigo',
+  'Sky',
+  'Teal',
+  'Green',
+  'Amber',
+  'Orange',
+  'Red',
+  'Pink',
+  'Purple',
+  'Slate',
+];
+
 const subjectPalette = <int>[
   0xFF6366F1, // indigo
   0xFF0EA5E9, // sky
