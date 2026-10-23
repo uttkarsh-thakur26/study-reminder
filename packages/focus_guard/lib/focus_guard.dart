@@ -82,6 +82,7 @@ class FocusGuardAccess {
     required this.quiet,
     required this.notifications,
     required this.battery,
+    this.lock = false,
   });
 
   /// Usage access: lets the app see which app is open.
@@ -102,6 +103,10 @@ class FocusGuardAccess {
   /// while the app is closed.
   final bool battery;
 
+  /// The Accessibility service is on: the screen can be locked after a flip,
+  /// the way the power button does.
+  final bool lock;
+
   bool get canBlockApps => usage && overlay;
 
   factory FocusGuardAccess.fromMap(Map<Object?, Object?> m) => FocusGuardAccess(
@@ -111,11 +116,12 @@ class FocusGuardAccess {
     quiet: m['quiet'] == true,
     notifications: m['notifications'] == true,
     battery: m['battery'] == true,
+    lock: m['lock'] == true,
   );
 }
 
 /// System pages where the user grants what Focus mode needs.
-enum FocusGuardPage { usage, overlay, media, quiet, battery, appInfo }
+enum FocusGuardPage { usage, overlay, media, quiet, battery, lock, appInfo }
 
 /// An app the user can block.
 @immutable
@@ -169,6 +175,11 @@ class FocusGuard {
 
   /// A short buzz, felt with the phone face down.
   Future<void> buzz() => _channel.invokeMethod<void>('buzz');
+
+  /// Locks the screen, as the power button does. False when the
+  /// Accessibility service is off, or Android is older than 9.
+  Future<bool> lock() async =>
+      await _channel.invokeMethod<bool>('lock') ?? false;
 
   Future<FocusGuardAccess> access() async => FocusGuardAccess.fromMap(
     await _channel.invokeMethod<Map<Object?, Object?>>('access') ?? const {},

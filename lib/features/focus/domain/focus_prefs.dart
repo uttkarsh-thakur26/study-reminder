@@ -16,6 +16,7 @@ class FocusPrefs {
     this.quiet = true,
     this.strict = false,
     this.flipToFocus = false,
+    this.flipLock = true,
     this.phoneApps = defaultPhoneApps,
     this.blockGames = true,
     this.laptopApps = defaultLaptopApps,
@@ -69,6 +70,10 @@ class FocusPrefs {
   /// open.
   final bool flipToFocus;
 
+  /// Lock the screen once a flip has started focus, so the phone is not left
+  /// on face down. Needs the app's Accessibility service on.
+  final bool flipLock;
+
   /// Android package names to block.
   final Set<String> phoneApps;
 
@@ -99,6 +104,7 @@ class FocusPrefs {
     bool? quiet,
     bool? strict,
     bool? flipToFocus,
+    bool? flipLock,
     Set<String>? phoneApps,
     bool? blockGames,
     List<String>? laptopApps,
@@ -113,6 +119,7 @@ class FocusPrefs {
     quiet: quiet ?? this.quiet,
     strict: strict ?? this.strict,
     flipToFocus: flipToFocus ?? this.flipToFocus,
+    flipLock: flipLock ?? this.flipLock,
     phoneApps: phoneApps ?? this.phoneApps,
     blockGames: blockGames ?? this.blockGames,
     laptopApps: laptopApps ?? this.laptopApps,
@@ -129,6 +136,7 @@ class FocusPrefs {
     quiet: quiet,
     strict: strict,
     flipToFocus: flipToFocus,
+    flipLock: flipLock,
     phoneApps: phoneApps,
     blockGames: blockGames,
     laptopApps: laptopApps,
@@ -145,6 +153,7 @@ class FocusPrefs {
     'quiet': quiet,
     'strict': strict,
     'flip': flipToFocus,
+    'flipLock': flipLock,
     'phoneApps': phoneApps.toList()..sort(),
     'blockGames': blockGames,
     'laptopApps': laptopApps,
@@ -178,6 +187,7 @@ class FocusPrefs {
       quiet: m['quiet'] as bool? ?? d.quiet,
       strict: m['strict'] as bool? ?? d.strict,
       flipToFocus: m['flip'] as bool? ?? d.flipToFocus,
+      flipLock: m['flipLock'] as bool? ?? d.flipLock,
       phoneApps: strings(m['phoneApps'])?.toSet() ?? d.phoneApps,
       blockGames: m['blockGames'] as bool? ?? d.blockGames,
       laptopApps: strings(m['laptopApps']) ?? d.laptopApps,

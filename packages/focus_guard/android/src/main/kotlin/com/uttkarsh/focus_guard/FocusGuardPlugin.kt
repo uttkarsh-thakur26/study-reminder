@@ -8,12 +8,14 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -151,6 +153,7 @@ class FocusGuardPlugin :
                 buzz()
                 result.success(null)
             }
+            "lock" -> result.success(FocusLockService.lock())
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }
@@ -159,7 +162,11 @@ class FocusGuardPlugin :
         }
     }
 
-    /** A short buzz, felt with the phone face down, when a flip starts focus. */
+    /**
+     * A short buzz, felt with the phone face down, when a flip starts focus.
+     * Sent as an alarm, which Do Not Disturb and silent mode let through: the
+     * session turns Do Not Disturb on as it starts.
+     */
     private fun buzz() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -168,8 +175,23 @@ class FocusGuardPlugin :
             context.getSystemService(Vibrator::class.java)
         } ?: return
         if (!vibrator.hasVibrator()) return
+        val timings = longArrayOf(0L, 220L, 140L, 220L)
+        val effect = if (vibrator.hasAmplitudeControl()) {
+            VibrationEffect.createWaveform(timings, intArrayOf(0, 255, 0, 255), -1)
+        } else {
+            VibrationEffect.createWaveform(timings, -1)
+        }
         try {
-            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0L, 180L, 120L, 180L), -1))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+            } else {
+                val alarm = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, alarm)
+            }
         } catch (e: SecurityException) {
             // No vibration permission; the session starts all the same.
         }
@@ -212,6 +234,7 @@ class FocusGuardPlugin :
             "quiet" to nm.isNotificationPolicyAccessGranted,
             "notifications" to nm.areNotificationsEnabled(),
             "battery" to power.isIgnoringBatteryOptimizations(context.packageName),
+            "lock" to FocusLockService.granted(context),
         )
     }
 
@@ -257,6 +280,16 @@ class FocusGuardPlugin :
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
             )
+            "lock" -> buildList {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val service = ComponentName(context, FocusLockService::class.java)
+                    add(
+                        Intent(Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
+                            .putExtra(Intent.EXTRA_COMPONENT_NAME, service.flattenToString()),
+                    )
+                }
+                add(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
             "appInfo" -> listOf(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
             else -> emptyList()
         }

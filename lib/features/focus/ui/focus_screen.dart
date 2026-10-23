@@ -620,6 +620,8 @@ class _StartForm extends ConsumerWidget {
 
     final minutes = prefs.minutes;
     final custom = !_presets.contains(minutes);
+    final locks =
+        prefs.flipLock && (ref.watch(focusAccessProvider).value?.lock ?? false);
     final subjects = ref.watch(subjectsProvider).value ?? const <Subject>[];
 
     final form = Padding(
@@ -675,22 +677,18 @@ class _StartForm extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Gap.m),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: Gap.s,
-            runSpacing: Gap.xs,
+          _ChipRow(
             children: [
               for (final m in _presets)
-                ChoiceChip(
-                  label: Text('$m'),
+                _ValueChip(
+                  label: '$m',
                   selected: minutes == m,
-                  onSelected: (_) => setMinutes(m),
+                  onTap: () => setMinutes(m),
                 ),
-              ChoiceChip(
-                avatar: custom ? null : const Icon(Icons.edit_outlined),
-                label: Text(custom ? '$minutes' : 'Other'),
+              _ValueChip(
                 selected: custom,
-                onSelected: (_) => typeMinutes(),
+                tooltip: 'Other minutes',
+                onTap: typeMinutes,
               ),
             ],
           ),
@@ -776,7 +774,8 @@ class _StartForm extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Flip to focus is on: lay the phone screen down for '
-                    '2 seconds to start. It buzzes when focus starts.',
+                    '2 seconds to start. It buzzes when focus starts'
+                    '${locks ? ', then the phone locks.' : '.'}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -884,57 +883,47 @@ class _RoundsPicker extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Wrap(
-                          spacing: Gap.xs,
-                          runSpacing: Gap.xs,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        Row(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(right: Gap.s),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                            Icon(
+                              Icons.local_cafe_outlined,
+                              size: 20,
+                              color: scheme.tertiary,
+                            ),
+                            const SizedBox(width: Gap.s),
+                            Text('Breaks', style: theme.textTheme.titleSmall),
+                            const SizedBox(width: Gap.s),
+                            Expanded(
+                              child: _ChipRow(
+                                alignment: MainAxisAlignment.end,
                                 children: [
-                                  Icon(
-                                    Icons.local_cafe_outlined,
-                                    size: 20,
-                                    color: scheme.tertiary,
-                                  ),
-                                  const SizedBox(width: Gap.s),
-                                  Text(
-                                    'Breaks',
-                                    style: theme.textTheme.titleSmall,
+                                  for (final m in _breaks)
+                                    _ValueChip(
+                                      label: '$m',
+                                      selected: prefs.breakMinutes == m,
+                                      onTap: () => onChanged(
+                                        prefs.copyWith(breakMinutes: m),
+                                      ),
+                                    ),
+                                  _ValueChip(
+                                    selected: customBreak,
+                                    tooltip: 'Other break length',
+                                    onTap: () async {
+                                      final m = await showMinutesDialog(
+                                        context,
+                                        title: 'Minutes a break',
+                                        initial: prefs.breakMinutes,
+                                        max: 60,
+                                      );
+                                      if (m != null) {
+                                        onChanged(
+                                          prefs.copyWith(breakMinutes: m),
+                                        );
+                                      }
+                                    },
                                   ),
                                 ],
                               ),
-                            ),
-                            for (final m in _breaks)
-                              ChoiceChip(
-                                label: Text('$m min'),
-                                selected: prefs.breakMinutes == m,
-                                onSelected: (_) =>
-                                    onChanged(prefs.copyWith(breakMinutes: m)),
-                              ),
-                            ChoiceChip(
-                              avatar: customBreak
-                                  ? null
-                                  : const Icon(Icons.edit_outlined),
-                              label: Text(
-                                customBreak
-                                    ? '${prefs.breakMinutes} min'
-                                    : 'Other',
-                              ),
-                              selected: customBreak,
-                              onSelected: (_) async {
-                                final m = await showMinutesDialog(
-                                  context,
-                                  title: 'Minutes a break',
-                                  initial: prefs.breakMinutes,
-                                  max: 60,
-                                );
-                                if (m != null) {
-                                  onChanged(prefs.copyWith(breakMinutes: m));
-                                }
-                              },
                             ),
                           ],
                         ),
@@ -955,6 +944,67 @@ class _RoundsPicker extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Chips on one line, scrolling when they do not fit, so one never sits
+/// alone on a second line.
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({
+    required this.children,
+    this.alignment = MainAxisAlignment.center,
+  });
+
+  final List<Widget> children;
+  final MainAxisAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: box.maxWidth),
+        child: Row(
+          mainAxisAlignment: alignment,
+          children: [
+            for (final (i, chip) in children.indexed) ...[
+              if (i > 0) const SizedBox(width: 6),
+              chip,
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A narrow choice chip for a length. Selection shows as its fill, with no
+/// check mark, so its width stays the same. Without a [label] it is a pencil
+/// that asks for a number, selected when the length is one typed in.
+class _ValueChip extends StatelessWidget {
+  const _ValueChip({
+    this.label,
+    required this.selected,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  final String? label;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+    showCheckmark: false,
+    tooltip: tooltip,
+    padding: const EdgeInsets.symmetric(horizontal: Gap.xs),
+    labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+    label: label == null
+        ? const Icon(Icons.edit_outlined, size: 18)
+        : Text(label!),
+    selected: selected,
+    onSelected: (_) => onTap(),
+  );
 }
 
 /// What a session is for, picked from the subjects.

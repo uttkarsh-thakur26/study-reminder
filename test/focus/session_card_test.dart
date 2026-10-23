@@ -145,6 +145,16 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('the pencil asks for exact minutes', (tester) async {
+    await pump(tester, FocusSessions.idle);
+    await tester.tap(find.byTooltip('Other minutes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Minutes'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await done(tester);
+  });
+
   testWidgets('with nothing paired, there is no choice of device', (
     tester,
   ) async {

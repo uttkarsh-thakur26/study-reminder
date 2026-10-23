@@ -59,7 +59,9 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
     final scheme = theme.colorScheme;
     final access = ref.watch(focusAccessProvider).value;
     final guard = ref.watch(focusGuardProvider);
+    final prefs = ref.watch(focusPrefsProvider).value;
     if (access == null || guard == null) return const SizedBox.shrink();
+    final wantsLock = prefs != null && prefs.flipToFocus && prefs.flipLock;
 
     Widget row(
       IconData icon,
@@ -79,7 +81,11 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             ),
     );
 
-    final restricted = !access.usage || !access.overlay || !access.media;
+    final restricted =
+        !access.usage ||
+        !access.overlay ||
+        !access.media ||
+        (wantsLock && !access.lock);
     return Card(
       child: Column(
         children: [
@@ -118,6 +124,14 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             access.battery,
             FocusGuardPage.battery,
           ),
+          if (wantsLock)
+            row(
+              Icons.lock_outline_rounded,
+              'Accessibility',
+              'Lock the phone after a flip. Nothing on screen is read',
+              access.lock,
+              FocusGuardPage.lock,
+            ),
           if (restricted)
             Padding(
               padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.m),
@@ -198,6 +212,8 @@ class PhoneBlockListCard extends ConsumerWidget {
       for (final a in apps ?? const <InstalledApp>[]) a.packageName: a.label,
     };
     final repo = ref.read(focusRepositoryProvider);
+    final guard = ref.watch(focusGuardProvider);
+    final canLock = ref.watch(focusAccessProvider).value?.lock ?? false;
     final chosen = prefs.phoneApps.toList()
       ..sort(
         (a, b) => (names[a] ?? a).toLowerCase().compareTo(
@@ -251,6 +267,22 @@ class PhoneBlockListCard extends ConsumerWidget {
             value: prefs.flipToFocus,
             onChanged: (v) => repo.savePrefs(prefs.copyWith(flipToFocus: v)),
           ),
+          if (prefs.flipToFocus)
+            SwitchListTile(
+              secondary: const Icon(Icons.lock_outline_rounded),
+              title: const Text('Lock the phone too'),
+              subtitle: Text(
+                !prefs.flipLock || canLock
+                    ? 'Once focus starts, so the screen does not stay on. '
+                          'Fingerprint still unlocks it'
+                    : 'Allow Accessibility above to lock it',
+              ),
+              value: prefs.flipLock,
+              onChanged: (v) {
+                repo.savePrefs(prefs.copyWith(flipLock: v));
+                if (v && !canLock) guard?.open(FocusGuardPage.lock);
+              },
+            ),
         ],
       ),
     );
