@@ -10,29 +10,47 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.util.Date
 
 /**
  * Starts and ends sessions on this phone: Do Not Disturb, the session
- * service, the alarm that ends the session on time, and the notifications.
- * Every entry point (Dart, the alarms, the boot receiver) goes through here.
+ * service, the alarms that end the session and its rounds on time, and the
+ * notifications. Every entry point (Dart, the alarms, the boot receiver)
+ * goes through here. During a break between rounds nothing is blocked and
+ * Do Not Disturb is off.
  */
 object FocusController {
     private const val TAG = "FocusGuard"
     private const val SESSION_CHANNEL = "focus_guard_session"
     private const val DONE_CHANNEL = "focus_guard_done"
     private const val ALERT_CHANNEL = "focus_guard_alert"
+    private const val PHASE_CHANNEL = "focus_guard_phase"
     const val SESSION_NOTIFICATION = 7301
     private const val DONE_NOTIFICATION = 7302
     private const val STOPPED_NOTIFICATION = 7303
     const val LEFT_NOTIFICATION = 7304
+    private const val PHASE_NOTIFICATION = 7305
+
+    /** How long "Back to focus" may sound before Do Not Disturb comes on. */
+    private const val QUIET_AFTER_ALERT_MS = 1500L
+
+    private val main = Handler(Looper.getMainLooper())
+
+    /** A phase alarm this late (after a reboot, say) changes things quietly. */
+    private const val PHASE_ALERT_WITHIN_MS = 2 * 60 * 1000L
 
     /** Extras on the app's launch intent: start a session on this phone. */
     const val EXTRA_FOCUS_UNTIL = "focus_guard_focus_until"
 
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
+    const val ACTION_PHASE = "com.uttkarsh.focus_guard.PHASE"
+
+    private const val WIDGET_REFRESH = "com.uttkarsh.study_widget.REFRESH"
+    private const val WIDGET_PROVIDER = "com.uttkarsh.study_widget.StudyWidgetProvider"
 
     /** When the session service was last asked to start; 0 once it has. */
     @Volatile
@@ -46,7 +64,13 @@ object FocusController {
      * phone: stopped, or only for the laptop.
      */
     @Synchronized
-    fun apply(context: Context, version: String, state: FocusState?, pushed: Boolean) {
+    fun apply(
+        context: Context,
+        version: String,
+        state: FocusState?,
+        pushed: Boolean,
+        paused: Boolean = false,
+    ) {
         if (version.isEmpty()) return
         val last = FocusState.lastVersion(context)
         val running = FocusState.load(context)
@@ -67,7 +91,7 @@ object FocusController {
             start(context, state)
         } else if (running != null) {
             finish(context, done = false)
-            if (pushed) postStopped(context)
+            if (pushed) postStopped(context, paused)
         }
     }
 
@@ -79,9 +103,65 @@ object FocusController {
             return
         }
         FocusState.save(context, state)
-        applyQuiet(context, state.quiet)
+        val phase = state.phaseAt()
+        applyQuiet(context, state.quiet && !phase.onBreak)
         scheduleAlarm(context, ACTION_END, state.endsAt)
+        schedulePhase(context, state, phase)
         startService(context, state, retry = true)
+        tellWidget(context, state.endsAt)
+    }
+
+    /**
+     * A round or a break began: Do Not Disturb follows, the session
+     * notification shows the new phase, and the user hears about it.
+     */
+    @Synchronized
+    fun phaseChanged(context: Context, done: () -> Unit = {}) {
+        val state = FocusState.load(context)
+        if (state == null) {
+            done()
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (state.isOver(now)) {
+            finish(context, done = true)
+            done()
+            return
+        }
+        val phase = state.phaseAt(now)
+        val quiet = state.quiet && !phase.onBreak
+        val alert = now - phase.startsAt < PHASE_ALERT_WITHIN_MS
+        schedulePhase(context, state, phase)
+        // The service redraws its notification for the new phase, and is
+        // started again if Android stopped it.
+        startService(context, state, retry = false)
+        if (!quiet || !alert) {
+            applyQuiet(context, quiet)
+            if (alert) postPhase(context, phase)
+            done()
+            return
+        }
+        // Do Not Disturb would silence "Back to focus", so it comes back on
+        // once that has sounded, if the session still wants it then.
+        postPhase(context, phase)
+        main.postDelayed({
+            synchronized(this) {
+                val current = FocusState.load(context)
+                if (current != null && !current.isOver() && !current.phaseAt().onBreak) {
+                    applyQuiet(context, current.quiet)
+                }
+            }
+            done()
+        }, QUIET_AFTER_ALERT_MS)
+    }
+
+    /** The alarm for the next round or break, if one comes before the end. */
+    private fun schedulePhase(context: Context, state: FocusState, phase: FocusState.Phase) {
+        if (phase.endsAt < state.endsAt) {
+            scheduleAlarm(context, ACTION_PHASE, phase.endsAt)
+        } else {
+            cancelAlarm(context, ACTION_PHASE)
+        }
     }
 
     /** Enforces the saved session again, after a reboot or an app update. */
@@ -99,11 +179,14 @@ object FocusController {
         applyQuiet(context, false)
         cancelAlarm(context, ACTION_END)
         cancelAlarm(context, ACTION_START)
+        cancelAlarm(context, ACTION_PHASE)
+        notifications(context).cancel(PHASE_NOTIFICATION)
         // Stopping a service Android is still starting crashes the app; the
         // service stops itself instead once it starts and finds no session.
         val starting = System.currentTimeMillis() - serviceRequestedAt < 10_000
         if (!starting) context.stopService(Intent(context, FocusService::class.java))
         notifications(context).cancel(SESSION_NOTIFICATION)
+        if (state != null) tellWidget(context, 0L)
         if (done && state != null) postDone(context, state)
     }
 
@@ -127,6 +210,22 @@ object FocusController {
             } else {
                 notifications(context).notify(SESSION_NOTIFICATION, waitingNotification(context, state))
             }
+        }
+    }
+
+    /**
+     * The home screen widget shows when the phone's session ends. It lives
+     * in another plugin of the same app, so it is told by name; an app
+     * without it just drops the broadcast.
+     */
+    private fun tellWidget(context: Context, focusUntil: Long) {
+        val intent = Intent(WIDGET_REFRESH)
+            .setClassName(context.packageName, WIDGET_PROVIDER)
+            .putExtra("focusUntil", focusUntil)
+        try {
+            context.sendBroadcast(intent)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Widget not told about the session", e)
         }
     }
 
@@ -161,7 +260,11 @@ object FocusController {
     private fun alarmIntent(context: Context, action: String): PendingIntent =
         PendingIntent.getBroadcast(
             context,
-            if (action == ACTION_END) 1 else 2,
+            when (action) {
+                ACTION_END -> 1
+                ACTION_START -> 2
+                else -> 5
+            },
             Intent(context, FocusReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -203,6 +306,10 @@ object FocusController {
             NotificationChannel(ALERT_CHANNEL, "Focus alerts", NotificationManager.IMPORTANCE_HIGH)
                 .apply { description = "When your other device stops a strict session early" },
         )
+        nm.createNotificationChannel(
+            NotificationChannel(PHASE_CHANNEL, "Focus breaks", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "When a break starts and when it is time to focus again" },
+        )
     }
 
     private fun openApp(context: Context): PendingIntent? {
@@ -221,19 +328,37 @@ object FocusController {
     private fun clock(context: Context, at: Long): String =
         android.text.format.DateFormat.getTimeFormat(context).format(Date(at))
 
-    /** The notification the session service shows while it runs. */
+    /**
+     * The notification the session service shows while it runs, counting
+     * down to the end of the session, or of the round or break, with rounds.
+     */
     fun sessionNotification(context: Context, state: FocusState): Notification {
         ensureChannels(context)
+        val phase = state.phaseAt()
         val text = buildString {
-            append("Until ")
-            append(clock(context, state.endsAt))
+            when {
+                phase.onBreak -> append("Back to focus at ${clock(context, phase.endsAt)}")
+                phase.round < phase.rounds -> {
+                    append("Break at ${clock(context, phase.endsAt)}")
+                    append(" · ends ${clock(context, state.endsAt)}")
+                }
+                else -> append("Until ${clock(context, state.endsAt)}")
+            }
             if (state.startedBy.isNotEmpty()) append(" · started on ${state.startedBy}")
+        }
+        val title = when {
+            phase.onBreak -> "Break · round ${phase.round} of ${phase.rounds} done"
+            phase.rounds > 1 && state.blockApps ->
+                "Round ${phase.round} of ${phase.rounds} · distractions blocked"
+            phase.rounds > 1 -> "Focus on · round ${phase.round} of ${phase.rounds}"
+            state.blockApps -> "Focus on · distractions blocked"
+            else -> "Focus on"
         }
         return Notification.Builder(context, SESSION_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
-            .setContentTitle(if (state.blockApps) "Focus on · distractions blocked" else "Focus on")
+            .setContentTitle(title)
             .setContentText(text)
-            .setWhen(state.endsAt)
+            .setWhen(phase.endsAt)
             .setShowWhen(true)
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
@@ -255,9 +380,31 @@ object FocusController {
             .build()
     }
 
+    /** "Break time" or "Back to focus", as a round or break begins. */
+    private fun postPhase(context: Context, phase: FocusState.Phase) {
+        ensureChannels(context)
+        val minutes = ((phase.endsAt - phase.startsAt + 30_000) / 60000).coerceAtLeast(1)
+        val title = if (phase.onBreak) "Break time · $minutes min" else "Back to focus"
+        val text = if (phase.onBreak) {
+            "Round ${phase.round} of ${phase.rounds} done. Next round at ${clock(context, phase.endsAt)}."
+        } else {
+            "Round ${phase.round} of ${phase.rounds}, until ${clock(context, phase.endsAt)}."
+        }
+        val notification = Notification.Builder(context, PHASE_CHANNEL)
+            .setSmallIcon(R.drawable.focus_guard_stat)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setTimeoutAfter((phase.endsAt - System.currentTimeMillis()).coerceAtLeast(10_000L))
+            .setContentIntent(openApp(context))
+            .build()
+        notifications(context).notify(PHASE_NOTIFICATION, notification)
+    }
+
     private fun postDone(context: Context, state: FocusState) {
         ensureChannels(context)
-        val minutes = ((state.endsAt - state.startedAt) / 60000).coerceAtLeast(1)
+        val minutes = (state.focusedMs() / 60000).coerceAtLeast(1)
         val notification = Notification.Builder(context, DONE_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
             .setContentTitle("Focus done")
@@ -319,12 +466,18 @@ object FocusController {
     }
 
     /** A short note that another device ended the session, gone after 10 s. */
-    fun postStopped(context: Context) {
+    fun postStopped(context: Context, paused: Boolean = false) {
         ensureChannels(context)
         val notification = Notification.Builder(context, SESSION_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
-            .setContentTitle("Focus ended")
-            .setContentText("Stopped from your other device.")
+            .setContentTitle(if (paused) "Focus paused" else "Focus ended")
+            .setContentText(
+                if (paused) {
+                    "Paused from your other device. Open the app to resume."
+                } else {
+                    "Stopped from your other device."
+                },
+            )
             .setAutoCancel(true)
             .setTimeoutAfter(10_000)
             .setContentIntent(openApp(context))

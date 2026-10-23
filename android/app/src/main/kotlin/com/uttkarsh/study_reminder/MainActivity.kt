@@ -42,6 +42,14 @@ class MainActivity : FlutterActivity() {
                             if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
                         )
                     }
+                    // The wallpaper's accent colour, on Android 12 and later.
+                    "accent" -> result.success(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            getColor(android.R.color.system_accent1_500)
+                        } else {
+                            null
+                        },
+                    )
                     else -> result.notImplemented()
                 }
             }

@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/** The end-of-session alarm, the retry alarm, and restoring after a reboot. */
+/**
+ * The end-of-session alarm, the alarm between rounds and breaks, the retry
+ * alarm, and restoring after a reboot.
+ */
 class FocusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
@@ -14,6 +17,11 @@ class FocusReceiver : BroadcastReceiver() {
                 if (state.endsAt > System.currentTimeMillis() + 1000) return
                 FocusController.finish(context, done = true)
             }
+            FocusController.ACTION_PHASE -> {
+                // Kept alive until Do Not Disturb has followed the new phase.
+                val pending = goAsync()
+                FocusController.phaseChanged(context) { pending.finish() }
+            }
             FocusController.ACTION_START -> {
                 val state = FocusState.load(context) ?: return
                 if (state.isOver()) {
@@ -22,8 +30,10 @@ class FocusReceiver : BroadcastReceiver() {
                     FocusController.startService(context, state, retry = false)
                 }
             }
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED ->
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                ScreenTimeout.restoreIfLeft(context)
                 FocusController.restore(context)
+            }
         }
     }
 }

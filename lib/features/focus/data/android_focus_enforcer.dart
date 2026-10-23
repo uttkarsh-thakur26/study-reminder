@@ -37,6 +37,10 @@ class AndroidFocusEnforcer implements FocusEnforcer {
               blockGames: prefs.blockGames,
               packages: prefs.phoneApps,
               startedBy: session.startedBy,
+              rounds: session.rounds,
+              workMinutes: session.workMinutes,
+              breakMinutes: session.breakMinutes,
+              doneMs: session.doneMs,
             )
           : null,
     );

@@ -8,12 +8,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -48,6 +53,7 @@ class FocusGuardPlugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
+        ScreenTimeout.restoreIfLeft(context)
         channel = MethodChannel(binding.binaryMessenger, "focus_guard")
         channel.setMethodCallHandler(this)
         flips = EventChannel(binding.binaryMessenger, "focus_guard/flip")
@@ -144,11 +150,51 @@ class FocusGuardPlugin :
                 focusUntil = 0L
                 result.success(if (until == 0L) null else until)
             }
+            "buzz" -> {
+                buzz()
+                result.success(null)
+            }
+            "lock" -> result.success(ScreenTimeout.shorten(context))
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }
             "icon" -> inBackground(result) { icon(call.argument<String>("package") ?: "") }
             else -> result.notImplemented()
+        }
+    }
+
+    /**
+     * A short buzz, felt with the phone face down, when a flip starts focus.
+     * Sent as an alarm, which Do Not Disturb and silent mode let through: the
+     * session turns Do Not Disturb on as it starts.
+     */
+    private fun buzz() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Vibrator::class.java)
+        } ?: return
+        if (!vibrator.hasVibrator()) return
+        val timings = longArrayOf(0L, 220L, 140L, 220L)
+        val effect = if (vibrator.hasAmplitudeControl()) {
+            VibrationEffect.createWaveform(timings, intArrayOf(0, 255, 0, 255), -1)
+        } else {
+            VibrationEffect.createWaveform(timings, -1)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+            } else {
+                val alarm = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, alarm)
+            }
+        } catch (e: SecurityException) {
+            // No vibration permission; the session starts all the same.
         }
     }
 
@@ -161,6 +207,10 @@ class FocusGuardPlugin :
         blockGames = m["blockGames"] == true,
         packages = (m["packages"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
         startedBy = m["startedBy"] as? String ?: "",
+        workMs = ((m["workMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
+        breakMs = ((m["breakMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
+        plannedRounds = ((m["rounds"] as? Number)?.toInt() ?: 1).coerceIn(1, 100),
+        doneMs = ((m["doneMs"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
     )
 
     /** This phone's Firebase token, or null when there is none to be had. */
@@ -185,6 +235,7 @@ class FocusGuardPlugin :
             "quiet" to nm.isNotificationPolicyAccessGranted,
             "notifications" to nm.areNotificationsEnabled(),
             "battery" to power.isIgnoringBatteryOptimizations(context.packageName),
+            "lock" to ScreenTimeout.granted(context),
         )
     }
 
@@ -230,6 +281,7 @@ class FocusGuardPlugin :
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
             )
+            "lock" -> listOf(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
             "appInfo" -> listOf(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
             else -> emptyList()
         }

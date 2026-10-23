@@ -1,0 +1,55 @@
+name: Windows packages
+description: >-
+  Zips the Windows release build and makes its installer with Inno Setup 6.
+  Run after `flutter build windows --release`, from the repository root.
+
+inputs:
+  version:
+    description: The version the installer shows and is named after, like 1.2.0.
+    required: true
+  zip-name:
+    description: File name of the zip.
+    required: true
+
+outputs:
+  installer:
+    description: File name of the installer, in the repository root.
+    value: ${{ steps.installer.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Zip the app
+      shell: pwsh
+      env:
+        ZIP_NAME: ${{ inputs.zip-name }}
+      run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath $env:ZIP_NAME
+
+    - name: Build the installer
+      id: installer
+      shell: pwsh
+      env:
+        APP_VERSION: ${{ inputs.version }}
+      run: |
+        # The runner image comes with Inno Setup 6; install it if that changes.
+        function Find-Iscc {
+          foreach ($dir in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+            foreach ($name in @('Inno Setup 6', 'Inno Setup 7')) {
+              $path = Join-Path $dir "$name\ISCC.exe"
+              if (Test-Path $path) { return $path }
+            }
+          }
+        }
+        $iscc = Find-Iscc
+        if (-not $iscc) {
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'Could not install Inno Setup.' }
+          $iscc = Find-Iscc
+        }
+        if (-not $iscc) { throw 'ISCC.exe not found.' }
+        & $iscc "/DAppVersion=$env:APP_VERSION" windows\installer\study_reminder.iss
+        if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
+        # Next to the zip, so an artifact with both has them side by side.
+        $installer = "StudyReminder-Setup-$env:APP_VERSION.exe"
+        Move-Item -Force "build\installer\$installer" $installer
+        "path=$installer" >> $env:GITHUB_OUTPUT

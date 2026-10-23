@@ -14,6 +14,8 @@ import '../features/focus/application/focus_providers.dart';
 import '../features/sync/application/sync_providers.dart';
 import '../features/reminders/ui/reminder_editor.dart';
 import 'desktop_window.dart';
+import 'global_hotkeys.dart';
+import 'mini_timer.dart';
 
 const _openItem = 'open';
 const _newItem = 'new';
@@ -46,6 +48,8 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
     trayManager.addListener(this);
     _taps = ref.read(localNotificationsProvider)?.taps.listen(_onTap);
     unawaited(_setUpTray());
+    // Turns the global shortcuts on, unless the user turned them off.
+    ref.read(globalHotkeysProvider);
   }
 
   @override
@@ -79,11 +83,11 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
       payload: response.payload,
       actionId: response.actionId,
     );
-    if (payload != null && action == null) unawaited(showDesktopWindow());
+    if (payload != null && action == null) unawaited(_showWindow());
   }
 
   @override
-  void onTrayIconMouseDown() => unawaited(showDesktopWindow());
+  void onTrayIconMouseDown() => unawaited(_showWindow());
 
   @override
   void onTrayIconRightMouseDown() => unawaited(
@@ -97,7 +101,7 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
   void onTrayMenuItemClick(MenuItem menuItem) {
     switch (menuItem.key) {
       case _openItem:
-        unawaited(showDesktopWindow());
+        unawaited(_showWindow());
       case _newItem:
         unawaited(_newReminder());
       case _quitItem:
@@ -105,8 +109,12 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
     }
   }
 
+  /// Out of the small timer too: whatever brings the window up needs room.
+  Future<void> _showWindow() =>
+      showFullWindow(ref.read(miniTimerProvider.notifier));
+
   Future<void> _newReminder() async {
-    await showDesktopWindow();
+    await _showWindow();
     if (mounted) unawaited(openReminderEditor(context));
   }
 
@@ -146,7 +154,7 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
   Future<bool> _mayQuitDuringFocus() async {
     final session = (await ref.read(focusRepositoryProvider).current()).laptop;
     if (!session.strict || !session.runningAt(DateTime.now())) return true;
-    await showDesktopWindow();
+    await _showWindow();
     if (!mounted) return false;
     final until = formatTime(context, session.endsAt!.toLocal());
     final quit = await showDialog<bool>(

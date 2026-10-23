@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/focus/ui/focus_screen.dart';
@@ -7,7 +8,8 @@ import '../features/reminders/ui/reminder_editor.dart';
 import '../features/reminders/ui/today_screen.dart';
 import '../features/reminders/ui/upcoming_screen.dart';
 import '../features/settings/ui/settings_screen.dart';
-import '../features/subjects/ui/subjects_screen.dart';
+import '../features/stats/ui/study_screen.dart';
+import 'shell_requests.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -24,29 +26,32 @@ const _destinations = [
     Icons.calendar_month_rounded,
   ),
   _Destination('Focus', Icons.timer_outlined, Icons.timer_rounded),
-  _Destination('Subjects', Icons.menu_book_outlined, Icons.menu_book_rounded),
+  _Destination('Study', Icons.insights_outlined, Icons.insights_rounded),
   _Destination('Settings', Icons.settings_outlined, Icons.settings_rounded),
 ];
 
 /// Bottom navigation on phones, a side rail on laptops.
 ///
 /// Keyboard: Ctrl+N new reminder, Ctrl+K quick add, Ctrl+1..5 switch pages.
-class AppShell extends StatefulWidget {
+/// Global shortcuts on Windows and the home screen widget on Android reach
+/// it through [shellRequestsProvider].
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
   final _quickAddFocus = FocusNode(debugLabel: 'quick-add');
+  final _pagesKey = GlobalKey();
 
   late final _pages = [
     TodayScreen(quickAddFocus: _quickAddFocus),
     const UpcomingScreen(),
     const FocusScreen(),
-    const SubjectsScreen(),
+    const StudyScreen(),
     const SettingsScreen(),
   ];
 
@@ -67,11 +72,26 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// From outside the pages, like a global shortcut on Windows.
+  void _onRequest(NumberedShellRequest? _, NumberedShellRequest? next) {
+    switch (next?.request) {
+      case ShellRequest.quickAdd:
+        _focusQuickAdd();
+      case ShellRequest.focus:
+        _select(_destinations.indexWhere((d) => d.label == 'Focus'));
+      case null:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<NumberedShellRequest?>(shellRequestsProvider, _onRequest);
     final wide = isWide(context);
     final scheme = Theme.of(context).colorScheme;
-    final body = IndexedStack(index: _index, children: _pages);
+    // Keyed, so the pages keep their state when the layout changes with the
+    // window's width (the small timer on Windows, say).
+    final body = IndexedStack(key: _pagesKey, index: _index, children: _pages);
 
     final shortcuts = <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):

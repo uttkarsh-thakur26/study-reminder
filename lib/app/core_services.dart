@@ -51,7 +51,8 @@ Future<Hlc?> _latestStamp(AppDatabase db) async {
         'SELECT MAX(hlc) AS h FROM reminders UNION ALL '
         'SELECT MAX(hlc) FROM subjects UNION ALL '
         'SELECT MAX(hlc) FROM occurrences UNION ALL '
-        'SELECT MAX(hlc) FROM focus_sessions)',
+        'SELECT MAX(hlc) FROM focus_sessions UNION ALL '
+        'SELECT MAX(hlc) FROM study_sessions)',
         variables: const <Variable<Object>>[],
       )
       .getSingleOrNull();

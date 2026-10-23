@@ -1,0 +1,50 @@
+name: Android release signing
+description: >-
+  Writes the release keystore and android/key.properties from the signing
+  secrets. Without them the APK is signed with a temporary debug key, which
+  cannot update an earlier install.
+
+inputs:
+  keystore-base64:
+    description: The keystore, base64 encoded (secret ANDROID_KEYSTORE_BASE64).
+    default: ''
+  keystore-password:
+    description: Secret ANDROID_KEYSTORE_PASSWORD.
+    default: ''
+  key-alias:
+    description: Secret ANDROID_KEY_ALIAS.
+    default: ''
+  key-password:
+    description: Secret ANDROID_KEY_PASSWORD.
+    default: ''
+  required:
+    description: Fail instead of warning when the secrets are missing.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up release signing
+      shell: bash
+      env:
+        KEYSTORE_BASE64: ${{ inputs.keystore-base64 }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        KEY_ALIAS: ${{ inputs.key-alias }}
+        KEY_PASSWORD: ${{ inputs.key-password }}
+        REQUIRED: ${{ inputs.required }}
+      run: |
+        if [ -z "$KEYSTORE_BASE64" ]; then
+          if [ "$REQUIRED" = true ]; then
+            echo "::error::No signing secrets set. A release APK must be signed with the release key, so it can update earlier installs."
+            exit 1
+          fi
+          echo "::warning::No signing secrets set. The APK is signed with a temporary debug key, so it cannot update a previous install."
+          exit 0
+        fi
+        echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+        {
+          echo "storeFile=release.jks"
+          echo "storePassword=$KEYSTORE_PASSWORD"
+          echo "keyAlias=$KEY_ALIAS"
+          echo "keyPassword=$KEY_PASSWORD"
+        } > android/key.properties

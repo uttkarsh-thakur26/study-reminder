@@ -3,17 +3,22 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
+import '../../alerts/application/alert_providers.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../sync/application/sync_providers.dart';
 import '../application/focus_providers.dart';
+import '../domain/focus_plan.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 
 /// Keeps this device following its focus session while the app runs:
 /// applies it whenever it or the block lists change (also when another
-/// device started it), again when it ends and when the app comes back, and
+/// device started it), again as each round or break begins (with a note on
+/// the laptop; the phone posts its own), when it ends and when the app
+/// comes back, and
 /// starts one when the phone is put down screen first, if the user turned
 /// that on, or when they asked for one from the note that the laptop quit a
 /// strict session.
@@ -35,6 +40,10 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
   FocusSessions? _all;
   FocusPrefs? _prefs;
   Timer? _end;
+
+  /// The phase last applied and the start of its session, to tell the user
+  /// when the next one begins.
+  ({DateTime session, FocusPhase phase})? _phase;
   bool _foreground = true;
   bool _askedAtStart = false;
   Future<void> _applying = Future.value();
@@ -91,7 +100,8 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     final session = _session;
     final prefs = _prefs;
     if (session == null || prefs == null) return;
-    _scheduleEnd(session);
+    _scheduleNext(session);
+    _notePhase(session);
     _updateFlip();
     final enforcer = ref.read(focusEnforcerProvider);
     _applying = _applying.then((_) async {
@@ -103,12 +113,46 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     });
   }
 
-  void _scheduleEnd(FocusSession session) {
+  /// Applies again when the next round or break begins, or the session ends.
+  void _scheduleNext(FocusSession session) {
     _end?.cancel();
-    final left = session.remainingAt(DateTime.now());
-    if (left > Duration.zero) {
-      _end = Timer(left + const Duration(milliseconds: 200), _apply);
+    final now = DateTime.now();
+    final next = session.nextChangeAfter(now);
+    if (next != null) {
+      _end = Timer(
+        next.difference(now) + const Duration(milliseconds: 200),
+        _apply,
+      );
     }
+  }
+
+  /// "Break time" or "Back to focus" on the laptop, as one begins. The
+  /// phone tells the user itself, even with the app closed.
+  void _notePhase(FocusSession session) {
+    final now = DateTime.now();
+    final here = ref.read(deviceKindProvider);
+    final phase = session.runsOn(here, now) ? session.phaseAt(now) : null;
+    final before = _phase;
+    _phase = phase == null ? null : (session: session.startedAt!, phase: phase);
+    if (phase == null || before == null || phase.rounds < 2) return;
+    if (ref.read(focusGuardProvider) != null) return;
+    if (before.session != session.startedAt) return;
+    if (before.phase.onBreak == phase.onBreak &&
+        before.phase.round == phase.round) {
+      return;
+    }
+    if (now.difference(phase.startedAt) > const Duration(minutes: 2)) return;
+    final at = DateFormat.jm().format(phase.endsAt.toLocal());
+    final minutes = (phase.length.inSeconds / 60).round();
+    ref
+        .read(localNotificationsProvider)
+        ?.showInfo(
+          title: phase.onBreak ? 'Break time · $minutes min' : 'Back to focus',
+          body: phase.onBreak
+              ? 'Round ${phase.round} of ${phase.rounds} done. Next round at $at.'
+              : 'Round ${phase.round} of ${phase.rounds}, until $at.',
+        )
+        .catchError((Object e) => debugPrint('focus: phase note failed: $e'));
   }
 
   /// Listens for the phone going face down only while that could start a
@@ -116,13 +160,18 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
   void _updateFlip() {
     final guard = ref.read(focusGuardProvider);
     final prefs = _prefs;
-    final idle = !(_session?.runningAt(DateTime.now()) ?? false);
+    final session = _session;
+    // A paused session waits to be resumed; a flip does not start another.
+    final idle =
+        session == null ||
+        !(session.runningAt(DateTime.now()) || session.isPaused);
     final want =
         guard != null &&
         prefs != null &&
         prefs.flipToFocus &&
         _foreground &&
         idle;
+    ref.read(flipArmedProvider.notifier).set(want);
     if (!want) {
       _flips?.cancel();
       _flips = null;
@@ -148,17 +197,25 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       orFree: false,
     );
     if (on.isEmpty) return;
-    await HapticFeedback.heavyImpact();
+    final guard = ref.read(focusGuardProvider);
+    // Felt through the table; a tap's haptics may be turned off. Before the
+    // start, which turns Do Not Disturb on.
+    try {
+      await guard?.buzz();
+    } on Object catch (e) {
+      debugPrint('focus: no buzz: $e');
+      await HapticFeedback.heavyImpact();
+    }
     await ref
         .read(focusRepositoryProvider)
-        .start(
-          on: on,
-          length: Duration(minutes: prefs.minutes),
-          blockApps: prefs.blockApps,
-          quiet: prefs.quiet,
-          strict: prefs.strict,
-          startedBy: ref.read(deviceNameProvider),
-        );
+        .startWith(prefs, on: on, startedBy: ref.read(deviceNameProvider));
+    if (guard == null || !prefs.flipLock) return;
+    // The phone left face down locks soon after.
+    try {
+      if (!await guard.lock()) debugPrint('focus: lock is not allowed');
+    } on Object catch (e) {
+      debugPrint('focus: could not lock: $e');
+    }
   }
 
   /// "Focus here" on the note that the laptop quit its strict session:
@@ -192,6 +249,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       blockApps: prefs.blockApps,
       quiet: prefs.quiet,
       strict: prefs.strict,
+      subjectId: prefs.subjectId,
       startedBy: ref.read(deviceNameProvider),
       now: now,
     );

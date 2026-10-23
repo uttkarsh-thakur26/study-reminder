@@ -31,8 +31,11 @@ class FocusService : Service() {
     private var lastBlockedAt = 0L
     private val games = HashMap<String, Boolean>()
     private var neverBlock: Set<String> = emptySet()
+    private var wasOnBreak = false
     private val media by lazy {
-        MediaGuard(this, handler) { app -> state?.let { it.blockApps && isBlocked(it, app) } == true }
+        MediaGuard(this, handler) { app ->
+            state?.let { it.blockApps && !it.phaseAt().onBreak && isBlocked(it, app) } == true
+        }
     }
 
     private val tick = object : Runnable {
@@ -102,6 +105,14 @@ class FocusService : Service() {
             return
         }
         if (!s.blockApps) return
+        // Nothing is blocked during a break. Once it ends, whatever blocked
+        // app is playing is paused again.
+        val onBreak = s.phaseAt().onBreak
+        if (onBreak != wasOnBreak) {
+            wasOnBreak = onBreak
+            if (!onBreak) media.recheck()
+        }
+        if (onBreak) return
         // Notification access may have been given or taken back since the
         // session began. Media plays with the screen off too.
         media.start()
@@ -125,10 +136,13 @@ class FocusService : Service() {
                         Intent.FLAG_ACTIVITY_NO_USER_ACTION,
                 )
                 .putExtra(BlockActivity.EXTRA_APP, label(app))
-                .putExtra(BlockActivity.EXTRA_ENDS_AT, s.endsAt)
+                .putExtra(BlockActivity.EXTRA_ENDS_AT, phase(s).endsAt)
+                .putExtra(BlockActivity.EXTRA_BREAK_NEXT, phase(s).round < phase(s).rounds)
                 .putExtra(BlockActivity.EXTRA_STRICT, s.strict),
         )
     }
+
+    private fun phase(s: FocusState) = s.phaseAt()
 
     /** The package of the activity in front, from usage events. */
     private fun currentApp(): String? {

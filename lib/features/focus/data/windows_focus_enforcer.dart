@@ -54,7 +54,7 @@ class WindowsFocusEnforcer implements FocusEnforcer {
 
   @override
   Future<void> apply(FocusSession session, FocusPrefs prefs) async {
-    if (session.blockApps && session.runsOn(DeviceKind.laptop, _now())) {
+    if (session.blockApps && session.enforcesOn(DeviceKind.laptop, _now())) {
       final rules = LaptopBlockRules(
         programs: prefs.laptopApps,
         sites: prefs.sites,
@@ -95,7 +95,7 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     final rules = _rules;
     if (session == null || rules == null) return;
     final now = _now();
-    if (!session.runningAt(now)) {
+    if (!session.enforcesOn(DeviceKind.laptop, now)) {
       _stop();
       return;
     }
@@ -131,7 +131,7 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     final rules = _rules;
     if (tabs == null || session == null || rules == null) return;
     if (!rules.blocksSites || _sweeping) return;
-    if (!session.runningAt(_now())) {
+    if (!session.enforcesOn(DeviceKind.laptop, _now())) {
       _stop();
       return;
     }

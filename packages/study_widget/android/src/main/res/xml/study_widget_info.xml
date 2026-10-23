@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 3 x 2 cells to start, resizable down to 2 x 1 and up as far as the
+     launcher allows. The rows shown follow the height. updatePeriodMillis is
+     only a fallback: the widget also schedules its own redraw for the next
+     reminder's time. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="80dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/study_widget"
+    android:previewLayout="@layout/study_widget_preview"
+    android:description="@string/study_widget_description"/>

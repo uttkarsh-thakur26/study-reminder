@@ -23,6 +23,7 @@ class BlockActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var detail: TextView
     private var endsAt = 0L
+    private var breakNext = false
 
     private val tick = object : Runnable {
         override fun run() {
@@ -71,6 +72,7 @@ class BlockActivity : Activity() {
 
     private fun bind(intent: Intent) {
         endsAt = intent.getLongExtra(EXTRA_ENDS_AT, 0)
+        breakNext = intent.getBooleanExtra(EXTRA_BREAK_NEXT, false)
         val app = intent.getStringExtra(EXTRA_APP) ?: "This app"
         heading.text = "$app is blocked"
         detail.text = detailText()
@@ -79,6 +81,7 @@ class BlockActivity : Activity() {
     private fun detailText(): String {
         val left = ((endsAt - System.currentTimeMillis()) / 60000 + 1).coerceAtLeast(1)
         val at = android.text.format.DateFormat.getTimeFormat(this).format(Date(endsAt))
+        if (breakNext) return "Your break starts at $at ($left min left). Stay with it until then."
         return "You're in a focus session until $at ($left min left). Stay with it."
     }
 
@@ -155,6 +158,7 @@ class BlockActivity : Activity() {
     companion object {
         const val EXTRA_APP = "app"
         const val EXTRA_ENDS_AT = "endsAt"
+        const val EXTRA_BREAK_NEXT = "breakNext"
         const val EXTRA_STRICT = "strict"
     }
 }

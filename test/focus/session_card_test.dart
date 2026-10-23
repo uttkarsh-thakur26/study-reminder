@@ -9,7 +9,9 @@ import 'package:study_reminder/features/focus/data/focus_repository.dart';
 import 'package:study_reminder/features/focus/domain/focus_prefs.dart';
 import 'package:study_reminder/features/focus/domain/focus_session.dart';
 import 'package:study_reminder/features/focus/ui/focus_screen.dart';
+import 'package:study_reminder/features/reminders/application/reminder_providers.dart';
 import 'package:study_reminder/features/reminders/domain/reminder.dart';
+import 'package:study_reminder/features/subjects/domain/subject.dart';
 import 'package:study_reminder/features/sync/application/sync_providers.dart';
 
 import '../sync/fake_sync_api.dart';
@@ -51,6 +53,10 @@ void main() {
           deviceKindProvider.overrideWithValue(DeviceKind.phone),
           deviceNameProvider.overrideWithValue('Pixel'),
           if (paired) syncApiProvider.overrideWithValue(FakeSyncApi()),
+          // Drift streams never settle under the test clock.
+          subjectsProvider.overrideWith(
+            (ref) => Stream.value(const <Subject>[]),
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -108,6 +114,44 @@ void main() {
     expect(find.text('left'), findsOneWidget);
     expect(find.textContaining('On this phone'), findsOneWidget);
     expect(find.text('Focus on the laptop too'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('a paused session shows its time and resumes', (tester) async {
+    final at = DateTime.now().toUtc().subtract(const Duration(minutes: 1));
+    final paused = FocusSession(
+      startedAt: at.subtract(const Duration(minutes: 5)),
+      endsAt: at.add(const Duration(minutes: 20)),
+      target: FocusTarget.phone,
+      startedBy: 'Pixel',
+      pausedAt: at,
+    );
+    await pump(tester, FocusSessions(phone: paused));
+    expect(find.text('paused'), findsOneWidget);
+    expect(find.text('20:00'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Start focus'), findsNothing, reason: 'still held');
+    expect(find.text('Focus on the laptop too'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets("the laptop's session can be paused from the phone", (
+    tester,
+  ) async {
+    await pump(tester, FocusSessions(laptop: running(DeviceKind.laptop)));
+    expect(find.byTooltip('Pause on the laptop'), findsOneWidget);
+    expect(find.byTooltip('Change the time on the laptop'), findsOneWidget);
+    expect(find.byTooltip('More for the laptop'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('the pencil asks for exact minutes', (tester) async {
+    await pump(tester, FocusSessions.idle);
+    await tester.tap(find.byTooltip('Other minutes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Minutes'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
     await done(tester);
   });
 

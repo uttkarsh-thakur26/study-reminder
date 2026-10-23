@@ -1,0 +1,19 @@
+name: study_widget
+description: The "Next up" home screen widget on Android for Study Reminder.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.5
+  flutter: '>=3.38.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.uttkarsh.study_widget
+        pluginClass: StudyWidgetPlugin

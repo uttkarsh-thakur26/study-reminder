@@ -84,3 +84,16 @@ List<Override> focusPlatformOverrides() {
     _ => [],
   };
 }
+
+/// Whether laying the phone face down starts a session right now: Flip to
+/// focus is on, the app is in front and nothing runs here.
+final flipArmedProvider = NotifierProvider<FlipArmed, bool>(FlipArmed.new);
+
+class FlipArmed extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool armed) {
+    if (state != armed) state = armed;
+  }
+}

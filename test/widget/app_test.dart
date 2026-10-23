@@ -14,9 +14,17 @@ import 'package:timezone/timezone.dart' as tz;
 void main() {
   late AppDatabase db;
 
+  // The app reads the clock in the system's zone, so the test's zone has to
+  // match it, or "today" means two different days late in the evening.
+  late String zone;
+
   setUpAll(() {
     tzdata.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    final offset = DateTime.now().timeZoneOffset;
+    zone = tz.timeZoneDatabase.locations.values
+        .firstWhere((l) => l.currentTimeZone.offset == offset)
+        .name;
+    tz.setLocalLocation(tz.getLocation(zone));
   });
 
   setUp(() => db = AppDatabase(NativeDatabase.memory()));
@@ -34,7 +42,7 @@ void main() {
           databaseProvider.overrideWithValue(db),
           deviceIdProvider.overrideWithValue('test-device'),
           hlcClockProvider.overrideWithValue(HlcClock('testdevice01')),
-          initialTimeZoneProvider.overrideWithValue('Asia/Kolkata'),
+          initialTimeZoneProvider.overrideWithValue(zone),
           minuteTickProvider.overrideWith(
             (ref) => Stream.value(DateTime.now()),
           ),
@@ -167,7 +175,9 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.text('5 min'));
+    await tester.tap(find.text('Time'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+5 min'));
     await tester.pumpAndSettle();
     final row = await real(
       tester,

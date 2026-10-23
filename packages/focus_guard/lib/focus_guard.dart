@@ -13,6 +13,10 @@ class FocusGuardSession {
     required this.blockGames,
     required this.packages,
     required this.startedBy,
+    this.rounds = 1,
+    this.workMinutes = 0,
+    this.breakMinutes = 0,
+    this.doneMs = 0,
   });
 
   final DateTime startedAt;
@@ -30,6 +34,16 @@ class FocusGuardSession {
   /// The device the session was started on, for the notification.
   final String startedBy;
 
+  /// [rounds] rounds of [workMinutes] with breaks of [breakMinutes] between
+  /// them, the last round running to [endsAt]; zero for one round. Nothing
+  /// is blocked during a break.
+  final int rounds;
+  final int workMinutes;
+  final int breakMinutes;
+
+  /// For a session resumed after a pause: how far into its rounds it was.
+  final int doneMs;
+
   Map<String, Object?> toMap() => {
     'startedAt': startedAt.millisecondsSinceEpoch,
     'endsAt': endsAt.millisecondsSinceEpoch,
@@ -39,6 +53,10 @@ class FocusGuardSession {
     'blockGames': blockGames,
     'packages': packages.toList()..sort(),
     'startedBy': startedBy,
+    'rounds': rounds,
+    'workMinutes': workMinutes,
+    'breakMinutes': breakMinutes,
+    'doneMs': doneMs,
   };
 
   @override
@@ -64,6 +82,7 @@ class FocusGuardAccess {
     required this.quiet,
     required this.notifications,
     required this.battery,
+    this.lock = false,
   });
 
   /// Usage access: lets the app see which app is open.
@@ -84,6 +103,10 @@ class FocusGuardAccess {
   /// while the app is closed.
   final bool battery;
 
+  /// Modify system settings: the screen timeout can be shortened after a
+  /// flip, so the phone locks soon.
+  final bool lock;
+
   bool get canBlockApps => usage && overlay;
 
   factory FocusGuardAccess.fromMap(Map<Object?, Object?> m) => FocusGuardAccess(
@@ -93,11 +116,12 @@ class FocusGuardAccess {
     quiet: m['quiet'] == true,
     notifications: m['notifications'] == true,
     battery: m['battery'] == true,
+    lock: m['lock'] == true,
   );
 }
 
 /// System pages where the user grants what Focus mode needs.
-enum FocusGuardPage { usage, overlay, media, quiet, battery, appInfo }
+enum FocusGuardPage { usage, overlay, media, quiet, battery, lock, appInfo }
 
 /// An app the user can block.
 @immutable
@@ -148,6 +172,16 @@ class FocusGuard {
   /// This phone's push token, so other devices can wake it. Null when the app
   /// was built without Firebase or the phone has no Google Play services.
   Future<String?> pushToken() => _channel.invokeMethod<String>('pushToken');
+
+  /// A short buzz, felt with the phone face down.
+  Future<void> buzz() => _channel.invokeMethod<void>('buzz');
+
+  /// Locks the phone soon: the screen timeout is shortened until the screen
+  /// goes off, then put back, and the phone locks as it always does. No
+  /// Accessibility or device admin, which payment apps refuse to run beside.
+  /// False without Modify system settings.
+  Future<bool> lock() async =>
+      await _channel.invokeMethod<bool>('lock') ?? false;
 
   Future<FocusGuardAccess> access() async => FocusGuardAccess.fromMap(
     await _channel.invokeMethod<Map<Object?, Object?>>('access') ?? const {},

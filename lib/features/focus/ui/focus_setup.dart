@@ -59,7 +59,9 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
     final scheme = theme.colorScheme;
     final access = ref.watch(focusAccessProvider).value;
     final guard = ref.watch(focusGuardProvider);
+    final prefs = ref.watch(focusPrefsProvider).value;
     if (access == null || guard == null) return const SizedBox.shrink();
+    final wantsLock = prefs != null && prefs.flipToFocus && prefs.flipLock;
 
     Widget row(
       IconData icon,
@@ -118,6 +120,14 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             access.battery,
             FocusGuardPage.battery,
           ),
+          if (wantsLock)
+            row(
+              Icons.lock_clock_outlined,
+              'Modify system settings',
+              'Lock the phone soon after a flip',
+              access.lock,
+              FocusGuardPage.lock,
+            ),
           if (restricted)
             Padding(
               padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.m),
@@ -198,6 +208,8 @@ class PhoneBlockListCard extends ConsumerWidget {
       for (final a in apps ?? const <InstalledApp>[]) a.packageName: a.label,
     };
     final repo = ref.read(focusRepositoryProvider);
+    final guard = ref.watch(focusGuardProvider);
+    final canLock = ref.watch(focusAccessProvider).value?.lock ?? false;
     final chosen = prefs.phoneApps.toList()
       ..sort(
         (a, b) => (names[a] ?? a).toLowerCase().compareTo(
@@ -251,6 +263,22 @@ class PhoneBlockListCard extends ConsumerWidget {
             value: prefs.flipToFocus,
             onChanged: (v) => repo.savePrefs(prefs.copyWith(flipToFocus: v)),
           ),
+          if (prefs.flipToFocus)
+            SwitchListTile(
+              secondary: const Icon(Icons.lock_outline_rounded),
+              title: const Text('Lock the phone too'),
+              subtitle: Text(
+                !prefs.flipLock || canLock
+                    ? 'The screen goes off and locks about 10 seconds after '
+                          'a flip. Fingerprint still unlocks it'
+                    : 'Allow Modify system settings above to lock it',
+              ),
+              value: prefs.flipLock,
+              onChanged: (v) {
+                repo.savePrefs(prefs.copyWith(flipLock: v));
+                if (v && !canLock) guard?.open(FocusGuardPage.lock);
+              },
+            ),
         ],
       ),
     );

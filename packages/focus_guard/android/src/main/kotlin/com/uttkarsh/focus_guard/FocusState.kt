@@ -16,8 +16,68 @@ data class FocusState(
     val blockGames: Boolean,
     val packages: Set<String>,
     val startedBy: String,
+    /** The length of a round and of the break after it; 0 for one round. */
+    val workMs: Long = 0L,
+    val breakMs: Long = 0L,
+    /** How many rounds were planned; time added goes to the last one. */
+    val plannedRounds: Int = 1,
+    /** For a session resumed after a pause, how far into its plan it was. */
+    val doneMs: Long = 0L,
 ) {
     fun isOver(now: Long = System.currentTimeMillis()) = now >= endsAt
+
+    /** Where the session is at a moment. [round] counts from 1. */
+    data class Phase(
+        val onBreak: Boolean,
+        val round: Int,
+        val rounds: Int,
+        val startsAt: Long,
+        val endsAt: Long,
+    )
+
+    private val hasBreaks: Boolean
+        get() = workMs > 0L && breakMs > 0L
+
+    /** Rounds of [workMs] with breaks of [breakMs]; the last runs to the end. */
+    fun rounds(): Int = if (hasBreaks && plannedRounds > 1) plannedRounds else 1
+
+    /**
+     * The round or break at [now]. The app works this out the same way
+     * (FocusPlan in Dart); keep the two alike.
+     */
+    /** Where the plan began: before [startedAt] for a resumed session. */
+    private val planStart: Long
+        get() = startedAt - doneMs
+
+    fun phaseAt(now: Long = System.currentTimeMillis()): Phase {
+        val n = rounds()
+        val start = planStart
+        if (n == 1) return Phase(false, 1, 1, start, endsAt)
+        val cycle = workMs + breakMs
+        for (k in 0 until n - 1) {
+            val workEnd = start + k * cycle + workMs
+            if (now < workEnd) return Phase(false, k + 1, n, start + k * cycle, workEnd)
+            val next = start + (k + 1) * cycle
+            if (now < next) return Phase(true, k + 1, n, workEnd, next)
+        }
+        return Phase(false, n, n, start + (n - 1) * cycle, endsAt)
+    }
+
+    /** Working time in the whole session, a part before a pause included. */
+    fun focusedMs(): Long {
+        val n = rounds()
+        val start = planStart
+        if (n == 1) return endsAt - start
+        val cycle = workMs + breakMs
+        var total = 0L
+        for (k in 0 until n) {
+            val from = start + k * cycle
+            if (from >= endsAt) break
+            val to = if (k == n - 1) endsAt else minOf(from + workMs, endsAt)
+            total += to - from
+        }
+        return total
+    }
 
     companion object {
         private const val PREFS = "focus_guard"
@@ -37,6 +97,10 @@ data class FocusState(
                 blockGames = p.getBoolean("blockGames", false),
                 packages = p.getStringSet("packages", emptySet())?.toSet() ?: emptySet(),
                 startedBy = p.getString("startedBy", "") ?: "",
+                workMs = p.getLong("workMs", 0L),
+                breakMs = p.getLong("breakMs", 0L),
+                plannedRounds = p.getInt("rounds", 1),
+                doneMs = p.getLong("doneMs", 0L),
             )
         }
 
@@ -51,6 +115,10 @@ data class FocusState(
                 .putBoolean("blockGames", state.blockGames)
                 .putStringSet("packages", state.packages)
                 .putString("startedBy", state.startedBy)
+                .putLong("workMs", state.workMs)
+                .putLong("breakMs", state.breakMs)
+                .putInt("rounds", state.plannedRounds)
+                .putLong("doneMs", state.doneMs)
                 .apply()
         }
 

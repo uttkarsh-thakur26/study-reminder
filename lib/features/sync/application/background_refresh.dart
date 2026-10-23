@@ -7,6 +7,7 @@ import '../../alerts/application/background_actions.dart';
 import '../../alerts/data/local_notifications.dart';
 import '../../focus/data/android_focus_enforcer.dart';
 import '../../focus/data/focus_repository.dart';
+import '../../home_widget/application/home_widget_refresh.dart';
 
 import 'package:focus_guard/focus_guard.dart';
 
@@ -84,6 +85,8 @@ void backgroundRefresh() {
         device: DeviceKind.phone,
       ).replan();
     } finally {
+      // Also after a failed run, so the widget shows what is synced.
+      await refreshHomeWidget(core);
       await core.db.close();
     }
     return true;
