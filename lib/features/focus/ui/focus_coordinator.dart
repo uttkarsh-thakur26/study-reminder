@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:focus_guard/focus_guard.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
@@ -210,22 +209,8 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     await ref
         .read(focusRepositoryProvider)
         .startWith(prefs, on: on, startedBy: ref.read(deviceNameProvider));
-    if (guard != null && prefs.flipLock) await _lockWhenApplied(guard, on);
-  }
-
-  /// Locks the phone left face down, once the session is in force here:
-  /// Android lets the session's service start only while the app is in
-  /// front.
-  Future<void> _lockWhenApplied(FocusGuard guard, Set<DeviceKind> on) async {
-    if (on.contains(DeviceKind.phone)) {
-      for (var i = 0; i < 30; i++) {
-        if (_session?.runningAt(DateTime.now()) ?? false) break;
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-      await _applying;
-    }
-    // Lets the buzz finish first.
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (guard == null || !prefs.flipLock) return;
+    // The phone left face down locks soon after.
     try {
       if (!await guard.lock()) debugPrint('focus: lock is not allowed');
     } on Object catch (e) {

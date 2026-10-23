@@ -81,11 +81,7 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
             ),
     );
 
-    final restricted =
-        !access.usage ||
-        !access.overlay ||
-        !access.media ||
-        (wantsLock && !access.lock);
+    final restricted = !access.usage || !access.overlay || !access.media;
     return Card(
       child: Column(
         children: [
@@ -126,9 +122,9 @@ class _PhoneAccessCardState extends ConsumerState<PhoneAccessCard> {
           ),
           if (wantsLock)
             row(
-              Icons.lock_outline_rounded,
-              'Accessibility',
-              'Lock the phone after a flip. Nothing on screen is read',
+              Icons.lock_clock_outlined,
+              'Modify system settings',
+              'Lock the phone soon after a flip',
               access.lock,
               FocusGuardPage.lock,
             ),
@@ -273,9 +269,9 @@ class PhoneBlockListCard extends ConsumerWidget {
               title: const Text('Lock the phone too'),
               subtitle: Text(
                 !prefs.flipLock || canLock
-                    ? 'Once focus starts, so the screen does not stay on. '
-                          'Fingerprint still unlocks it'
-                    : 'Allow Accessibility above to lock it',
+                    ? 'The screen goes off and locks about 10 seconds after '
+                          'a flip. Fingerprint still unlocks it'
+                    : 'Allow Modify system settings above to lock it',
               ),
               value: prefs.flipLock,
               onChanged: (v) {

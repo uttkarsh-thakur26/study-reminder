@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="focus_guard_lock_description">Locks the screen when you flip the phone to start focus, as the power button does, so fingerprint unlock keeps working. It reads nothing on the screen.</string>
-</resources>

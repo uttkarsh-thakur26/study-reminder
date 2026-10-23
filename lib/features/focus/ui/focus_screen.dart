@@ -775,7 +775,7 @@ class _StartForm extends ConsumerWidget {
                   child: Text(
                     'Flip to focus is on: lay the phone screen down for '
                     '2 seconds to start. It buzzes when focus starts'
-                    '${locks ? ', then the phone locks.' : '.'}',
+                    '${locks ? ', and the phone locks soon after.' : '.'}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),

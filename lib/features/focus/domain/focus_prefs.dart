@@ -70,8 +70,8 @@ class FocusPrefs {
   /// open.
   final bool flipToFocus;
 
-  /// Lock the screen once a flip has started focus, so the phone is not left
-  /// on face down. Needs the app's Accessibility service on.
+  /// Lock the phone soon after a flip has started focus, so it is not left
+  /// on face down. Needs Modify system settings.
   final bool flipLock;
 
   /// Android package names to block.

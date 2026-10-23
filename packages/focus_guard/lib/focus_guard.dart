@@ -103,8 +103,8 @@ class FocusGuardAccess {
   /// while the app is closed.
   final bool battery;
 
-  /// The Accessibility service is on: the screen can be locked after a flip,
-  /// the way the power button does.
+  /// Modify system settings: the screen timeout can be shortened after a
+  /// flip, so the phone locks soon.
   final bool lock;
 
   bool get canBlockApps => usage && overlay;
@@ -176,8 +176,10 @@ class FocusGuard {
   /// A short buzz, felt with the phone face down.
   Future<void> buzz() => _channel.invokeMethod<void>('buzz');
 
-  /// Locks the screen, as the power button does. False when the
-  /// Accessibility service is off, or Android is older than 9.
+  /// Locks the phone soon: the screen timeout is shortened until the screen
+  /// goes off, then put back, and the phone locks as it always does. No
+  /// Accessibility or device admin, which payment apps refuse to run beside.
+  /// False without Modify system settings.
   Future<bool> lock() async =>
       await _channel.invokeMethod<bool>('lock') ?? false;
 

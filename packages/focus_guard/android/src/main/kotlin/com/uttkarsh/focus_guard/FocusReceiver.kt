@@ -30,8 +30,10 @@ class FocusReceiver : BroadcastReceiver() {
                     FocusController.startService(context, state, retry = false)
                 }
             }
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED ->
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                ScreenTimeout.restoreIfLeft(context)
                 FocusController.restore(context)
+            }
         }
     }
 }

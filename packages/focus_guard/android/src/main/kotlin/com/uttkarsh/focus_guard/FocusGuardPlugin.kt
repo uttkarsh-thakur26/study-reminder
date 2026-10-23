@@ -53,6 +53,7 @@ class FocusGuardPlugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
+        ScreenTimeout.restoreIfLeft(context)
         channel = MethodChannel(binding.binaryMessenger, "focus_guard")
         channel.setMethodCallHandler(this)
         flips = EventChannel(binding.binaryMessenger, "focus_guard/flip")
@@ -153,7 +154,7 @@ class FocusGuardPlugin :
                 buzz()
                 result.success(null)
             }
-            "lock" -> result.success(FocusLockService.lock())
+            "lock" -> result.success(ScreenTimeout.shorten(context))
             "access" -> result.success(access())
             "open" -> result.success(open(call.argument<String>("page") ?: ""))
             "apps" -> inBackground(result) { launcherApps() }
@@ -234,7 +235,7 @@ class FocusGuardPlugin :
             "quiet" to nm.isNotificationPolicyAccessGranted,
             "notifications" to nm.areNotificationsEnabled(),
             "battery" to power.isIgnoringBatteryOptimizations(context.packageName),
-            "lock" to FocusLockService.granted(context),
+            "lock" to ScreenTimeout.granted(context),
         )
     }
 
@@ -280,8 +281,7 @@ class FocusGuardPlugin :
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
             )
-            // The page for one service is open only to system apps.
-            "lock" -> listOf(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            "lock" -> listOf(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
             "appInfo" -> listOf(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
             else -> emptyList()
         }
