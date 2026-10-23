@@ -280,16 +280,8 @@ class FocusGuardPlugin :
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
             )
-            "lock" -> buildList {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val service = ComponentName(context, FocusLockService::class.java)
-                    add(
-                        Intent(Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
-                            .putExtra(Intent.EXTRA_COMPONENT_NAME, service.flattenToString()),
-                    )
-                }
-                add(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            }
+            // The page for one service is open only to system apps.
+            "lock" -> listOf(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             "appInfo" -> listOf(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
             else -> emptyList()
         }
