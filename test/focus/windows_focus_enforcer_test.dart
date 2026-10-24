@@ -7,6 +7,7 @@ import 'package:study_reminder/features/focus/data/windows_focus_enforcer.dart';
 import 'package:study_reminder/features/focus/domain/focus_prefs.dart';
 import 'package:study_reminder/features/focus/domain/focus_session.dart';
 import 'package:study_reminder/features/focus/domain/laptop_block_rules.dart';
+import 'package:study_reminder/features/focus/domain/study_videos.dart';
 
 class _FakeWindows implements DesktopWindows {
   DesktopWindow? front;
@@ -47,12 +48,33 @@ class _FakeTabs implements BrowserTabs {
   /// Set to make sweeps fail.
   Object? error;
 
+  /// What each sweep was told of the study videos.
+  final studies = <StudyTabs>[];
+
+  /// The study tabs and titles each sweep reports.
+  var studyTabs = <String>{};
+  var studyTitles = <String>{};
+
+  /// The address bar of each window.
+  final addresses = <int, String>{};
+  final reads = <int>[];
+
   @override
-  Future<List<BlockHit>> closeBlockedTabs(List<String> sites) async {
+  Future<TabSweep> closeBlockedTabs(
+    List<String> sites, {
+    StudyTabs study = const StudyTabs(),
+  }) async {
     sweeps.add(sites);
+    studies.add(study);
     await hold?.future;
     if (error case final e?) throw e;
-    return closes;
+    return (closed: closes, studyTabs: studyTabs, studyTitles: studyTitles);
+  }
+
+  @override
+  Future<String?> addressOf(int hwnd) async {
+    reads.add(hwnd);
+    return addresses[hwnd];
   }
 }
 
@@ -313,5 +335,126 @@ void main() {
     await enforcer.sweepTabs();
     expect(tabs.sweeps, hasLength(2));
     expect(notices, ['YouTube']);
+  });
+
+  group('study videos', () {
+    const study = FocusPrefs(
+      laptopApps: ['steam.exe'],
+      sites: ['youtube.com'],
+      studyVideos: [
+        StudyVideo.playlist('PLstudy123'),
+        StudyVideo.video('abcdefghijk', title: 'Lecture 1'),
+      ],
+    );
+
+    Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+    test('keeps a tab in front playing the study playlist', () async {
+      await enforcer.apply(session(), study);
+      tabs.addresses[1] = 'youtube.com/watch?v=zzzzzzzzzzz&list=PLstudy123';
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        'Part 3 - YouTube - Google Chrome',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, isEmpty);
+      expect(notices, isEmpty);
+
+      // Not read again while the same video is in front.
+      enforcer.check();
+      await settle();
+      expect(tabs.reads, [1]);
+
+      // Its title now lets a background tab of it stay too.
+      await enforcer.sweepTabs();
+      expect(tabs.studies.last.titles, containsAll(['part 3', 'lecture 1']));
+      expect(tabs.studies.last.videos, hasLength(2));
+    });
+
+    test('remembers the study tabs and titles a sweep found', () async {
+      await enforcer.apply(session(), study);
+      tabs
+        ..studyTabs = {'42.7'}
+        ..studyTitles = {'part 4'};
+      await enforcer.sweepTabs();
+      tabs.studyTabs = {};
+      await enforcer.sweepTabs();
+      expect(tabs.studies.last.tabs, {'42.7'});
+      expect(tabs.studies.last.titles, contains('part 4'));
+
+      // A title confirmed in the background is known in front too.
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        'Part 4 - YouTube',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, isEmpty);
+      expect(tabs.reads, isEmpty);
+
+      // Changing the study videos starts over.
+      await enforcer.apply(
+        session(),
+        study.copyWith(studyVideos: [const StudyVideo.video('abcdefghijk')]),
+      );
+      await enforcer.sweepTabs();
+      expect(tabs.studies.last.tabs, isEmpty);
+    });
+
+    test('closes a YouTube tab on any other video', () async {
+      await enforcer.apply(session(), study);
+      tabs.addresses[1] = 'https://www.youtube.com/watch?v=otherother1';
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        'Funny cats - YouTube',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, ['tab 1']);
+      expect(notices, ['YouTube']);
+    });
+
+    test('closes it when the address bar cannot be read', () async {
+      await enforcer.apply(session(), study);
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\firefox.exe',
+        'Funny cats - YouTube',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, ['tab 1']);
+    });
+
+    test('knows a study video by its title without reading', () async {
+      await enforcer.apply(session(), study);
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        '(2) Lecture 1 - YouTube - Google Chrome',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, isEmpty);
+      expect(tabs.reads, isEmpty);
+    });
+
+    test('leaves the tab alone if it changed while reading', () async {
+      await enforcer.apply(session(), study);
+      tabs.addresses[1] = 'youtube.com/watch?v=otherother1';
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        'Funny cats - YouTube',
+      );
+      enforcer.check();
+      windows.front = const DesktopWindow(2, r'C:\x\code.exe', 'notes.md');
+      await settle();
+      expect(windows.actions, isEmpty);
+    });
   });
 }

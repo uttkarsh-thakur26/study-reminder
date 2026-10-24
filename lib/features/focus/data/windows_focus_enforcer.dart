@@ -6,6 +6,7 @@ import '../../reminders/domain/reminder.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import '../domain/laptop_block_rules.dart';
+import '../domain/study_videos.dart';
 import 'browser_tabs.dart';
 import 'desktop_windows.dart';
 import 'focus_enforcer.dart';
@@ -15,6 +16,9 @@ import 'focus_enforcer.dart';
 /// tab is closed; a blocked program is minimised, or closed in a strict
 /// session. Every few seconds it also closes blocked sites in browser tabs
 /// that are not in front, such as music left playing in a background tab.
+/// The user's study videos stay open on YouTube: the tab in front by its
+/// address, read from the address bar, and other tabs by the titles of
+/// study videos seen that way.
 /// The app keeps running in the tray, so this works with its window hidden.
 class WindowsFocusEnforcer implements FocusEnforcer {
   WindowsFocusEnforcer({
@@ -46,6 +50,18 @@ class WindowsFocusEnforcer implements FocusEnforcer {
   List<String> _sites = const [];
   final _noticed = <String, DateTime>{};
 
+  StudyVideoRules? _study;
+  List<StudyVideo> _studyVideos = const [];
+  String _studyKey = '';
+
+  /// Background tabs found showing a study video, by UI Automation id.
+  final _studyTabs = <String>{};
+
+  /// The window in front and its title when its address was last found to
+  /// be a study video, so it is not read again every second.
+  ({int handle, String title})? _studyFront;
+  bool _reading = false;
+
   @visibleForTesting
   bool get watching => _timer != null;
 
@@ -62,6 +78,16 @@ class WindowsFocusEnforcer implements FocusEnforcer {
       _session = session;
       _rules = rules;
       _sites = prefs.sites;
+      final studyKey = [
+        for (final v in prefs.studyVideos) '${v.isPlaylist}:${v.id}:${v.title}',
+      ].join('|');
+      if (_study == null || studyKey != _studyKey) {
+        _study = StudyVideoRules(prefs.studyVideos);
+        _studyVideos = prefs.studyVideos;
+        _studyKey = studyKey;
+        _studyTabs.clear();
+        _studyFront = null;
+      }
       _timer ??= Timer.periodic(_every, (_) => check());
       if (_tabs != null && rules.blocksSites) {
         _sweepTimer ??= Timer.periodic(
@@ -86,6 +112,11 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     _rules = null;
     _sites = const [];
     _noticed.clear();
+    _study = null;
+    _studyVideos = const [];
+    _studyKey = '';
+    _studyTabs.clear();
+    _studyFront = null;
   }
 
   /// One look at the window in front.
@@ -109,6 +140,15 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     if (window == null) return;
     final hit = rules.match(window.exePath, window.title);
     if (hit == null) return;
+    final study = _study;
+    if (hit.isYouTube && study != null && !study.isEmpty) {
+      if (study.allowsTitle(window.title)) return;
+      if (_studyFront == (handle: window.handle, title: window.title)) return;
+      if (_tabs != null) {
+        unawaited(_checkStudyVideo(window, hit, session, study));
+        return;
+      }
+    }
     if (hit.isSite) {
       // A sweep may be closing this very tab; pressing Ctrl+W as well would
       // close the one next to it. Tried again next second.
@@ -120,6 +160,48 @@ class WindowsFocusEnforcer implements FocusEnforcer {
       _windows.minimize(window.handle);
     }
     _notice(hit, session, now);
+  }
+
+  /// Leaves the YouTube tab in [window] open when its address is a study
+  /// video, and closes it otherwise. One at a time; the next second's check
+  /// tries again.
+  Future<void> _checkStudyVideo(
+    DesktopWindow window,
+    BlockHit hit,
+    FocusSession session,
+    StudyVideoRules study,
+  ) async {
+    if (_reading) return;
+    _reading = true;
+    String? address;
+    try {
+      address = await _tabs!.addressOf(window.handle);
+    } on Object catch (e) {
+      debugPrint('focus: could not read the address: $e');
+    } finally {
+      _reading = false;
+    }
+    // The session or the study videos may have changed meanwhile.
+    if (_session == null || !identical(_study, study)) return;
+    if (address != null && study.allowsAddress(address)) {
+      _studyFront = (handle: window.handle, title: window.title);
+      study.learn(window.title);
+      return;
+    }
+    final DesktopWindow? front;
+    try {
+      front = _windows.foreground();
+    } on Object {
+      return;
+    }
+    // Only the same tab, still in front.
+    if (front == null ||
+        front.handle != window.handle ||
+        front.title != window.title ||
+        _sweeping) {
+      return;
+    }
+    if (_windows.closeTab(window.handle)) _notice(hit, session, _now());
   }
 
   /// One look through the browsers' tabs for blocked sites the check of the
@@ -136,9 +218,17 @@ class WindowsFocusEnforcer implements FocusEnforcer {
       return;
     }
     _sweeping = true;
-    final List<BlockHit> closed;
+    final study = _study;
+    final TabSweep result;
     try {
-      closed = await tabs.closeBlockedTabs(_sites);
+      result = await tabs.closeBlockedTabs(
+        _sites,
+        study: StudyTabs(
+          videos: _studyVideos,
+          titles: study?.titles ?? const {},
+          tabs: Set.of(_studyTabs),
+        ),
+      );
     } on Object catch (e) {
       debugPrint('focus: could not look at the browser tabs: $e');
       return;
@@ -148,7 +238,11 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     // The session may have ended meanwhile.
     final current = _session;
     if (current == null) return;
-    for (final hit in closed) {
+    if (study != null && identical(study, _study)) {
+      _studyTabs.addAll(result.studyTabs);
+      result.studyTitles.forEach(study.learn);
+    }
+    for (final hit in result.closed) {
       _notice(hit, current, _now());
     }
   }

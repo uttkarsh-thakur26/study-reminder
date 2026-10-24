@@ -58,6 +58,9 @@ dependencies:
     path: packages/focus_guard
   study_widget:
     path: packages/study_widget
+  url_launcher: ^6.3.3
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
 
 dev_dependencies:
   flutter_test:

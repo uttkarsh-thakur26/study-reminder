@@ -136,12 +136,16 @@ data class FocusState(
             return packages to p.getBoolean("blocklistGames", false)
         }
 
-        fun saveBlocklist(context: Context, packages: Set<String>, games: Boolean) {
+        fun saveBlocklist(context: Context, packages: Set<String>, games: Boolean, studyVideos: Boolean) {
             prefs(context).edit()
                 .putStringSet("blocklistPackages", packages)
                 .putBoolean("blocklistGames", games)
+                .putBoolean("studyVideos", studyVideos)
                 .apply()
         }
+
+        /** Whether the user has study videos to watch in the app instead of YouTube. */
+        fun hasStudyVideos(context: Context): Boolean = prefs(context).getBoolean("studyVideos", false)
 
         /**
          * The version of the shared session this phone last acted on, kept

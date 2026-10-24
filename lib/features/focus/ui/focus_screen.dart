@@ -21,6 +21,7 @@ import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import 'focus_setup.dart';
 import 'focus_time_sheet.dart';
+import 'study_videos_card.dart';
 
 /// Start a focus session on this device, the paired one or both, follow
 /// the ones running, and set up what each device blocks.
@@ -35,6 +36,8 @@ class FocusScreen extends ConsumerWidget {
     final prefs = ref.watch(focusPrefsProvider).value ?? const FocusPrefs();
     final hasGuard = ref.watch(focusGuardProvider) != null;
     final hasWindows = ref.watch(desktopWindowsProvider) != null;
+    final here = sessions.of(ref.watch(deviceKindProvider));
+    final strictHere = here.strict && here.runningAt(DateTime.now());
 
     return SafeArea(
       bottom: false,
@@ -45,6 +48,14 @@ class FocusScreen extends ConsumerWidget {
             Text('Focus', style: theme.textTheme.headlineMedium),
             const SizedBox(height: Gap.l),
             SessionCard(sessions: sessions, prefs: prefs),
+            if (hasGuard || hasWindows) ...[
+              const SectionHeader('STUDY VIDEOS'),
+              StudyVideosCard(
+                prefs: prefs,
+                onPhone: hasGuard,
+                locked: strictHere,
+              ),
+            ],
             if (hasGuard) ...[
               const SectionHeader('THIS PHONE'),
               const PhoneAccessCard(),

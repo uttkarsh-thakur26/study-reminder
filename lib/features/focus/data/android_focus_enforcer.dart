@@ -22,7 +22,11 @@ class AndroidFocusEnforcer implements FocusEnforcer {
   @override
   Future<void> apply(FocusSession session, FocusPrefs prefs) async {
     // Kept on the phone for sessions pushed while the app is closed.
-    await _guard.setBlocklist(prefs.phoneApps, blockGames: prefs.blockGames);
+    await _guard.setBlocklist(
+      prefs.phoneApps,
+      blockGames: prefs.blockGames,
+      studyVideos: prefs.studyVideos.isNotEmpty,
+    );
     if (session.version.isEmpty) return;
     final runsHere = session.runsOn(DeviceKind.phone, _now());
     await _guard.apply(

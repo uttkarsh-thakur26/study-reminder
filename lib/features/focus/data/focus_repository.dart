@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../../../core/db/app_database.dart';
@@ -311,7 +313,66 @@ class FocusRepository {
 
   Future<void> savePrefs(FocusPrefs prefs) =>
       _db.writeSetting(FocusPrefs.key, prefs.encode());
+
+  static const _studyProgressKey = 'study_video_progress';
+  static const _studySiteKey = 'study_player_site';
+
+  /// Where the user got to in the study playlist [playlistId]: the video,
+  /// and its place in the playlist from 0, as far as they are known. Null
+  /// before they watched it here.
+  Future<StudyPlace?> studyPlaylistPlace(String playlistId) async =>
+      (await _studyProgress())[playlistId];
+
+  Future<void> saveStudyPlaylistPlace(
+    String playlistId, {
+    String? video,
+    int? index,
+  }) async {
+    final progress = await _studyProgress();
+    final place = (video: video, index: index);
+    if (progress[playlistId] == place) return;
+    progress[playlistId] = place;
+    await _db.writeSetting(
+      _studyProgressKey,
+      jsonEncode({
+        for (final MapEntry(:key, :value) in progress.entries)
+          key: {'v': ?value.video, 'i': ?value.index},
+      }),
+    );
+  }
+
+  Future<Map<String, StudyPlace>> _studyProgress() async {
+    final raw = await _db.readSetting(_studyProgressKey);
+    if (raw == null) return {};
+    try {
+      return {
+        for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map).entries)
+          if (key is String)
+            if (value is Map)
+              key: (
+                video: value['v'] is String ? value['v'] as String : null,
+                index: value['i'] is int ? value['i'] as int : null,
+              )
+            // Saved by the first study player: the place only.
+            else if (value is int)
+              key: (video: null, index: value),
+      };
+    } on Object {
+      return {};
+    }
+  }
+
+  /// Whether the phone plays study videos on YouTube's mobile site, for
+  /// when YouTube won't play them in the app's own player.
+  Future<bool> studyPlayerUsesSite() async =>
+      await _db.readSetting(_studySiteKey) == 'true';
+
+  Future<void> saveStudyPlayerUsesSite(bool site) =>
+      _db.writeSetting(_studySiteKey, site ? 'true' : 'false');
 }
+
+/// Where the user got to in a study playlist.
+typedef StudyPlace = ({String? video, int? index});
 
 /// A change [_update] made to one device's session.
 typedef _Change = ({DeviceKind kind, FocusSession? before, FocusSession after});
