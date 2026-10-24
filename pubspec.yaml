@@ -58,6 +58,8 @@ dependencies:
     path: packages/focus_guard
   study_widget:
     path: packages/study_widget
+  youtube_player_iframe: ^6.0.2
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

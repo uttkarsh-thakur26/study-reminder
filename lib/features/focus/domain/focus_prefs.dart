@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'focus_session.dart';
+import 'study_videos.dart';
 
 /// This device's Focus settings: the defaults for a new session and what to
 /// block here. Not synced, because the phone blocks apps by package name and
@@ -21,6 +22,7 @@ class FocusPrefs {
     this.blockGames = true,
     this.laptopApps = defaultLaptopApps,
     this.sites = defaultSites,
+    this.studyVideos = const [],
   });
 
   static const key = 'focus_prefs';
@@ -86,6 +88,10 @@ class FocusPrefs {
   /// Sites to block in browsers on the laptop.
   final List<String> sites;
 
+  /// YouTube videos and playlists still allowed while YouTube is blocked:
+  /// in the app's own player on the phone, in the browser on the laptop.
+  final List<StudyVideo> studyVideos;
+
   /// Work and break lengths for a new session's rounds; zero for one round.
   Duration get work => rounds > 1 ? Duration(minutes: minutes) : Duration.zero;
   Duration get rest =>
@@ -109,6 +115,7 @@ class FocusPrefs {
     bool? blockGames,
     List<String>? laptopApps,
     List<String>? sites,
+    List<StudyVideo>? studyVideos,
   }) => FocusPrefs(
     minutes: minutes ?? this.minutes,
     rounds: rounds ?? this.rounds,
@@ -124,6 +131,7 @@ class FocusPrefs {
     blockGames: blockGames ?? this.blockGames,
     laptopApps: laptopApps ?? this.laptopApps,
     sites: sites ?? this.sites,
+    studyVideos: studyVideos ?? this.studyVideos,
   );
 
   FocusPrefs withSubject(String? id) => FocusPrefs(
@@ -141,6 +149,7 @@ class FocusPrefs {
     blockGames: blockGames,
     laptopApps: laptopApps,
     sites: sites,
+    studyVideos: studyVideos,
   );
 
   String encode() => jsonEncode({
@@ -158,6 +167,7 @@ class FocusPrefs {
     'blockGames': blockGames,
     'laptopApps': laptopApps,
     'sites': sites,
+    'studyVideos': [for (final v in studyVideos) v.toJson()],
   });
 
   /// Reads [raw], falling back to the defaults for anything missing or odd.
@@ -192,6 +202,12 @@ class FocusPrefs {
       blockGames: m['blockGames'] as bool? ?? d.blockGames,
       laptopApps: strings(m['laptopApps']) ?? d.laptopApps,
       sites: strings(m['sites']) ?? d.sites,
+      studyVideos: m['studyVideos'] is List
+          ? [
+              for (final v in m['studyVideos'] as List)
+                if (StudyVideo.fromJson(v) case final StudyVideo video) video,
+            ]
+          : d.studyVideos,
     );
   }
 }

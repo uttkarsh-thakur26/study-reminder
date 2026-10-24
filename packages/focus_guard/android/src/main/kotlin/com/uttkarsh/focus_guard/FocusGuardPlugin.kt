@@ -48,6 +48,9 @@ class FocusGuardPlugin :
 
     // A session the user asked for from a notification, until Dart takes it.
     private var focusUntil = 0L
+
+    // A page of the app the block screen asked for, until Dart takes it.
+    private var openPage: String? = null
     private var flipDetector: FlipDetector? = null
     private val main = Handler(Looper.getMainLooper())
 
@@ -114,6 +117,10 @@ class FocusGuardPlugin :
      */
     private fun read(intent: Intent?) {
         if (intent == null) return
+        intent.getStringExtra(BlockActivity.EXTRA_OPEN_PAGE)?.let { page ->
+            intent.removeExtra(BlockActivity.EXTRA_OPEN_PAGE)
+            if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) openPage = page
+        }
         val until = intent.getLongExtra(FocusController.EXTRA_FOCUS_UNTIL, 0L)
         if (until == 0L) return
         intent.removeExtra(FocusController.EXTRA_FOCUS_UNTIL)
@@ -141,6 +148,7 @@ class FocusGuardPlugin :
                     context,
                     call.argument<List<String>>("packages")?.toSet() ?: emptySet(),
                     call.argument<Boolean>("blockGames") == true,
+                    call.argument<Boolean>("studyVideos") == true,
                 )
                 result.success(null)
             }
@@ -149,6 +157,10 @@ class FocusGuardPlugin :
                 val until = focusUntil
                 focusUntil = 0L
                 result.success(if (until == 0L) null else until)
+            }
+            "takeOpenPage" -> {
+                result.success(openPage)
+                openPage = null
             }
             "buzz" -> {
                 buzz()

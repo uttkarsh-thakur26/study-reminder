@@ -1,9 +1,14 @@
 /// What a blocked window on the laptop matched.
 class BlockHit {
-  const BlockHit(this.label, {required this.isSite});
+  const BlockHit(this.label, {required this.isSite, this.site});
 
   /// What to call it in the notice, for example "YouTube" or "steam".
   final String label;
+
+  /// For a site, the name its address and titles use, such as "youtube".
+  final String? site;
+
+  bool get isYouTube => site == 'youtube';
 
   /// A site open in a browser, as opposed to a program.
   final bool isSite;
@@ -78,7 +83,7 @@ class LaptopBlockRules {
     final t = title.toLowerCase().replaceAll('\u200b', '');
     for (final s in _sites) {
       if (_titleShows(t, s.site.toLowerCase(), s.keyword)) {
-        return BlockHit(_display(s.keyword), isSite: true);
+        return BlockHit(_display(s.keyword), isSite: true, site: s.keyword);
       }
     }
     return null;

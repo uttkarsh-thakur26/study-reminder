@@ -154,12 +154,24 @@ class FocusGuard {
       await _channel.invokeMethod<bool>('isRunning') ?? false;
 
   /// What to block when a session arrives from another device while the app
-  /// is closed.
-  Future<void> setBlocklist(Set<String> packages, {required bool blockGames}) =>
-      _channel.invokeMethod('setBlocklist', {
-        'packages': packages.toList()..sort(),
-        'blockGames': blockGames,
-      });
+  /// is closed. With [studyVideos], YouTube's block screen offers the app's
+  /// own player instead.
+  Future<void> setBlocklist(
+    Set<String> packages, {
+    required bool blockGames,
+    bool studyVideos = false,
+  }) => _channel.invokeMethod('setBlocklist', {
+    'packages': packages.toList()..sort(),
+    'blockGames': blockGames,
+    'studyVideos': studyVideos,
+  });
+
+  /// The page of the app the block screen asked to open, such as
+  /// [studyVideosPage]. Null otherwise. Given once.
+  Future<String?> takeOpenPage() =>
+      _channel.invokeMethod<String>('takeOpenPage');
+
+  static const studyVideosPage = 'study_videos';
 
   /// When the user tapped "Focus here" on the note that the laptop quit a
   /// strict session: the end of the session they want on this phone. Null

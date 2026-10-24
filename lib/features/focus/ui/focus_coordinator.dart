@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:focus_guard/focus_guard.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
@@ -13,6 +14,7 @@ import '../application/focus_providers.dart';
 import '../domain/focus_plan.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
+import 'study_player.dart';
 
 /// Keeps this device following its focus session while the app runs:
 /// applies it whenever it or the block lists change (also when another
@@ -68,6 +70,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
         _foreground = true;
         _apply();
         unawaited(_takeRequest());
+        unawaited(_takeOpenPage());
       },
       onHide: () {
         _foreground = false;
@@ -82,6 +85,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     if (!_askedAtStart) {
       _askedAtStart = true;
       unawaited(_takeRequest());
+      unawaited(_takeOpenPage());
     }
   }
 
@@ -253,6 +257,22 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       startedBy: ref.read(deviceNameProvider),
       now: now,
     );
+  }
+
+  /// "Watch study videos" on YouTube's block screen: opens the player,
+  /// unless it is open already.
+  Future<void> _takeOpenPage() async {
+    final guard = ref.read(focusGuardProvider);
+    if (guard == null) return;
+    final String? page;
+    try {
+      page = await guard.takeOpenPage();
+    } on Object catch (e) {
+      debugPrint('focus: could not read the page to open: $e');
+      return;
+    }
+    if (page != FocusGuard.studyVideosPage || !mounted) return;
+    if (StudyPlayerScreen.openCount == 0) await openStudyPlayer(context);
   }
 
   @override

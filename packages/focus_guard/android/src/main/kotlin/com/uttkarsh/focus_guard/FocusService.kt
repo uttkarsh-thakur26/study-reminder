@@ -136,6 +136,7 @@ class FocusService : Service() {
                         Intent.FLAG_ACTIVITY_NO_USER_ACTION,
                 )
                 .putExtra(BlockActivity.EXTRA_APP, label(app))
+                .putExtra(BlockActivity.EXTRA_PACKAGE, app)
                 .putExtra(BlockActivity.EXTRA_ENDS_AT, phase(s).endsAt)
                 .putExtra(BlockActivity.EXTRA_BREAK_NEXT, phase(s).round < phase(s).rounds)
                 .putExtra(BlockActivity.EXTRA_STRICT, s.strict),

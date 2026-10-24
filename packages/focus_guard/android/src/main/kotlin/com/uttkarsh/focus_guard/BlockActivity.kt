@@ -69,6 +69,7 @@ class BlockActivity : Activity() {
     override fun onBackPressed() = goHome()
 
     private lateinit var heading: TextView
+    private lateinit var watch: Button
 
     private fun bind(intent: Intent) {
         endsAt = intent.getLongExtra(EXTRA_ENDS_AT, 0)
@@ -76,6 +77,8 @@ class BlockActivity : Activity() {
         val app = intent.getStringExtra(EXTRA_APP) ?: "This app"
         heading.text = "$app is blocked"
         detail.text = detailText()
+        val youTube = intent.getStringExtra(EXTRA_PACKAGE) == YOUTUBE
+        watch.visibility = if (youTube && FocusState.hasStudyVideos(this)) View.VISIBLE else View.GONE
     }
 
     private fun detailText(): String {
@@ -94,13 +97,19 @@ class BlockActivity : Activity() {
         finish()
     }
 
-    private fun openStudyReminder() {
+    private fun openStudyReminder(page: String? = null) {
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         if (launch == null) {
             goHome()
             return
         }
-        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("focus_guard_open", true))
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("focus_guard_open", true)
+        if (page != null) {
+            // Handed to the app already open too, rather than only bringing it up.
+            launch.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(EXTRA_OPEN_PAGE, page)
+        }
+        startActivity(launch)
         finish()
     }
 
@@ -133,6 +142,18 @@ class BlockActivity : Activity() {
             setLineSpacing(0f, 1.2f)
         }
         root.addView(detail, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        watch = Button(this).apply {
+            text = "Watch study videos"
+            isAllCaps = false
+            setTextColor(Color.rgb(16, 20, 24))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(28).toFloat()
+                setColor(Color.rgb(165, 180, 252))
+            }
+            visibility = View.GONE
+            setOnClickListener { openStudyReminder(PAGE_STUDY_VIDEOS) }
+        }
+        root.addView(watch, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(40) })
         val primary = Button(this).apply {
             text = "Back to studying"
             isAllCaps = false
@@ -143,7 +164,7 @@ class BlockActivity : Activity() {
             }
             setOnClickListener { openStudyReminder() }
         }
-        root.addView(primary, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(40) })
+        root.addView(primary, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(12) })
         val secondary = Button(this).apply {
             text = "Go to home screen"
             isAllCaps = false
@@ -160,5 +181,11 @@ class BlockActivity : Activity() {
         const val EXTRA_ENDS_AT = "endsAt"
         const val EXTRA_BREAK_NEXT = "breakNext"
         const val EXTRA_STRICT = "strict"
+        const val EXTRA_PACKAGE = "package"
+
+        /** The app's page to open, given to Dart once. */
+        const val EXTRA_OPEN_PAGE = "focus_guard_page"
+        const val PAGE_STUDY_VIDEOS = "study_videos"
+        private const val YOUTUBE = "com.google.android.youtube"
     }
 }

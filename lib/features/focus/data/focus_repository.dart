@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../../../core/db/app_database.dart';
@@ -311,6 +313,33 @@ class FocusRepository {
 
   Future<void> savePrefs(FocusPrefs prefs) =>
       _db.writeSetting(FocusPrefs.key, prefs.encode());
+
+  static const _studyProgressKey = 'study_video_progress';
+
+  /// Where the user got to in the study playlist [playlistId]: the video's
+  /// place in it, from 0. Null before they watched it here.
+  Future<int?> studyPlaylistIndex(String playlistId) async =>
+      (await _studyProgress())[playlistId];
+
+  Future<void> saveStudyPlaylistIndex(String playlistId, int index) async {
+    final progress = await _studyProgress();
+    if (progress[playlistId] == index) return;
+    progress[playlistId] = index;
+    await _db.writeSetting(_studyProgressKey, jsonEncode(progress));
+  }
+
+  Future<Map<String, int>> _studyProgress() async {
+    final raw = await _db.readSetting(_studyProgressKey);
+    if (raw == null) return {};
+    try {
+      return {
+        for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map).entries)
+          if (key is String && value is int) key: value,
+      };
+    } on Object {
+      return {};
+    }
+  }
 }
 
 /// A change [_update] made to one device's session.
