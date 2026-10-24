@@ -58,16 +58,15 @@ dependencies:
     path: packages/focus_guard
   study_widget:
     path: packages/study_widget
-  youtube_player_iframe: ^6.0.2
   url_launcher: ^6.3.3
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
-  webview_flutter: ^4.14.1
-  webview_flutter_android: ^4.14.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
