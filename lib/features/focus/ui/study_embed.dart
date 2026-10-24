@@ -47,7 +47,7 @@ const embedOrigins = [
 /// its own play button can always be tapped.
 class StudyEmbedController extends ChangeNotifier {
   StudyEmbedController({
-    this.onPlaylistIndex,
+    this.onPlace,
     this.onBlocked,
     this.onEvent,
     @visibleForTesting this.firstOrigin = 0,
@@ -80,8 +80,9 @@ class StudyEmbedController extends ChangeNotifier {
     }
   }
 
-  /// Called with the playlist and the place in it as the player moves on.
-  final void Function(StudyVideo playlist, int index)? onPlaylistIndex;
+  /// Called with the playlist, the video playing and its place in the
+  /// playlist as the player moves on.
+  final void Function(StudyVideo playlist, String video, int index)? onPlace;
 
   /// Called when the player was sent back from a video that is not a study
   /// video.
@@ -259,7 +260,7 @@ class StudyEmbedController extends ChangeNotifier {
         _index = index;
         _count = count;
         if (video != null && video.isPlaylist && count > 0) {
-          onPlaylistIndex?.call(video, index);
+          onPlace?.call(video, id, index);
         }
       case 'error':
         final code = data['code'];

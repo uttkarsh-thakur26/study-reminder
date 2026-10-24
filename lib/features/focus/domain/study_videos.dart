@@ -30,6 +30,40 @@ class StudyVideo {
             : 'https://www.youtube.com/watch?v=$startId&list=$id'
       : 'https://www.youtube.com/watch?v=$id';
 
+  /// Its page on YouTube's mobile site, for the phone's site view. A
+  /// playlist opens at the video [at], at the video its link opened at, or
+  /// on its own page.
+  String siteUrl({String? at}) {
+    if (!isPlaylist) return 'https://m.youtube.com/watch?v=$id';
+    final video = at ?? startId;
+    return video == null
+        ? 'https://m.youtube.com/playlist?list=$id'
+        : 'https://m.youtube.com/watch?v=$video&list=$id';
+  }
+
+  /// Whether the phone's site view may show the YouTube page at [url]: this
+  /// video's page, a video page in this playlist, or the playlist's own
+  /// page.
+  bool allowsPage(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+      return false;
+    }
+    final host = uri.host.toLowerCase();
+    if (host != 'youtube.com' && !host.endsWith('.youtube.com')) return false;
+    final Map<String, String> query;
+    try {
+      query = uri.queryParameters;
+    } on FormatException {
+      return false;
+    }
+    return switch (uri.path) {
+      '/watch' => isPlaylist ? query['list'] == id : query['v'] == id,
+      '/playlist' => isPlaylist && query['list'] == id,
+      _ => false,
+    };
+  }
+
   /// The name to show: its title, or what it is while that is unknown.
   String get label => title.isNotEmpty
       ? title

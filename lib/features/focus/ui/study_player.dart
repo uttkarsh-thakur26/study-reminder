@@ -9,6 +9,7 @@ import '../application/focus_providers.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/study_videos.dart';
 import 'study_embed.dart';
+import 'study_site.dart';
 
 /// Opens the player on the phone, at [video] or the first study video.
 Future<void> openStudyPlayer(BuildContext context, {StudyVideo? video}) =>
@@ -38,6 +39,13 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
   late final StudyEmbedController _embed;
   late final AppLifecycleListener _lifecycle;
 
+  /// YouTube's mobile site, made when it is first needed.
+  StudySiteController? _site;
+
+  /// Whether videos play on YouTube's mobile site rather than in the app's
+  /// own player.
+  bool _onSite = false;
+
   /// Keeps the player when the layout changes for full screen.
   final _playerKey = GlobalKey();
   StudyVideo? _current;
@@ -47,12 +55,12 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
   void initState() {
     super.initState();
     StudyPlayerScreen.openCount++;
-    _embed = StudyEmbedController(
-      onPlaylistIndex: _saveIndex,
-      onBlocked: _showBlocked,
-    )..addListener(_changed);
+    _embed = StudyEmbedController(onPlace: _savePlace, onBlocked: _showBlocked)
+      ..addListener(_embedChanged);
     // Stops with the app out of sight, as YouTube's own player does.
-    _lifecycle = AppLifecycleListener(onHide: () => unawaited(_embed.pause()));
+    _lifecycle = AppLifecycleListener(
+      onHide: () => unawaited(_onSite ? _site?.pause() : _embed.pause()),
+    );
     unawaited(_start());
   }
 
@@ -61,7 +69,10 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     StudyPlayerScreen.openCount--;
     _lifecycle.dispose();
     _embed
-      ..removeListener(_changed)
+      ..removeListener(_embedChanged)
+      ..dispose();
+    _site
+      ?..removeListener(_changed)
       ..dispose();
     if (_fullscreen) unawaited(_systemUi(fullscreen: false));
     super.dispose();
@@ -71,38 +82,88 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     if (mounted) setState(() {});
   }
 
+  void _embedChanged() {
+    _changed();
+    // YouTube won't play it in the app's player: its site will.
+    final problem = _embed.problem;
+    if (!_onSite &&
+        (problem == EmbedProblem.notEmbeddable ||
+            problem == EmbedProblem.refused ||
+            problem == EmbedProblem.other)) {
+      unawaited(_useSite(true, told: true));
+    }
+  }
+
+  StudySiteController get _siteView => _site ??= StudySiteController(
+    onPlace: _savePlace,
+    onBlocked: _showBlocked,
+  )..addListener(_changed);
+
   Future<void> _start() async {
-    final videos =
-        (await ref.read(focusRepositoryProvider).prefs()).studyVideos;
+    final repo = ref.read(focusRepositoryProvider);
+    final videos = (await repo.prefs()).studyVideos;
+    final onSite = await repo.studyPlayerUsesSite();
     final first =
         videos.where((v) => widget.initial?.sameAs(v) ?? false).firstOrNull ??
         videos.firstOrNull;
-    if (first != null && mounted) await _play(first);
+    if (!mounted) return;
+    setState(() => _onSite = onSite);
+    if (first != null) await _play(first);
   }
 
   Future<void> _play(StudyVideo video) async {
     setState(() => _current = video);
-    if (!video.isPlaylist) {
-      await _embed.open(video);
+    final place = video.isPlaylist
+        ? await ref.read(focusRepositoryProvider).studyPlaylistPlace(video.id)
+        : null;
+    if (!mounted || !identical(video, _current)) return;
+    if (_onSite) {
+      await _siteView.open(video, at: place?.video);
       return;
     }
-    final saved = await ref
-        .read(focusRepositoryProvider)
-        .studyPlaylistIndex(video.id);
-    if (!mounted || !identical(video, _current)) return;
+    if (_site != null) unawaited(_site!.pause());
     await _embed.open(
       video,
-      index: saved ?? 0,
-      startAt: saved == null ? video.startId : null,
+      index: place?.index ?? 0,
+      startAt: place?.video ?? (place == null ? video.startId : null),
     );
   }
 
-  void _saveIndex(StudyVideo playlist, int index) {
+  /// Switches between YouTube's mobile site and the app's own player, and
+  /// keeps it for next time. [told] says why when it was YouTube's doing.
+  Future<void> _useSite(bool site, {bool told = false}) async {
+    if (site == _onSite) return;
+    setState(() {
+      _onSite = site;
+      if (site && _fullscreen) _fullscreen = false;
+    });
+    if (site) {
+      unawaited(_embed.pause());
+      unawaited(_systemUi(fullscreen: false));
+    }
+    unawaited(ref.read(focusRepositoryProvider).saveStudyPlayerUsesSite(site));
+    if (told && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              "YouTube wouldn't play it in the app's player, so it plays "
+              "on YouTube's site here instead.",
+            ),
+          ),
+        );
+    }
+    final current = _current;
+    if (current != null) await _play(current);
+  }
+
+  void _savePlace(StudyVideo playlist, String video, int? index) {
     if (!mounted) return;
     unawaited(
       ref
           .read(focusRepositoryProvider)
-          .saveStudyPlaylistIndex(playlist.id, index),
+          .saveStudyPlaylistPlace(playlist.id, video: video, index: index),
     );
   }
 
@@ -134,6 +195,33 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     );
   }
 
+  /// Opens a list of the study videos to switch to.
+  Future<void> _pick(List<StudyVideo> videos) async {
+    final picked = await showModalBottomSheet<StudyVideo>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final v in videos)
+              ListTile(
+                leading: Icon(
+                  v.isPlaylist
+                      ? Icons.playlist_play_rounded
+                      : Icons.smart_display_rounded,
+                ),
+                title: Text(v.label),
+                subtitle: Text(v.isPlaylist ? 'Playlist' : 'Video'),
+                selected: _current?.sameAs(v) ?? false,
+                onTap: () => Navigator.pop(context, v),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) await _play(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -143,6 +231,38 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     final current = _current;
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    final switchView = IconButton(
+      tooltip: _onSite ? "Use the app's player" : "Use YouTube's site",
+      onPressed: () => _useSite(!_onSite),
+      icon: Icon(_onSite ? Icons.smart_display_rounded : Icons.public_rounded),
+    );
+
+    if (_onSite && current != null) {
+      final site = StudySite(controller: _siteView);
+      // YouTube's site has its own player, playlist and full screen.
+      if (landscape) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: SafeArea(child: site),
+        );
+      }
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Study videos'),
+          actions: [
+            if (videos.length > 1)
+              IconButton(
+                tooltip: 'Your study videos',
+                onPressed: () => _pick(videos),
+                icon: const Icon(Icons.video_library_rounded),
+              ),
+            switchView,
+          ],
+        ),
+        body: SafeArea(top: false, child: site),
+      );
+    }
 
     final player = KeyedSubtree(
       key: _playerKey,
@@ -193,7 +313,10 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Study videos')),
+      appBar: AppBar(
+        title: const Text('Study videos'),
+        actions: [if (current != null) switchView],
+      ),
       body: SafeArea(
         top: false,
         child: Column(

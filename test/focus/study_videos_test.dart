@@ -119,4 +119,63 @@ void main() {
       expect(rules.allowsTitle('Lecture 2 - YouTube'), isTrue);
     });
   });
+
+  group('site view pages', () {
+    const playlist = StudyVideo.playlist('PLabc_DEF-123');
+    const video = StudyVideo.video('dQw4w9WgXcQ');
+
+    test('opens a playlist at the saved video, its start, or its page', () {
+      expect(
+        playlist.siteUrl(),
+        'https://m.youtube.com/playlist?list=PLabc_DEF-123',
+      );
+      expect(
+        playlist.siteUrl(at: 'zzzzzzzzzzz'),
+        'https://m.youtube.com/watch?v=zzzzzzzzzzz&list=PLabc_DEF-123',
+      );
+      expect(
+        const StudyVideo.playlist(
+          'PLabc_DEF-123',
+          startId: 'yyyyyyyyyyy',
+        ).siteUrl(),
+        'https://m.youtube.com/watch?v=yyyyyyyyyyy&list=PLabc_DEF-123',
+      );
+      expect(video.siteUrl(), 'https://m.youtube.com/watch?v=dQw4w9WgXcQ');
+    });
+
+    test('allows only the study pages', () {
+      for (final url in [
+        'https://m.youtube.com/watch?v=zzzzzzzzzzz&list=PLabc_DEF-123',
+        'https://m.youtube.com/watch?v=zzzzzzzzzzz&list=PLabc_DEF-123&index=4&pp=x',
+        'https://m.youtube.com/playlist?list=PLabc_DEF-123',
+        'https://www.youtube.com/watch?list=PLabc_DEF-123&v=zzzzzzzzzzz',
+      ]) {
+        expect(playlist.allowsPage(url), isTrue, reason: url);
+      }
+      for (final url in [
+        'https://m.youtube.com/',
+        'https://m.youtube.com/watch?v=zzzzzzzzzzz',
+        'https://m.youtube.com/watch?v=zzzzzzzzzzz&list=PLother1234',
+        'https://m.youtube.com/results?search_query=cats',
+        'https://m.youtube.com/shorts/zzzzzzzzzzz',
+        'https://m.youtube.com/@channel',
+        'https://example.com/watch?v=zzzzzzzzzzz&list=PLabc_DEF-123',
+        'intent://watch?v=zzzzzzzzzzz&list=PLabc_DEF-123',
+      ]) {
+        expect(playlist.allowsPage(url), isFalse, reason: url);
+      }
+      expect(
+        video.allowsPage('https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=30s'),
+        isTrue,
+      );
+      expect(
+        video.allowsPage('https://m.youtube.com/watch?v=zzzzzzzzzzz'),
+        isFalse,
+      );
+      expect(
+        video.allowsPage('https://m.youtube.com/playlist?list=dQw4w9WgXcQ'),
+        isFalse,
+      );
+    });
+  });
 }
