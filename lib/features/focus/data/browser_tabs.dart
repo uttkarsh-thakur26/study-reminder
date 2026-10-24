@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:io' show sleep;
 import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
@@ -25,8 +26,10 @@ abstract interface class BrowserTabs {
     StudyTabs study = const StudyTabs(),
   });
 
-  /// The address in the address bar of the browser window [hwnd], as the
-  /// browser shows it (often without https://). Null when it can't be read.
+  /// The address of the page shown in the browser window [hwnd]: the page's
+  /// own address where the browser gives it, else the address bar's text as
+  /// the browser shows it (often without https://). Null when neither can
+  /// be read.
   Future<String?> addressOf(int hwnd);
 }
 
@@ -67,8 +70,8 @@ const TabSweep _nothing = (
 /// Only Chromium browsers are looked at ([LaptopBlockRules.tabBrowsers]), and
 /// only while one plays sound: reading a browser's tabs turns on its
 /// accessibility support, which slows it down a little, so this is kept to
-/// the moments a background tab may be playing a blocked site. Web pages
-/// themselves are never read.
+/// the moments a background tab may be playing a blocked site. Nothing
+/// inside a web page is read: of a page, only the address of the one shown.
 class Win32BrowserTabs implements BrowserTabs {
   const Win32BrowserTabs();
 
@@ -92,10 +95,8 @@ class Win32BrowserTabs implements BrowserTabs {
       Isolate.run(() => _readAddress(hwnd), debugName: 'focus address');
 }
 
-/// The address bar's text of the browser window [hwnd], in the worker
-/// isolate: the first edit field outside the page whose text looks like an
-/// address. Chromium names it "Address and search bar"; Firefox has its own
-/// name, so the text is what counts.
+/// The address of the page shown in the browser window [hwnd], in the
+/// worker isolate.
 String? _readAddress(int hwnd) {
   if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return null;
   try {
@@ -104,7 +105,13 @@ String? _readAddress(int hwnd) {
       final walker = arena.own(
         IUIAutomationTreeWalker(automation.controlViewWalker),
       );
-      return _findAddress(automation, walker, hwnd);
+      for (var tries = 1; ; tries++) {
+        final address = _findAddress(automation, walker, hwnd);
+        if (address != null || tries == _addressTries) return address;
+        // Firefox starts telling other programs about its window only once
+        // one asks, so the first look can find nothing yet.
+        sleep(_addressRetry);
+      }
     });
   } on Object catch (e) {
     debugPrint('focus: could not read the address bar: $e');
@@ -114,7 +121,19 @@ String? _readAddress(int hwnd) {
   }
 }
 
-/// The address bar's text of window [hwnd], looked for depth first.
+const _addressTries = 2;
+const _addressRetry = Duration(milliseconds: 300);
+
+/// The address of the page shown in window [hwnd], looked for depth first.
+///
+/// The page's own document gives its address, but a side panel is a
+/// document too, so a document counts first only when it is on screen and
+/// the window is titled after it. Firefox gives the address only this way:
+/// its address bar is no edit field, and it is hidden with the toolbars in
+/// full screen. Next comes the first edit field outside the pages whose
+/// text looks like an address, which is Chromium's address bar ("Address
+/// and search bar"), and last any other web page on screen. Nothing inside
+/// a page is read.
 String? _findAddress(
   IUIAutomation automation,
   IUIAutomationTreeWalker walker,
@@ -126,6 +145,9 @@ String? _findAddress(
     IUIAutomationElement.new,
   );
   if (root == null) return null;
+  final title = _name(root);
+  String? bar;
+  String? otherPage;
   var budget = _maxNodes;
   String? visit(IUIAutomationElement element, int depth) => using((arena) {
     IUIAutomationElement? child;
@@ -140,25 +162,49 @@ String? _findAddress(
       );
       if (child == null) return null;
       final type = _controlType(child);
-      if (type == UIA_EditControlTypeId) {
+      if (type == UIA_DocumentControlTypeId) {
+        if (_isOffscreen(child)) continue;
+        final address = _value(child);
+        if (address == null || !_isWebAddress(address)) continue;
+        final name = _name(child);
+        if (name.isNotEmpty && title.startsWith(name)) return address;
+        otherPage ??= address;
+      } else if (type == UIA_EditControlTypeId) {
+        if (bar != null) continue;
         final value = _value(child);
-        if (value != null && _looksLikeAddress(value)) return value;
-      } else if (type != UIA_DocumentControlTypeId && depth < _maxDepth) {
-        // A document is a web page, which is never read.
+        if (value != null && _looksLikeAddress(value)) bar = value;
+      } else if (depth < _maxDepth) {
         if (visit(child, depth + 1) case final String found) return found;
       }
     }
     return null;
   });
-  return visit(root, 0);
+  return visit(root, 0) ?? bar ?? otherPage;
 });
+
+bool _isWebAddress(String text) {
+  final t = text.trim().toLowerCase();
+  return (t.startsWith('https://') || t.startsWith('http://')) &&
+      !t.contains(' ');
+}
+
+/// Whether [element] is out of sight, such as the page of a tab in the
+/// background. False when that can't be told.
+bool _isOffscreen(IUIAutomationElement element) {
+  try {
+    return element.currentIsOffscreen != FALSE;
+  } on WindowsException {
+    return false;
+  }
+}
 
 bool _looksLikeAddress(String text) {
   final t = text.trim();
   return t.isNotEmpty && !t.contains(' ') && t.contains('.');
 }
 
-/// The text of an edit field, or null.
+/// The text of an edit field, or the address of a web page. Null when
+/// there is none.
 String? _value(IUIAutomationElement element) => using((arena) {
   final iid = convertToIID(IID_IUIAutomationValuePattern, allocator: arena);
   final pattern = _take(
@@ -388,7 +434,7 @@ class _TabSweep {
     var confirmed = false;
     if (!_study.allowsTitle(title) &&
         !(id != null && _knownTabs.contains(id))) {
-      // Only the tab shown in its window has its address in the bar.
+      // Only the address of the tab shown in its window can be read.
       if (!_isSelected(tab, unsure: false)) return false;
       final address = _addresses.putIfAbsent(
         hwnd,
