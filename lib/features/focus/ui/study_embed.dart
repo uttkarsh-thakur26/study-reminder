@@ -28,13 +28,13 @@ enum EmbedProblem {
 /// Where the player's page says it comes from, in the order tried. YouTube
 /// asks apps to name themselves with their app id
 /// (developers.google.com/youtube/terms/required-minimum-functionality);
-/// the others are kept for when YouTube still won't play there.
+/// youtube-nocookie.com is kept for when YouTube still won't play there.
+/// (A page on youtube.com itself gets error 152.)
 const embedOrigins = [
   (
     page: 'https://com.uttkarsh.study_reminder',
     host: 'https://www.youtube.com',
   ),
-  (page: 'https://www.youtube.com', host: 'https://www.youtube.com'),
   (
     page: 'https://www.youtube-nocookie.com',
     host: 'https://www.youtube-nocookie.com',
