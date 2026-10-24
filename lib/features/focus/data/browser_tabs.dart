@@ -15,18 +15,52 @@ abstract interface class BrowserTabs {
   /// Closes the tabs showing one of [sites] in browsers playing sound,
   /// background tabs and windows behind others or minimised too. The tab in
   /// front of the window in front is left to the check of that window.
-  /// YouTube tabs whose title is one of [studyTitles] (as
-  /// [StudyVideoRules.cleanTitle] gives them) stay open. Gives back what it
-  /// closed.
-  Future<List<BlockHit>> closeBlockedTabs(
+  /// YouTube tabs showing one of the [study] videos stay open: known by
+  /// title, as a study tab of an earlier sweep (so a playlist moving on to
+  /// its next video in the background keeps playing), or, for the tab shown
+  /// in its window, by the window's address bar. Gives back what it closed
+  /// and the study tabs it saw.
+  Future<TabSweep> closeBlockedTabs(
     List<String> sites, {
-    Set<String> studyTitles = const {},
+    StudyTabs study = const StudyTabs(),
   });
 
   /// The address in the address bar of the browser window [hwnd], as the
   /// browser shows it (often without https://). Null when it can't be read.
   Future<String?> addressOf(int hwnd);
 }
+
+/// What a sweep knows of the user's study videos.
+class StudyTabs {
+  const StudyTabs({
+    this.videos = const [],
+    this.titles = const {},
+    this.tabs = const {},
+  });
+
+  final List<StudyVideo> videos;
+
+  /// Titles of study videos, as [StudyVideoRules.cleanTitle] gives them.
+  final Set<String> titles;
+
+  /// Tabs an earlier sweep found showing a study video, by their UI
+  /// Automation runtime id.
+  final Set<String> tabs;
+}
+
+/// What one sweep did: the blocked tabs it closed, and the tabs it left
+/// open as study videos, with the titles it confirmed by address.
+typedef TabSweep = ({
+  List<BlockHit> closed,
+  Set<String> studyTabs,
+  Set<String> studyTitles,
+});
+
+const TabSweep _nothing = (
+  closed: <BlockHit>[],
+  studyTabs: <String>{},
+  studyTitles: <String>{},
+);
 
 /// [BrowserTabs] through Core Audio and UI Automation.
 ///
@@ -39,19 +73,18 @@ class Win32BrowserTabs implements BrowserTabs {
   const Win32BrowserTabs();
 
   @override
-  Future<List<BlockHit>> closeBlockedTabs(
+  Future<TabSweep> closeBlockedTabs(
     List<String> sites, {
-    Set<String> studyTitles = const {},
+    StudyTabs study = const StudyTabs(),
   }) {
     final list = List.of(sites);
-    final titles = Set.of(studyTitles);
     // A new isolate for each sweep, so the UI thread never waits on another
     // program, and so COM is set up, used and torn down in one synchronous
     // call on one thread: a long-lived isolate can move between threads
     // from one message to the next, and CoUninitialize must run on the
     // thread that called CoInitializeEx. Starting one every few seconds
     // costs little next to the sweep.
-    return Isolate.run(() => _sweep(list, titles), debugName: 'focus tabs');
+    return Isolate.run(() => _sweep(list, study), debugName: 'focus tabs');
   }
 
   @override
@@ -71,37 +104,7 @@ String? _readAddress(int hwnd) {
       final walker = arena.own(
         IUIAutomationTreeWalker(automation.controlViewWalker),
       );
-      final root = _take(
-        arena,
-        (out) => automation.elementFromHandle(hwnd, out),
-        IUIAutomationElement.new,
-      );
-      if (root == null) return null;
-      var budget = _maxNodes;
-      String? visit(IUIAutomationElement element, int depth) => using((arena) {
-        IUIAutomationElement? child;
-        while (budget-- > 0) {
-          final previous = child;
-          child = _take(
-            arena,
-            (out) => previous == null
-                ? walker.getFirstChildElement(_raw(element), out)
-                : walker.getNextSiblingElement(_raw(previous), out),
-            IUIAutomationElement.new,
-          );
-          if (child == null) return null;
-          final type = _controlType(child);
-          if (type == UIA_EditControlTypeId) {
-            final value = _value(child);
-            if (value != null && _looksLikeAddress(value)) return value;
-          } else if (type != UIA_DocumentControlTypeId && depth < _maxDepth) {
-            // A document is a web page, which is never read.
-            if (visit(child, depth + 1) case final String found) return found;
-          }
-        }
-        return null;
-      });
-      return visit(root, 0);
+      return _findAddress(automation, walker, hwnd);
     });
   } on Object catch (e) {
     debugPrint('focus: could not read the address bar: $e');
@@ -110,6 +113,45 @@ String? _readAddress(int hwnd) {
     CoUninitialize();
   }
 }
+
+/// The address bar's text of window [hwnd], looked for depth first.
+String? _findAddress(
+  IUIAutomation automation,
+  IUIAutomationTreeWalker walker,
+  int hwnd,
+) => using((arena) {
+  final root = _take(
+    arena,
+    (out) => automation.elementFromHandle(hwnd, out),
+    IUIAutomationElement.new,
+  );
+  if (root == null) return null;
+  var budget = _maxNodes;
+  String? visit(IUIAutomationElement element, int depth) => using((arena) {
+    IUIAutomationElement? child;
+    while (budget-- > 0) {
+      final previous = child;
+      child = _take(
+        arena,
+        (out) => previous == null
+            ? walker.getFirstChildElement(_raw(element), out)
+            : walker.getNextSiblingElement(_raw(previous), out),
+        IUIAutomationElement.new,
+      );
+      if (child == null) return null;
+      final type = _controlType(child);
+      if (type == UIA_EditControlTypeId) {
+        final value = _value(child);
+        if (value != null && _looksLikeAddress(value)) return value;
+      } else if (type != UIA_DocumentControlTypeId && depth < _maxDepth) {
+        // A document is a web page, which is never read.
+        if (visit(child, depth + 1) case final String found) return found;
+      }
+    }
+    return null;
+  });
+  return visit(root, 0);
+});
 
 bool _looksLikeAddress(String text) {
   final t = text.trim();
@@ -149,19 +191,19 @@ const _maxNodes = 400;
 const _maxTabParts = 8;
 
 /// One sweep, start to end, in the worker isolate.
-List<BlockHit> _sweep(List<String> sites, Set<String> studyTitles) {
+TabSweep _sweep(List<String> sites, StudyTabs study) {
   final rules = LaptopBlockRules(programs: const [], sites: sites);
-  if (!rules.blocksSites) return const [];
-  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return const [];
+  if (!rules.blocksSites) return _nothing;
+  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return _nothing;
   try {
     final playing = _playingBrowsers();
-    if (playing.isEmpty) return const [];
+    if (playing.isEmpty) return _nothing;
     final windows = _windowsOf(playing);
-    if (windows.isEmpty) return const [];
-    return _TabSweep(rules, studyTitles).run(windows);
+    if (windows.isEmpty) return _nothing;
+    return _TabSweep(rules, study).run(windows);
   } on Object catch (e) {
     debugPrint('focus: could not sweep browser tabs: $e');
-    return const [];
+    return _nothing;
   } finally {
     CoUninitialize();
   }
@@ -271,16 +313,23 @@ List<int> _windowsOf(Set<String> programs) {
 
 /// One look through the tab strips of some browser windows.
 class _TabSweep {
-  _TabSweep(this.rules, this.studyTitles);
+  _TabSweep(this.rules, StudyTabs study)
+    : _study = StudyVideoRules(study.videos, titles: study.titles),
+      _knownTabs = study.tabs;
 
   final LaptopBlockRules rules;
-  final Set<String> studyTitles;
+  final StudyVideoRules _study;
+  final Set<String> _knownTabs;
   final _closed = <BlockHit>[];
+  final _studyTabs = <String>{};
+  final _studyTitles = <String>{};
+  final _addresses = <int, String?>{};
+  late IUIAutomation _automation;
   late IUIAutomationTreeWalker _walker;
   var _budget = 0;
 
-  List<BlockHit> run(List<int> windows) => using((arena) {
-    final automation = arena.own(CUIAutomation.createInstance());
+  TabSweep run(List<int> windows) => using((arena) {
+    final automation = _automation = arena.own(CUIAutomation.createInstance());
     _walker = arena.own(IUIAutomationTreeWalker(automation.controlViewWalker));
     for (final hwnd in windows) {
       try {
@@ -297,7 +346,7 @@ class _TabSweep {
         debugPrint('focus: could not look at a browser window: $e');
       }
     }
-    return _closed;
+    return (closed: _closed, studyTabs: _studyTabs, studyTitles: _studyTitles);
   });
 
   /// Looks for tabs under [element], depth first.
@@ -320,8 +369,7 @@ class _TabSweep {
     final title = _name(tab);
     final hit = rules.matchTab(title);
     if (hit == null) return;
-    if (hit.isYouTube &&
-        studyTitles.contains(StudyVideoRules.cleanTitle(title))) {
+    if (hit.isYouTube && !_study.isEmpty && _isStudyTab(tab, hwnd, title)) {
       return;
     }
     // The check of the window in front closes its tab in front. Closing it
@@ -330,9 +378,38 @@ class _TabSweep {
     if (_pressClose(tab)) _closed.add(hit);
   }
 
-  /// Whether [tab] is the one shown in its window. True when it can't tell,
-  /// so that such a tab is left alone.
-  bool _isSelected(IUIAutomationElement tab) => using((arena) {
+  /// Whether the YouTube [tab] titled [title] shows a study video, and if
+  /// so notes it. A tab kept as a study tab before may have moved on to
+  /// the next video of its playlist; its new title is not learned, since
+  /// it may also have moved on to a suggested video. That tab is checked by
+  /// its address once it is in front again.
+  bool _isStudyTab(IUIAutomationElement tab, int hwnd, String title) {
+    final id = _runtimeId(tab);
+    var confirmed = false;
+    if (!_study.allowsTitle(title) &&
+        !(id != null && _knownTabs.contains(id))) {
+      // Only the tab shown in its window has its address in the bar.
+      if (!_isSelected(tab, unsure: false)) return false;
+      final address = _addresses.putIfAbsent(
+        hwnd,
+        () => _findAddress(_automation, _walker, hwnd),
+      );
+      if (address == null || !_study.allowsAddress(address)) return false;
+      confirmed = true;
+    }
+    if (id != null) _studyTabs.add(id);
+    if (confirmed) {
+      final t = StudyVideoRules.cleanTitle(title);
+      if (t.isNotEmpty) _studyTitles.add(t);
+    }
+    return true;
+  }
+
+  /// Whether [tab] is the one shown in its window, or [unsure] when it
+  /// can't tell.
+  bool _isSelected(IUIAutomationElement tab, {bool unsure = true}) => using((
+    arena,
+  ) {
     final iid = convertToIID(
       IID_IUIAutomationSelectionItemPattern,
       allocator: arena,
@@ -343,11 +420,11 @@ class _TabSweep {
           tab.getCurrentPatternAs(UIA_SelectionItemPatternId, iid, out.cast()),
       IUIAutomationSelectionItemPattern.new,
     );
-    if (pattern == null) return true;
+    if (pattern == null) return unsure;
     try {
       return pattern.currentIsSelected != FALSE;
     } on WindowsException {
-      return true;
+      return unsure;
     }
   });
 
@@ -398,6 +475,35 @@ class _TabSweep {
     return children;
   }
 }
+
+/// The runtime id UI Automation gives [element], which stays the same while
+/// the element lives, as text. Null when there is none.
+String? _runtimeId(IUIAutomationElement element) => using((arena) {
+  final out = arena<Pointer<SAFEARRAY>>();
+  if (FAILED(element.getRuntimeId(out)) || out.value.address == 0) {
+    return null;
+  }
+  final array = out.value;
+  try {
+    final lower = arena<Int32>();
+    final upper = arena<Int32>();
+    final data = arena<Pointer>();
+    if (FAILED(SafeArrayGetLBound(array, 1, lower)) ||
+        FAILED(SafeArrayGetUBound(array, 1, upper)) ||
+        FAILED(SafeArrayAccessData(array, data))) {
+      return null;
+    }
+    try {
+      final ints = data.value.cast<Int32>();
+      return [for (var i = 0; i <= upper.value - lower.value; i++) ints[i]]
+          .join('.');
+    } finally {
+      SafeArrayUnaccessData(array);
+    }
+  } finally {
+    SafeArrayDestroy(array);
+  }
+});
 
 int _controlType(IUIAutomationElement element) {
   try {

@@ -48,23 +48,27 @@ class _FakeTabs implements BrowserTabs {
   /// Set to make sweeps fail.
   Object? error;
 
-  /// The study titles each sweep was given.
-  final titles = <Set<String>>[];
+  /// What each sweep was told of the study videos.
+  final studies = <StudyTabs>[];
+
+  /// The study tabs and titles each sweep reports.
+  var studyTabs = <String>{};
+  var studyTitles = <String>{};
 
   /// The address bar of each window.
   final addresses = <int, String>{};
   final reads = <int>[];
 
   @override
-  Future<List<BlockHit>> closeBlockedTabs(
+  Future<TabSweep> closeBlockedTabs(
     List<String> sites, {
-    Set<String> studyTitles = const {},
+    StudyTabs study = const StudyTabs(),
   }) async {
     sweeps.add(sites);
-    titles.add(studyTitles);
+    studies.add(study);
     await hold?.future;
     if (error case final e?) throw e;
-    return closes;
+    return (closed: closes, studyTabs: studyTabs, studyTitles: studyTitles);
   }
 
   @override
@@ -365,7 +369,39 @@ void main() {
 
       // Its title now lets a background tab of it stay too.
       await enforcer.sweepTabs();
-      expect(tabs.titles.last, containsAll(['part 3', 'lecture 1']));
+      expect(tabs.studies.last.titles, containsAll(['part 3', 'lecture 1']));
+      expect(tabs.studies.last.videos, hasLength(2));
+    });
+
+    test('remembers the study tabs and titles a sweep found', () async {
+      await enforcer.apply(session(), study);
+      tabs
+        ..studyTabs = {'42.7'}
+        ..studyTitles = {'part 4'};
+      await enforcer.sweepTabs();
+      tabs.studyTabs = {};
+      await enforcer.sweepTabs();
+      expect(tabs.studies.last.tabs, {'42.7'});
+      expect(tabs.studies.last.titles, contains('part 4'));
+
+      // A title confirmed in the background is known in front too.
+      windows.front = const DesktopWindow(
+        1,
+        r'C:\x\chrome.exe',
+        'Part 4 - YouTube',
+      );
+      enforcer.check();
+      await settle();
+      expect(windows.actions, isEmpty);
+      expect(tabs.reads, isEmpty);
+
+      // Changing the study videos starts over.
+      await enforcer.apply(
+        session(),
+        study.copyWith(studyVideos: [const StudyVideo.video('abcdefghijk')]),
+      );
+      await enforcer.sweepTabs();
+      expect(tabs.studies.last.tabs, isEmpty);
     });
 
     test('closes a YouTube tab on any other video', () async {

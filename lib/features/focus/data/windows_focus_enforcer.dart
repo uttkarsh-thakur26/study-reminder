@@ -51,7 +51,11 @@ class WindowsFocusEnforcer implements FocusEnforcer {
   final _noticed = <String, DateTime>{};
 
   StudyVideoRules? _study;
+  List<StudyVideo> _studyVideos = const [];
   String _studyKey = '';
+
+  /// Background tabs found showing a study video, by UI Automation id.
+  final _studyTabs = <String>{};
 
   /// The window in front and its title when its address was last found to
   /// be a study video, so it is not read again every second.
@@ -79,7 +83,9 @@ class WindowsFocusEnforcer implements FocusEnforcer {
       ].join('|');
       if (_study == null || studyKey != _studyKey) {
         _study = StudyVideoRules(prefs.studyVideos);
+        _studyVideos = prefs.studyVideos;
         _studyKey = studyKey;
+        _studyTabs.clear();
         _studyFront = null;
       }
       _timer ??= Timer.periodic(_every, (_) => check());
@@ -107,7 +113,9 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     _sites = const [];
     _noticed.clear();
     _study = null;
+    _studyVideos = const [];
     _studyKey = '';
+    _studyTabs.clear();
     _studyFront = null;
   }
 
@@ -210,11 +218,16 @@ class WindowsFocusEnforcer implements FocusEnforcer {
       return;
     }
     _sweeping = true;
-    final List<BlockHit> closed;
+    final study = _study;
+    final TabSweep result;
     try {
-      closed = await tabs.closeBlockedTabs(
+      result = await tabs.closeBlockedTabs(
         _sites,
-        studyTitles: _study?.titles ?? const {},
+        study: StudyTabs(
+          videos: _studyVideos,
+          titles: study?.titles ?? const {},
+          tabs: Set.of(_studyTabs),
+        ),
       );
     } on Object catch (e) {
       debugPrint('focus: could not look at the browser tabs: $e');
@@ -225,7 +238,11 @@ class WindowsFocusEnforcer implements FocusEnforcer {
     // The session may have ended meanwhile.
     final current = _session;
     if (current == null) return;
-    for (final hit in closed) {
+    if (study != null && identical(study, _study)) {
+      _studyTabs.addAll(result.studyTabs);
+      result.studyTitles.forEach(study.learn);
+    }
+    for (final hit in result.closed) {
       _notice(hit, current, _now());
     }
   }

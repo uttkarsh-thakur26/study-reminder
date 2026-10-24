@@ -167,108 +167,112 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
       appBar: AppBar(title: const Text('Study videos')),
       body: SafeArea(
         top: false,
-        child: ListView(
-          children: [
-            if (current != null)
-              YoutubePlayer(controller: _controller)
-            else
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: ColoredBox(
-                  color: scheme.surfaceContainerHighest,
-                  child: Center(
-                    child: Text(
-                      videos.isEmpty
-                          ? 'Add a study video on the Focus page'
-                          : 'Pick a video below',
-                      style: theme.textTheme.bodyMedium,
+        // Not a ListView: scrolled out of sight, the player would be
+        // rebuilt and start over.
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (current != null)
+                YoutubePlayer(controller: _controller)
+              else
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: ColoredBox(
+                    color: scheme.surfaceContainerHighest,
+                    child: Center(
+                      child: Text(
+                        videos.isEmpty
+                            ? 'Add a study video on the Focus page'
+                            : 'Pick a video below',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            if (current != null)
-              YoutubeValueBuilder(
-                controller: _controller,
-                builder: (context, value) => Padding(
-                  padding: const EdgeInsets.fromLTRB(Gap.l, Gap.l, Gap.l, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        value.metaData.title.isNotEmpty
-                            ? value.metaData.title
-                            : current.label,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      if (value.error != YoutubeError.none) ...[
-                        const SizedBox(height: Gap.xs),
+              if (current != null)
+                YoutubeValueBuilder(
+                  controller: _controller,
+                  builder: (context, value) => Padding(
+                    padding: const EdgeInsets.fromLTRB(Gap.l, Gap.l, Gap.l, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          switch (value.error) {
-                            YoutubeError.notEmbeddable ||
-                            YoutubeError.sameAsNotEmbeddable =>
-                              'Its owner lets it play only on YouTube itself.',
-                            YoutubeError.videoNotFound ||
-                            YoutubeError.cannotFindVideo =>
-                              'This video is private or was removed.',
-                            _ => 'This video could not be played.',
-                          },
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.error,
-                          ),
+                          value.metaData.title.isNotEmpty
+                              ? value.metaData.title
+                              : current.label,
+                          style: theme.textTheme.titleMedium,
                         ),
-                      ],
-                      if (current.isPlaylist) ...[
-                        const SizedBox(height: Gap.xs),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _playlist.isEmpty
-                                    ? current.label
-                                    : '${current.label} · '
-                                          '${_index + 1} of ${_playlist.length}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                        if (value.error != YoutubeError.none) ...[
+                          const SizedBox(height: Gap.xs),
+                          Text(
+                            switch (value.error) {
+                              YoutubeError.notEmbeddable ||
+                              YoutubeError.sameAsNotEmbeddable => 'Its owner lets it play only on YouTube itself.',
+                              YoutubeError.videoNotFound ||
+                              YoutubeError.cannotFindVideo =>
+                                'This video is private or was removed.',
+                              _ => 'This video could not be played.',
+                            },
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.error,
+                            ),
+                          ),
+                        ],
+                        if (current.isPlaylist) ...[
+                          const SizedBox(height: Gap.xs),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _playlist.isEmpty
+                                      ? current.label
+                                      : '${current.label} · '
+                                            '${_index + 1} of ${_playlist.length}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Previous',
-                              onPressed: _index > 0
-                                  ? _controller.previousVideo
-                                  : null,
-                              icon: const Icon(Icons.skip_previous_rounded),
-                            ),
-                            IconButton(
-                              tooltip: 'Next',
-                              onPressed:
-                                  _playlist.isEmpty ||
-                                      _index < _playlist.length - 1
-                                  ? _controller.nextVideo
-                                  : null,
-                              icon: const Icon(Icons.skip_next_rounded),
-                            ),
-                          ],
-                        ),
+                              IconButton(
+                                tooltip: 'Previous',
+                                onPressed: _index > 0
+                                    ? _controller.previousVideo
+                                    : null,
+                                icon: const Icon(Icons.skip_previous_rounded),
+                              ),
+                              IconButton(
+                                tooltip: 'Next',
+                                onPressed:
+                                    _playlist.isEmpty ||
+                                        _index < _playlist.length - 1
+                                    ? _controller.nextVideo
+                                    : null,
+                                icon: const Icon(Icons.skip_next_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            const SizedBox(height: Gap.m),
-            for (final v in videos)
-              ListTile(
-                leading: Icon(
-                  v.isPlaylist
-                      ? Icons.playlist_play_rounded
-                      : Icons.smart_display_rounded,
+              const SizedBox(height: Gap.m),
+              for (final v in videos)
+                ListTile(
+                  leading: Icon(
+                    v.isPlaylist
+                        ? Icons.playlist_play_rounded
+                        : Icons.smart_display_rounded,
+                  ),
+                  title: Text(v.label),
+                  subtitle: Text(v.isPlaylist ? 'Playlist' : 'Video'),
+                  selected: current?.sameAs(v) ?? false,
+                  onTap: () => _play(v),
                 ),
-                title: Text(v.label),
-                subtitle: Text(v.isPlaylist ? 'Playlist' : 'Video'),
-                selected: current?.sameAs(v) ?? false,
-                onTap: () => _play(v),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
