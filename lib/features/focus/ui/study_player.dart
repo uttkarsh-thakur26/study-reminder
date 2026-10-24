@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../application/focus_providers.dart';
+import '../data/youtube_titles.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/study_videos.dart';
 import 'study_embed.dart';
@@ -51,6 +52,11 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
   StudyVideo? _current;
   bool _fullscreen = false;
 
+  /// The list of the playlist's videos, and the video it was last brought
+  /// into view for.
+  final _listScroll = ScrollController();
+  String _listShows = '';
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +80,7 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     _site
       ?..removeListener(_changed)
       ..dispose();
+    _listScroll.dispose();
     if (_fullscreen) unawaited(_systemUi(fullscreen: false));
     super.dispose();
   }
@@ -84,6 +91,7 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
 
   void _embedChanged() {
     _changed();
+    _showPlaying();
     // YouTube won't play it in the app's player: its site will.
     final problem = _embed.problem;
     if (!_onSite &&
@@ -92,6 +100,41 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
             problem == EmbedProblem.other)) {
       unawaited(_useSite(true, told: true));
     }
+  }
+
+  /// Brings the video playing into view in the list of the playlist's
+  /// videos when it moves on to one out of view: at once the first time,
+  /// smoothly after.
+  void _showPlaying() {
+    final embed = _embed;
+    final index = embed.index;
+    if (embed.playlist.length <= index || embed.videoId.isEmpty) return;
+    final key = '${embed.video?.id}|${embed.videoId}';
+    if (key == _listShows) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_listScroll.hasClients || key == _listShows) return;
+      final first = _listShows.isEmpty;
+      _listShows = key;
+      final position = _listScroll.position;
+      const extent = _PlaylistRow.extent;
+      final top = index * extent;
+      if (top >= position.pixels &&
+          top + extent <= position.pixels + position.viewportDimension) {
+        return;
+      }
+      final to = (top - extent).clamp(0.0, position.maxScrollExtent);
+      if (first) {
+        _listScroll.jumpTo(to);
+      } else {
+        unawaited(
+          _listScroll.animateTo(
+            to,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          ),
+        );
+      }
+    });
   }
 
   StudySiteController get _siteView => _site ??= StudySiteController(
@@ -111,8 +154,22 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
     if (first != null) await _play(first);
   }
 
+  /// Plays [video], unless it is playing already.
+  Future<void> _choose(StudyVideo video) async {
+    final current = _current;
+    if (current != null &&
+        current.sameAs(video) &&
+        (_onSite || _embed.problem == null)) {
+      return;
+    }
+    await _play(video);
+  }
+
   Future<void> _play(StudyVideo video) async {
-    setState(() => _current = video);
+    setState(() {
+      _current = video;
+      _listShows = '';
+    });
     final place = video.isPlaylist
         ? await ref.read(focusRepositoryProvider).studyPlaylistPlace(video.id)
         : null;
@@ -219,7 +276,7 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
         ),
       ),
     );
-    if (picked != null && mounted) await _play(picked);
+    if (picked != null && mounted) await _choose(picked);
   }
 
   @override
@@ -237,6 +294,11 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
       onPressed: () => _useSite(!_onSite),
       icon: Icon(_onSite ? Icons.smart_display_rounded : Icons.public_rounded),
     );
+    final pick = IconButton(
+      tooltip: 'Your study videos',
+      onPressed: () => _pick(videos),
+      icon: const Icon(Icons.video_library_rounded),
+    );
 
     if (_onSite && current != null) {
       final site = StudySite(controller: _siteView);
@@ -250,15 +312,7 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Study videos'),
-          actions: [
-            if (videos.length > 1)
-              IconButton(
-                tooltip: 'Your study videos',
-                onPressed: () => _pick(videos),
-                icon: const Icon(Icons.video_library_rounded),
-              ),
-            switchView,
-          ],
+          actions: [if (videos.length > 1) pick, switchView],
         ),
         body: SafeArea(top: false, child: site),
       );
@@ -312,10 +366,18 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
       );
     }
 
+    final playlist = _embed.playlist;
+    // A playlist lists its videos, with the study videos a tap away above.
+    final showsPlaylist =
+        current != null && current.isPlaylist && playlist.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Study videos'),
-        actions: [if (current != null) switchView],
+        actions: [
+          if (showsPlaylist && videos.length > 1) pick,
+          if (current != null) switchView,
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -326,24 +388,39 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
             // start over, and the list would take its swipes.
             AspectRatio(aspectRatio: 16 / 9, child: player),
             if (current != null) _info(theme, current),
+            const Divider(height: Gap.s),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(top: Gap.s),
-                children: [
-                  for (final v in videos)
-                    ListTile(
-                      leading: Icon(
-                        v.isPlaylist
-                            ? Icons.playlist_play_rounded
-                            : Icons.smart_display_rounded,
+              child: showsPlaylist
+                  ? ListView.builder(
+                      controller: _listScroll,
+                      itemExtent: _PlaylistRow.extent,
+                      itemCount: playlist.length,
+                      itemBuilder: (context, i) => _PlaylistRow(
+                        id: playlist[i],
+                        number: i + 1,
+                        playing: i == _embed.index,
+                        onTap: () {
+                          if (i != _embed.index) unawaited(_embed.playAt(i));
+                        },
                       ),
-                      title: Text(v.label),
-                      subtitle: Text(v.isPlaylist ? 'Playlist' : 'Video'),
-                      selected: current?.sameAs(v) ?? false,
-                      onTap: () => _play(v),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.only(top: Gap.s),
+                      children: [
+                        for (final v in videos)
+                          ListTile(
+                            leading: Icon(
+                              v.isPlaylist
+                                  ? Icons.playlist_play_rounded
+                                  : Icons.smart_display_rounded,
+                            ),
+                            title: Text(v.label),
+                            subtitle: Text(v.isPlaylist ? 'Playlist' : 'Video'),
+                            selected: current?.sameAs(v) ?? false,
+                            onTap: () => _choose(v),
+                          ),
+                      ],
                     ),
-                ],
-              ),
             ),
           ],
         ),
@@ -448,6 +525,108 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The titles of playlist videos looked up so far, by video id.
+final _videoTitles = <String, Future<String?>>{};
+
+/// The title of the video [id], looked up once. One that couldn't be
+/// looked up is tried again the next time it is asked for.
+Future<String?> _titleOf(String id) => _videoTitles.putIfAbsent(id, () async {
+  final title = await lookUpYouTubeTitle(StudyVideo.video(id));
+  if (title == null) _videoTitles.remove(id);
+  return title;
+});
+
+/// One video of the playlist: its place, picture and title.
+class _PlaylistRow extends StatelessWidget {
+  const _PlaylistRow({
+    required this.id,
+    required this.number,
+    required this.playing,
+    required this.onTap,
+  });
+
+  /// The height of each row.
+  static const extent = 80.0;
+
+  final String id;
+
+  /// Its place in the playlist, from 1.
+  final int number;
+  final bool playing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: playing ? scheme.secondaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Gap.m,
+            vertical: Gap.s,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 32,
+                child: playing
+                    ? Icon(
+                        Icons.play_arrow_rounded,
+                        size: 20,
+                        color: scheme.primary,
+                      )
+                    : Text(
+                        '$number',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: Gap.xs),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(Radii.s),
+                child: SizedBox(
+                  width: 112,
+                  height: 63,
+                  child: Image.network(
+                    'https://i.ytimg.com/vi/$id/mqdefault.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        ColoredBox(color: scheme.surfaceContainerHighest),
+                    frameBuilder: (_, child, frame, loaded) =>
+                        loaded || frame != null
+                        ? child
+                        : ColoredBox(color: scheme.surfaceContainerHighest),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Gap.m),
+              Expanded(
+                child: FutureBuilder<String?>(
+                  future: _titleOf(id),
+                  builder: (context, snapshot) => Text(
+                    snapshot.data ?? 'Video $number',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: playing ? FontWeight.w600 : null,
+                      color: playing ? scheme.onSecondaryContainer : null,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

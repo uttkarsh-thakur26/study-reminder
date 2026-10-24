@@ -116,6 +116,7 @@ class StudyEmbedController extends ChangeNotifier {
   String _title = '';
   int _index = 0;
   int _count = 0;
+  List<String> _playlist = const [];
   EmbedProblem? _problem;
   bool _needsTap = false;
 
@@ -138,6 +139,10 @@ class StudyEmbedController extends ChangeNotifier {
 
   /// How many videos the playlist has. 0 while unknown.
   int get count => _count;
+
+  /// The ids of the playlist's videos, in order. Empty while unknown, and
+  /// for a single video.
+  List<String> get playlist => _playlist;
 
   EmbedProblem? get problem => _problem;
 
@@ -167,6 +172,9 @@ class StudyEmbedController extends ChangeNotifier {
 
   Future<void> next() => _run('nextVideo()');
 
+  /// Plays the playlist's video at [index], from 0.
+  Future<void> playAt(int index) => _run('playVideoAt($index)');
+
   Future<void> pause() => _run('pauseVideo()');
 
   Future<void> _run(String call) async {
@@ -189,6 +197,7 @@ class StudyEmbedController extends ChangeNotifier {
     _title = '';
     _index = video.isPlaylist ? _startIndex : 0;
     _count = 0;
+    _playlist = const [];
     _problem = null;
     _needsTap = false;
     notifyListeners();
@@ -262,6 +271,10 @@ class StudyEmbedController extends ChangeNotifier {
         if (video != null && video.isPlaylist && count > 0) {
           onPlace?.call(video, id, index);
         }
+      case 'list':
+        final ids = data['ids'];
+        if (ids is! List) return;
+        _playlist = List.unmodifiable(ids.whereType<String>());
       case 'error':
         final code = data['code'];
         switch (code) {
@@ -351,6 +364,9 @@ var known = [];
 var index = config.index;
 var reported = '';
 var started = false;
+// Whether the playlist still has to move on to the video it was left at.
+var pending = config.kind === 'playlist' && !!config.start;
+var listed = '';
 var bouncedAt = 0;
 // Where the study video was, to go back to.
 var time = 0;
@@ -404,14 +420,20 @@ function onStateChange(e) {
   if (!guard()) return;
   if (e.data === 5 && !started) {
     started = true;
-    var at = config.start ? known.indexOf(config.start) : -1;
-    if (at > 0 && at !== index) {
-      index = at;
-      player.playVideoAt(at);
-    } else {
-      player.playVideo();
-    }
+    if (!goToStart()) player.playVideo();
   }
+}
+
+// Moves the playlist on to the video it was left at, once the player lists
+// its videos. Whether it did.
+function goToStart() {
+  if (!pending || !known.length) return false;
+  pending = false;
+  var at = known.indexOf(config.start);
+  if (at < 0 || at === index) return false;
+  index = at;
+  player.playVideoAt(at);
+  return true;
 }
 
 // Whether the video in the player is the study video, or one of the study
@@ -427,12 +449,18 @@ function guard() {
   } else {
     var list = player.getPlaylist();
     if (list && list.length) known = list;
+    var key = known.length ? known.length + '|' + known[0] + '|' + known[known.length - 1] : '';
+    if (key !== listed) {
+      listed = key;
+      send('list', {ids: known});
+    }
     var at = known.indexOf(id);
     // Long playlists may not list every video.
     var place = typeof player.getPlaylistIndex === 'function' ? player.getPlaylistIndex() : -1;
     if (at < 0 && known.length >= 200 && list && list.length && place >= known.length) at = place;
     if (known.length && at < 0) allowed = false;
     if (at >= 0) index = at;
+    if (started && goToStart()) return true;
   }
   if (!allowed) {
     if (Date.now() - bouncedAt < 2500) return false;
