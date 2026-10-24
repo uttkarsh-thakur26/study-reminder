@@ -15,4 +15,11 @@ flutter test integration_test/player_check_test.dart -d emulator-5554 \
 kill $shots || true
 adb logcat -d -v time > "$out/logcat.txt" || true
 grep -iE "chromium|console|youtube|flutter" "$out/logcat.txt" | tail -400 > "$out/logcat-web.txt" || true
+# Artifacts can't always be fetched, so the log carries what matters.
+echo "===== crashes ====="
+grep -E "FATAL|AndroidRuntime|DEBUG   :|SIGSEGV|SIGABRT|backtrace|Abort message|Process .* has died|died, pid|lowmemorykiller|ANR in" "$out/logcat.txt" | head -150 || true
+echo "===== flutter and web console ====="
+grep -E " I/flutter| E/flutter|chromium|Console" "$out/logcat.txt" | grep -v "^--" | tail -250 || true
+echo "===== screenshots ====="
+ls "$out" | grep shot || true
 exit 0
