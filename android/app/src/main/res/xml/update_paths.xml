@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Where UpdateInstaller (lib/features/updates) saves a downloaded APK:
+     the cache folder's "updates" directory. -->
+<paths>
+    <cache-path name="updates" path="updates/"/>
+</paths>

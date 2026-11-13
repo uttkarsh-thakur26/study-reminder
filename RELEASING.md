@@ -47,7 +47,8 @@ has run.
 ## Where the files appear
 
 On the repository's Releases page, as **Study Reminder 1.2.0**, with notes
-made from the pull requests merged since the last release:
+made from the pull requests merged since the last release (one line per pull
+request title, without names):
 
 | File | For |
 | --- | --- |
@@ -58,6 +59,26 @@ made from the pull requests merged since the last release:
 Every CI run on `main` and on pull requests also keeps an APK, a zip and an
 installer for 30 days, as artifacts of the run. Those show a version like
 `1.2.0-ci.57` in Settings > About.
+
+## In-app updates
+
+From 1.2.0 the app checks this repository's latest release once a day
+(`releaseRepository` in `lib/features/updates/data/release_feed.dart`; the
+repository must stay public, since the app does not sign in). When the
+release is newer than the app, it asks at most once a day, never during a
+focus session, and **Update now** downloads and installs it:
+
+- **Phone:** downloads `StudyReminder-X.Y.Z.apk` and opens Android's
+  installer. The first time, Android asks to allow "Install unknown apps"
+  for Study Reminder. A daily background check also posts a notification
+  once per new version.
+- **Laptop:** downloads `StudyReminder-Setup-X.Y.Z.exe`, quits, runs Setup
+  silently and starts the app again. Only the installed copy updates
+  itself; a copy from the zip opens the release page instead.
+- Settings > About has **Check for updates**.
+
+So the file names in the table below must not change. A build without
+`APP_VERSION` (a local build) never checks.
 
 ## Things to know
 

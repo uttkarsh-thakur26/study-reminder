@@ -139,6 +139,25 @@ class LocalNotificationsScheduler implements AlertScheduler {
         ),
       );
 
+  /// Says a new version is out (Android, from the background check). A tap
+  /// opens the app, which then offers to install it.
+  Future<void> showUpdate(String version) => plugin.show(
+    id: updateNotificationId,
+    title: 'Study Reminder $version is out',
+    body: 'Tap to update from the app.',
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'updates',
+        'App updates',
+        channelDescription: 'When a new version of the app is out',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+      windows: WindowsNotificationDetails(),
+    ),
+    payload: updatePayload,
+  );
+
   /// A round or break of Focus mode beginning on the laptop. Shown as a
   /// reminder, which plays a sound and stays on screen until dismissed, and
   /// which Windows' Do not disturb lets through when reminders are allowed:
@@ -170,6 +189,11 @@ class LocalNotificationsScheduler implements AlertScheduler {
 
 const testNotificationId = 1;
 const infoNotificationId = 2;
+const updateNotificationId = 4;
+
+/// The payload of the update notification, so a click on it is recognised.
+const updatePayload = 'app-update';
+
 const focusPhaseNotificationId = 3;
 
 const _doneAction = AndroidNotificationAction(
