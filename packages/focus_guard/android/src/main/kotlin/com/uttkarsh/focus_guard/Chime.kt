@@ -56,8 +56,11 @@ object Chime {
     private fun sound(context: Context, soundMs: Long) {
         val audio = context.getSystemService(AudioManager::class.java)
         if (audio != null && audio.getStreamVolume(AudioManager.STREAM_ALARM) == 0) return
+        // The notification sound, or the alarm sound when that is set to
+        // None. The symbolic default would stay silent then.
         val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_NOTIFICATION)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ?: RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
             ?: return
         main.post {
             try {
