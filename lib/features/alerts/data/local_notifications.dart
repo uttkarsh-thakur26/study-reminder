@@ -168,7 +168,7 @@ class LocalNotificationsScheduler implements AlertScheduler {
 
 const testNotificationId = 1;
 const infoNotificationId = 2;
-const updateNotificationId = 3;
+const updateNotificationId = 4;
 
 /// The payload of the update notification, so a click on it is recognised.
 const updatePayload = 'app-update';
