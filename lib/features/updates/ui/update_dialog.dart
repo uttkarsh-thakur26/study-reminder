@@ -163,7 +163,8 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
     } finally {
       if (identical(_cancel, cancel)) _cancel = null;
     }
-    if (mounted) await _install();
+    // Cancel may have come while the file was being finished.
+    if (mounted && !cancel.isCompleted) await _install();
   }
 
   void _fail(String message) => setState(() {
@@ -180,7 +181,20 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  var _installing = false;
+
   Future<void> _install() async {
+    // Continue and the return from settings can race; one install only.
+    if (_installing) return;
+    _installing = true;
+    try {
+      await _startInstall();
+    } finally {
+      _installing = false;
+    }
+  }
+
+  Future<void> _startInstall() async {
     final installer = ref.read(updateInstallerProvider);
     final notifications = ref.read(localNotificationsProvider);
     // The laptop app quits to update: during strict focus, ask first.
@@ -214,7 +228,9 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
         _lifecycle ??= AppLifecycleListener(
           onResume: () async {
             if (_stage != _Stage.permission) return;
-            if (await installer.mayInstall() && mounted) {
+            if (await installer.mayInstall() &&
+                mounted &&
+                _stage == _Stage.permission) {
               unawaited(_install());
             }
           },

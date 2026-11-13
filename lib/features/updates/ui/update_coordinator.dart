@@ -92,13 +92,22 @@ class _UpdateCoordinatorState extends ConsumerState<UpdateCoordinator> {
     if (mounted) await showUpdatePrompt(context, update);
   });
 
-  Future<void> _openFromNotification() => _run(() async {
+  /// A click on the notification is never dropped: while a check runs, it
+  /// waits for the check to finish.
+  Future<void> _openFromNotification() async {
+    while (_busy && mounted) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    await _run(_openPrompt);
+  }
+
+  Future<void> _openPrompt() async {
     if (isWindowsApp) {
       await showFullWindow(ref.read(miniTimerProvider.notifier));
     }
     final update = await ref.read(updateServiceProvider).available();
     if (update != null && mounted) await showUpdatePrompt(context, update);
-  });
+  }
 
   Future<void> _run(Future<void> Function() body) async {
     if (_busy || !mounted) return;
