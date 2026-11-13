@@ -175,6 +175,7 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
   /// Stops a running download before closing, so the next update starts
   /// with a clean download folder.
   Future<void> _close() async {
+    _closing = true;
     _cancel?.complete();
     _cancel = null;
     await _downloading;
@@ -183,9 +184,12 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
 
   var _installing = false;
 
+  /// Set by Cancel, so nothing pending starts an install afterwards.
+  var _closing = false;
+
   Future<void> _install() async {
     // Continue and the return from settings can race; one install only.
-    if (_installing) return;
+    if (_installing || _closing) return;
     _installing = true;
     try {
       await _startInstall();
@@ -230,6 +234,7 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
             if (_stage != _Stage.permission) return;
             if (await installer.mayInstall() &&
                 mounted &&
+                !_closing &&
                 _stage == _Stage.permission) {
               unawaited(_install());
             }
