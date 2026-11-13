@@ -153,9 +153,18 @@ void main() {
     test('prompts once a day until updated', () async {
       final s = service();
       expect(await s.toPrompt(), isNotNull);
+      await s.markPrompted();
       now = now.add(const Duration(hours: 5));
       expect(await s.toPrompt(), isNull);
       now = now.add(const Duration(hours: 19));
+      expect(await s.toPrompt(), isNotNull);
+    });
+
+    test('a prompt held back for focus comes again', () async {
+      final s = service();
+      expect(await s.toPrompt(), isNotNull);
+      // Not marked: focus started meanwhile.
+      now = now.add(const Duration(minutes: 30));
       expect(await s.toPrompt(), isNotNull);
     });
 
@@ -186,7 +195,10 @@ void main() {
 
     test('notifies once per version', () async {
       final s = service();
+      // A notification that failed to post is tried again.
       expect(await s.toNotify(), isNotNull);
+      expect(await s.toNotify(), isNotNull);
+      await s.markNotified((await s.toNotify())!);
       now = now.add(const Duration(days: 2));
       expect(await s.toNotify(), isNull);
       latest = release('v1.3.0');

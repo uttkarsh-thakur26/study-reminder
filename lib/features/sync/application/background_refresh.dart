@@ -29,8 +29,12 @@ Future<void> _notifyUpdate(
 ) async {
   final client = http.Client();
   try {
-    final update = await updateServiceFor(core.db, client).toNotify();
-    if (update != null) await scheduler.showUpdate('${update.version}');
+    final service = updateServiceFor(core.db, client);
+    final update = await service.toNotify();
+    if (update != null) {
+      await scheduler.showUpdate('${update.version}');
+      await service.markNotified(update);
+    }
   } on Object catch (e) {
     debugPrint('background update check failed: $e');
   } finally {

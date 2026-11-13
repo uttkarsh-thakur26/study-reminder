@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -21,6 +22,8 @@ class UpdateInstall(private val activity: Activity) : MethodChannel.MethodCallHa
                 }
                 result.success(install(File(path)))
             }
+            // Whether "Install unknown apps" is allowed, without asking.
+            "canInstall" -> result.success(activity.packageManager.canRequestPackageInstalls())
             "openUrl" -> {
                 val url = call.argument<String>("url")
                 try {
@@ -49,7 +52,7 @@ class UpdateInstall(private val activity: Activity) : MethodChannel.MethodCallHa
             )
             return "needs_permission"
         }
-        val uri = UpdateFileProvider.getUriForFile(
+        val uri = FileProvider.getUriForFile(
             activity,
             "${activity.packageName}.updates",
             apk,

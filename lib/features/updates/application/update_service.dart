@@ -87,23 +87,28 @@ class UpdateService {
   }
 
   /// The update to ask the user about now: found, and not asked about in the
-  /// last day. Marks it asked.
+  /// last day. Call [markPrompted] once the prompt is actually shown.
   Future<UpdateInfo?> toPrompt() async {
     final update = await checkIfDue();
     if (update == null || !await _due(UpdateKeys.promptedAt)) return null;
-    await write(UpdateKeys.promptedAt, '${_now().millisecondsSinceEpoch}');
     return update;
   }
 
+  Future<void> markPrompted() =>
+      write(UpdateKeys.promptedAt, '${_now().millisecondsSinceEpoch}');
+
   /// The update a background check should post a notification for: once
-  /// per version.
+  /// per version. Call [markNotified] once the notification is posted, so a
+  /// failed one is tried again.
   Future<UpdateInfo?> toNotify() async {
     final update = await checkIfDue();
     if (update == null ||
         await read(UpdateKeys.notified) == '${update.version}') {
       return null;
     }
-    await write(UpdateKeys.notified, '${update.version}');
     return update;
   }
+
+  Future<void> markNotified(UpdateInfo update) =>
+      write(UpdateKeys.notified, '${update.version}');
 }

@@ -44,16 +44,25 @@ class _UpdateCoordinatorState extends ConsumerState<UpdateCoordinator> {
     _start = Timer(const Duration(seconds: 8), _check);
     _hourly = Timer.periodic(const Duration(hours: 1), (_) => _check());
     _lifecycle = AppLifecycleListener(onResume: _check);
-    if (isWindowsApp) {
-      _taps = ref
-          .read(localNotificationsProvider)
-          ?.taps
-          .where(
-            (r) => r.payload == updatePayload || r.id == updateNotificationId,
-          )
-          .listen((_) => unawaited(_openFromToast()));
+    // A click on the update notification opens the prompt, while the app
+    // runs or when the click started it.
+    _taps = ref
+        .read(localNotificationsProvider)
+        ?.taps
+        .where(_isUpdateTap)
+        .listen((_) => unawaited(_openFromNotification()));
+    final launch = ref.read(launchResponseProvider);
+    if (launch != null && _isUpdateTap(launch)) {
+      _start?.cancel();
+      _start = Timer(
+        const Duration(seconds: 1),
+        () => unawaited(_openFromNotification()),
+      );
     }
   }
+
+  static bool _isUpdateTap(NotificationResponse r) =>
+      r.payload == updatePayload || r.id == updateNotificationId;
 
   @override
   void dispose() {
@@ -68,20 +77,25 @@ class _UpdateCoordinatorState extends ConsumerState<UpdateCoordinator> {
     if (await _focusing()) return;
     final service = ref.read(updateServiceProvider);
     if (isWindowsApp && !await windowManager.isVisible()) {
+      final notifications = ref.read(localNotificationsProvider);
       final update = await service.toNotify();
-      if (update != null) {
-        await ref
-            .read(localNotificationsProvider)
-            ?.showUpdate('${update.version}');
+      if (update != null && notifications != null) {
+        await notifications.showUpdate('${update.version}');
+        await service.markNotified(update);
       }
       return;
     }
     final update = await service.toPrompt();
-    if (update != null && mounted) await showUpdatePrompt(context, update);
+    // A focus session may have started while GitHub answered.
+    if (update == null || !mounted || await _focusing()) return;
+    await service.markPrompted();
+    if (mounted) await showUpdatePrompt(context, update);
   });
 
-  Future<void> _openFromToast() => _run(() async {
-    await showFullWindow(ref.read(miniTimerProvider.notifier));
+  Future<void> _openFromNotification() => _run(() async {
+    if (isWindowsApp) {
+      await showFullWindow(ref.read(miniTimerProvider.notifier));
+    }
     final update = await ref.read(updateServiceProvider).available();
     if (update != null && mounted) await showUpdatePrompt(context, update);
   });

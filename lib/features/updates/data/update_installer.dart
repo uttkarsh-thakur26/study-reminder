@@ -49,10 +49,13 @@ class UpdateInstaller {
       (Platform.isAndroid || isInstalledWindowsCopy);
 
   /// Downloads the file of [update], reporting progress from 0 to 1 (null
-  /// while the size is unknown). Returns the downloaded file.
+  /// while the size is unknown). Returns the downloaded file. Completing
+  /// [cancel] stops the download, which then throws
+  /// [http.RequestAbortedException]; await the call before starting another.
   Future<File> download(
     UpdateInfo update, {
     void Function(double? progress)? onProgress,
+    Future<void>? cancel,
   }) async {
     final url = update.downloadUrl;
     if (url == null) throw StateError('No file for this device');
@@ -64,7 +67,26 @@ class UpdateInstaller {
     final file = File(p.join(dir.path, p.basename(Uri.parse(url).path)));
     final part = File('${file.path}.part');
 
-    final response = await _client.send(http.Request('GET', Uri.parse(url)));
+    // Aborts on cancel, or when GitHub sends no answer within 30 s.
+    final abort = Completer<void>();
+    void stop() {
+      if (!abort.isCompleted) abort.complete();
+    }
+
+    unawaited(cancel?.then((_) => stop()));
+    final headers = Timer(const Duration(seconds: 30), stop);
+    final http.StreamedResponse response;
+    try {
+      response = await _client.send(
+        http.AbortableRequest(
+          'GET',
+          Uri.parse(url),
+          abortTrigger: abort.future,
+        ),
+      );
+    } finally {
+      headers.cancel();
+    }
     if (response.statusCode != 200) {
       throw HttpException('Download failed (${response.statusCode})');
     }
@@ -86,6 +108,13 @@ class UpdateInstaller {
       throw const HttpException('Download was cut off');
     }
     return part.rename(file.path);
+  }
+
+  /// Whether Android lets this app install updates ("Install unknown
+  /// apps"), without asking.
+  Future<bool> mayInstall() async {
+    if (!Platform.isAndroid) return true;
+    return await _channel.invokeMethod<bool>('canInstall') ?? false;
   }
 
   /// Hands [file] to the system installer. On Windows the app quits right

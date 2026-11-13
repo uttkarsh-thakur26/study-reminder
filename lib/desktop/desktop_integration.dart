@@ -141,48 +141,56 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
   /// the next start queues them again. During a strict focus session the
   /// user is asked first, and the phone is told.
   Future<void> _quit() async {
-    if (!await _mayQuitDuringFocus()) return;
+    if (!await mayQuitDuringFocus(context, ref)) return;
     await exitDesktopApp(ref.read(localNotificationsProvider));
-  }
-
-  Future<bool> _mayQuitDuringFocus() async {
-    final session = (await ref.read(focusRepositoryProvider).current()).laptop;
-    if (!session.strict || !session.runningAt(DateTime.now())) return true;
-    await _showWindow();
-    if (!mounted) return false;
-    final until = formatTime(context, session.endsAt!.toLocal());
-    final quit = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        icon: const Icon(Icons.timer_rounded),
-        title: const Text('Strict focus is on'),
-        content: Text(
-          'It runs until $until. If you quit, this laptop stops blocking '
-          'distractions and your phone is told.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Quit anyway'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Keep focusing'),
-          ),
-        ],
-      ),
-    );
-    if (quit != true) return false;
-    await ref.read(syncServiceProvider)?.tellOthers({
-      'kind': 'left',
-      'device': ref.read(deviceNameProvider),
-      'endsAt': session.endsAt!.millisecondsSinceEpoch,
-    });
-    return true;
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// During a strict laptop focus session, asks before the app quits (to
+/// [action], such as 'quit' or 'update'), and tells the phone when the user
+/// goes ahead. True when the app may quit.
+Future<bool> mayQuitDuringFocus(
+  BuildContext context,
+  WidgetRef ref, {
+  String action = 'quit',
+}) async {
+  final session = (await ref.read(focusRepositoryProvider).current()).laptop;
+  if (!session.strict || !session.runningAt(DateTime.now())) return true;
+  await showFullWindow(ref.read(miniTimerProvider.notifier));
+  if (!context.mounted) return false;
+  final until = formatTime(context, session.endsAt!.toLocal());
+  final verb = action[0].toUpperCase() + action.substring(1);
+  final quit = await showDialog<bool>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      icon: const Icon(Icons.timer_rounded),
+      title: const Text('Strict focus is on'),
+      content: Text(
+        'It runs until $until. If you $action, this laptop stops blocking '
+        'distractions and your phone is told.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialog).pop(true),
+          child: Text('$verb anyway'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialog).pop(false),
+          child: const Text('Keep focusing'),
+        ),
+      ],
+    ),
+  );
+  if (quit != true) return false;
+  await ref.read(syncServiceProvider)?.tellOthers({
+    'kind': 'left',
+    'device': ref.read(deviceNameProvider),
+    'endsAt': session.endsAt!.millisecondsSinceEpoch,
+  });
+  return true;
 }
 
 /// Ends the Windows app: withdraws queued toasts, whose buttons need the app

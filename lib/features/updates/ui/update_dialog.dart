@@ -118,21 +118,25 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
   String _error = '';
   File? _file;
   AppLifecycleListener? _lifecycle;
+  Completer<void>? _cancel;
+  Future<void>? _downloading;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_run());
+    _downloading = _run();
   }
 
   @override
   void dispose() {
     _lifecycle?.dispose();
+    _cancel?.complete();
     super.dispose();
   }
 
   Future<void> _run() async {
     final installer = ref.read(updateInstallerProvider);
+    final cancel = _cancel = Completer<void>();
     setState(() {
       _stage = _Stage.downloading;
       _progress = null;
@@ -140,34 +144,64 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
     try {
       _file ??= await installer.download(
         widget.update,
+        cancel: cancel.future,
         onProgress: (p) {
           if (mounted) setState(() => _progress = p);
         },
       );
-      if (!mounted) return;
-      await _install();
     } on Object catch (e) {
-      debugPrint('update failed: $e');
+      debugPrint('update download failed: $e');
       _file = null;
-      if (mounted) {
-        setState(() {
-          _stage = _Stage.failed;
-          _error = e is SocketException || e is TimeoutException
+      if (mounted && !cancel.isCompleted) {
+        _fail(
+          e is SocketException || e is TimeoutException
               ? 'No connection. Check the internet and try again.'
-              : 'The download did not finish. Try again.';
-        });
+              : 'The download did not finish. Try again.',
+        );
       }
+      return;
+    } finally {
+      if (identical(_cancel, cancel)) _cancel = null;
     }
+    if (mounted) await _install();
+  }
+
+  void _fail(String message) => setState(() {
+    _stage = _Stage.failed;
+    _error = message;
+  });
+
+  /// Stops a running download before closing, so the next update starts
+  /// with a clean download folder.
+  Future<void> _close() async {
+    _cancel?.complete();
+    _cancel = null;
+    await _downloading;
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _install() async {
     final installer = ref.read(updateInstallerProvider);
     final notifications = ref.read(localNotificationsProvider);
+    // The laptop app quits to update: during strict focus, ask first.
+    if (Platform.isWindows &&
+        !await mayQuitDuringFocus(context, ref, action: 'update')) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    if (!mounted) return;
     setState(() => _stage = _Stage.installing);
-    final result = await installer.install(
-      _file!,
-      quitApp: () => exitDesktopApp(notifications),
-    );
+    final InstallStart result;
+    try {
+      result = await installer.install(
+        _file!,
+        quitApp: () => exitDesktopApp(notifications),
+      );
+    } on Object catch (e) {
+      debugPrint('update install failed: $e');
+      if (mounted) _fail('The installer did not start. Try again.');
+      return;
+    }
     if (!mounted) return;
     switch (result) {
       case InstallStart.started:
@@ -175,10 +209,14 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
         Navigator.of(context).pop();
       case InstallStart.needsPermission:
         setState(() => _stage = _Stage.permission);
-        // Back from Android's settings page: try again once.
+        // Back from Android's settings page: go on if it was allowed. If
+        // not, stay here; Continue opens the page again.
         _lifecycle ??= AppLifecycleListener(
-          onResume: () {
-            if (_stage == _Stage.permission) unawaited(_install());
+          onResume: () async {
+            if (_stage != _Stage.permission) return;
+            if (await installer.mayInstall() && mounted) {
+              unawaited(_install());
+            }
           },
         );
       case InstallStart.unsupported:
@@ -230,12 +268,12 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
       ),
       actions: [
         if (_stage != _Stage.installing)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: _close, child: const Text('Cancel')),
         if (_stage == _Stage.failed)
-          FilledButton(onPressed: _run, child: const Text('Try again')),
+          FilledButton(
+            onPressed: () => _downloading = _file == null ? _run() : _install(),
+            child: const Text('Try again'),
+          ),
         if (_stage == _Stage.permission)
           FilledButton(onPressed: _install, child: const Text('Continue')),
       ],
