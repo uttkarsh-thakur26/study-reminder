@@ -175,6 +175,8 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
   /// Stops a running download before closing, so the next update starts
   /// with a clean download folder.
   Future<void> _close() async {
+    // A second Cancel (or Back) would pop the screen underneath.
+    if (_closing) return;
     _closing = true;
     _cancel?.complete();
     _cancel = null;
@@ -232,7 +234,17 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
         _lifecycle ??= AppLifecycleListener(
           onResume: () async {
             if (_stage != _Stage.permission) return;
-            if (await installer.mayInstall() &&
+            final bool allowed;
+            try {
+              allowed = await installer.mayInstall();
+            } on Object catch (e) {
+              debugPrint('install permission check failed: $e');
+              if (mounted && !_closing && _stage == _Stage.permission) {
+                _fail('Could not check the permission. Try again.');
+              }
+              return;
+            }
+            if (allowed &&
                 mounted &&
                 !_closing &&
                 _stage == _Stage.permission) {
@@ -267,37 +279,47 @@ class _UpdateProgressState extends ConsumerState<_UpdateProgress> {
       ),
       _Stage.failed => ('Update failed', _error),
     };
-    return AlertDialog(
-      icon: Icon(
-        _stage == _Stage.failed
-            ? Icons.error_outline_rounded
-            : Icons.system_update_rounded,
-      ),
-      title: Text(title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(body),
-          if (_stage == _Stage.downloading || _stage == _Stage.installing) ...[
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              value: _stage == _Stage.downloading ? _progress : null,
-            ),
+    // Back works like Cancel, so a pending download never installs after
+    // the dialog is gone. While installing there is nothing to cancel.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _stage != _Stage.installing) unawaited(_close());
+      },
+      child: AlertDialog(
+        icon: Icon(
+          _stage == _Stage.failed
+              ? Icons.error_outline_rounded
+              : Icons.system_update_rounded,
+        ),
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(body),
+            if (_stage == _Stage.downloading ||
+                _stage == _Stage.installing) ...[
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: _stage == _Stage.downloading ? _progress : null,
+              ),
+            ],
           ],
+        ),
+        actions: [
+          if (_stage != _Stage.installing)
+            TextButton(onPressed: _close, child: const Text('Cancel')),
+          if (_stage == _Stage.failed)
+            FilledButton(
+              onPressed: () =>
+                  _downloading = _file == null ? _run() : _install(),
+              child: const Text('Try again'),
+            ),
+          if (_stage == _Stage.permission)
+            FilledButton(onPressed: _install, child: const Text('Continue')),
         ],
       ),
-      actions: [
-        if (_stage != _Stage.installing)
-          TextButton(onPressed: _close, child: const Text('Cancel')),
-        if (_stage == _Stage.failed)
-          FilledButton(
-            onPressed: () => _downloading = _file == null ? _run() : _install(),
-            child: const Text('Try again'),
-          ),
-        if (_stage == _Stage.permission)
-          FilledButton(onPressed: _install, child: const Text('Continue')),
-      ],
     );
   }
 }
