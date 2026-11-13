@@ -158,6 +158,27 @@ class LocalNotificationsScheduler implements AlertScheduler {
     payload: updatePayload,
   );
 
+  /// A round or break of Focus mode beginning on the laptop. Shown as a
+  /// reminder, which plays a sound and stays on screen until dismissed, and
+  /// which Windows' Do not disturb lets through when reminders are allowed:
+  /// a plain message slid away after a few seconds and was easy to miss.
+  Future<void> showFocusPhase({required String title, required String body}) =>
+      plugin.show(
+        id: focusPhaseNotificationId,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          windows: WindowsNotificationDetails(
+            scenario: WindowsNotificationScenario.reminder,
+            // A reminder needs a button to stay on screen. It only closes
+            // the note: its text is not a reminder's payload.
+            actions: [
+              WindowsAction(content: 'Got it', arguments: 'focus_phase'),
+            ],
+          ),
+        ),
+      );
+
   /// Stops whatever is ringing for [payload] and clears it from the shade.
   Future<void> dismiss(AlertPayload payload) => plugin.cancel(
     id: payload.isTest
@@ -172,6 +193,8 @@ const updateNotificationId = 4;
 
 /// The payload of the update notification, so a click on it is recognised.
 const updatePayload = 'app-update';
+
+const focusPhaseNotificationId = 3;
 
 const _doneAction = AndroidNotificationAction(
   AlertActions.done,
