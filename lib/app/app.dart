@@ -10,6 +10,7 @@ import '../features/focus/ui/focus_coordinator.dart';
 import '../features/home_widget/ui/home_widget_coordinator.dart';
 import '../features/settings/settings_controller.dart';
 import '../features/sync/ui/sync_coordinator.dart';
+import '../features/updates/ui/update_coordinator.dart';
 import '../shell/app_shell.dart';
 import 'providers.dart';
 
@@ -60,7 +61,9 @@ class _StudyReminderAppState extends ConsumerState<StudyReminderApp> {
         child: FocusCoordinator(
           child: AlertCoordinator(
             child: HomeWidgetCoordinator(
-              child: DesktopIntegration(child: _Shell()),
+              child: DesktopIntegration(
+                child: UpdateCoordinator(child: _Shell()),
+              ),
             ),
           ),
         ),

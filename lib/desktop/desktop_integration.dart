@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import '../app/providers.dart';
 import '../core/ui/formatters.dart';
 import '../features/alerts/application/alert_providers.dart';
+import '../features/alerts/data/local_notifications.dart';
 import '../features/alerts/domain/alert_sync.dart';
 import '../features/focus/application/focus_providers.dart';
 import '../features/sync/application/sync_providers.dart';
@@ -141,14 +142,7 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
   /// user is asked first, and the phone is told.
   Future<void> _quit() async {
     if (!await _mayQuitDuringFocus()) return;
-    try {
-      await ref.read(localNotificationsProvider)?.plugin.cancelAll();
-    } on Object catch (e) {
-      debugPrint('could not withdraw queued reminders: $e');
-    }
-    await trayManager.destroy();
-    await windowManager.setPreventClose(false);
-    await windowManager.destroy();
+    await exitDesktopApp(ref.read(localNotificationsProvider));
   }
 
   Future<bool> _mayQuitDuringFocus() async {
@@ -189,4 +183,17 @@ class _DesktopIntegrationState extends ConsumerState<DesktopIntegration>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// Ends the Windows app: withdraws queued toasts, whose buttons need the app
+/// running (the next start queues them again), and removes the tray icon.
+Future<void> exitDesktopApp(LocalNotificationsScheduler? notifications) async {
+  try {
+    await notifications?.plugin.cancelAll();
+  } on Object catch (e) {
+    debugPrint('could not withdraw queued reminders: $e');
+  }
+  await trayManager.destroy();
+  await windowManager.setPreventClose(false);
+  await windowManager.destroy();
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:workmanager/workmanager.dart';
 
 import '../../../app/core_services.dart';
@@ -8,6 +9,7 @@ import '../../alerts/data/local_notifications.dart';
 import '../../focus/data/android_focus_enforcer.dart';
 import '../../focus/data/focus_repository.dart';
 import '../../home_widget/application/home_widget_refresh.dart';
+import '../../updates/application/update_providers.dart';
 
 import 'package:focus_guard/focus_guard.dart';
 
@@ -18,6 +20,23 @@ import '../data/sync_config.dart';
 import 'sync_service.dart';
 
 const _task = 'refresh';
+
+/// Once a day: a notification when a new version is out, once per version,
+/// so the phone hears about it even when the app stays closed.
+Future<void> _notifyUpdate(
+  CoreServices core,
+  LocalNotificationsScheduler scheduler,
+) async {
+  final client = http.Client();
+  try {
+    final update = await updateServiceFor(core.db, client).toNotify();
+    if (update != null) await scheduler.showUpdate('${update.version}');
+  } on Object catch (e) {
+    debugPrint('background update check failed: $e');
+  } finally {
+    client.close();
+  }
+}
 
 /// Android only: every 15 minutes or so, even when the app is closed, sync
 /// with the other devices and roll the two-week alarm window forward.
@@ -84,6 +103,7 @@ void backgroundRefresh() {
         scheduler: scheduler,
         device: DeviceKind.phone,
       ).replan();
+      await _notifyUpdate(core, scheduler);
     } finally {
       // Also after a failed run, so the widget shows what is synced.
       await refreshHomeWidget(core);

@@ -31,6 +31,8 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "study_reminder/updates")
+            .setMethodCallHandler(UpdateInstall(this))
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "study_reminder/device")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

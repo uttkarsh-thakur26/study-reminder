@@ -173,8 +173,19 @@ jobs:
             # A re-run: replace the files of the release made before.
             gh release upload "$tag" "${files[@]}" --clobber
           else
+            # GitHub's generated notes, without who opened each pull
+            # request and without the New Contributors section: one plain
+            # line per change, then the Full Changelog link.
+            gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" \
+              --jq .body > raw-notes.md
+            sed -E 's/ by @[^ ]+ in [^ ]+$//' raw-notes.md \
+              | awk '/^## New Contributors/ { skip = 1; next }
+                     /^\*\*Full Changelog\*\*/ { skip = 0 }
+                     !skip' > notes.md
+            cat notes.md
             gh release create "$tag" "${files[@]}" \
               --title "Study Reminder $VERSION" \
-              --generate-notes \
+              --notes-file notes.md \
               --target "$GITHUB_SHA"
           fi
