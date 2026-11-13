@@ -8,17 +8,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
-import android.os.VibrationAttributes
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.provider.Settings
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -162,6 +157,10 @@ class FocusGuardPlugin :
                 result.success(openPage)
                 openPage = null
             }
+            "testBreak" -> {
+                FocusController.testPhase(context)
+                result.success(null)
+            }
             "buzz" -> {
                 buzz()
                 result.success(null)
@@ -180,35 +179,7 @@ class FocusGuardPlugin :
      * Sent as an alarm, which Do Not Disturb and silent mode let through: the
      * session turns Do Not Disturb on as it starts.
      */
-    private fun buzz() {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Vibrator::class.java)
-        } ?: return
-        if (!vibrator.hasVibrator()) return
-        val timings = longArrayOf(0L, 220L, 140L, 220L)
-        val effect = if (vibrator.hasAmplitudeControl()) {
-            VibrationEffect.createWaveform(timings, intArrayOf(0, 255, 0, 255), -1)
-        } else {
-            VibrationEffect.createWaveform(timings, -1)
-        }
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
-            } else {
-                val alarm = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(effect, alarm)
-            }
-        } catch (e: SecurityException) {
-            // No vibration permission; the session starts all the same.
-        }
-    }
+    private fun buzz() = Chime.buzz(context)
 
     private fun stateFrom(m: Map<String, Any?>) = FocusState(
         startedAt = (m["startedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),

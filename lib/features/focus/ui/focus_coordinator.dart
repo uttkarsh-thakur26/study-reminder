@@ -130,8 +130,10 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     }
   }
 
-  /// "Break time" or "Back to focus" on the laptop, as one begins. The
-  /// phone tells the user itself, even with the app closed.
+  /// "Break time" or "Back to focus" on the laptop, as one begins, as a
+  /// reminder that stays on screen until dismissed. Also when the timer came
+  /// late (the laptop slept), while the round or break still has time left.
+  /// The phone tells the user itself, even with the app closed.
   void _notePhase(FocusSession session) {
     final now = DateTime.now();
     final here = ref.read(deviceKindProvider);
@@ -145,12 +147,12 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
         before.phase.round == phase.round) {
       return;
     }
-    if (now.difference(phase.startedAt) > const Duration(minutes: 2)) return;
+    if (phase.endsAt.difference(now) < const Duration(seconds: 30)) return;
     final at = DateFormat.jm().format(phase.endsAt.toLocal());
     final minutes = (phase.length.inSeconds / 60).round();
     ref
         .read(localNotificationsProvider)
-        ?.showInfo(
+        ?.showFocusPhase(
           title: phase.onBreak ? 'Break time · $minutes min' : 'Back to focus',
           body: phase.onBreak
               ? 'Round ${phase.round} of ${phase.rounds} done. Next round at $at.'

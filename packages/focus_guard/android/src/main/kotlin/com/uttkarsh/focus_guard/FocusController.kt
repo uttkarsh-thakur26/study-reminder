@@ -27,20 +27,25 @@ object FocusController {
     private const val SESSION_CHANNEL = "focus_guard_session"
     private const val DONE_CHANNEL = "focus_guard_done"
     private const val ALERT_CHANNEL = "focus_guard_alert"
-    private const val PHASE_CHANNEL = "focus_guard_phase"
+    /** Silent: the chime plays on the alarm volume instead. */
+    private const val PHASE_CHANNEL = "focus_guard_break"
+    private const val OLD_PHASE_CHANNEL = "focus_guard_phase"
     const val SESSION_NOTIFICATION = 7301
     private const val DONE_NOTIFICATION = 7302
     private const val STOPPED_NOTIFICATION = 7303
     const val LEFT_NOTIFICATION = 7304
     private const val PHASE_NOTIFICATION = 7305
 
-    /** How long "Back to focus" may sound before Do Not Disturb comes on. */
-    private const val QUIET_AFTER_ALERT_MS = 1500L
+    /** How long the chime plays as a break or round begins. */
+    private const val CHIME_MS = 4000L
 
     private val main = Handler(Looper.getMainLooper())
 
-    /** A phase alarm this late (after a reboot, say) changes things quietly. */
-    private const val PHASE_ALERT_WITHIN_MS = 2 * 60 * 1000L
+    /**
+     * A round or break with less than this left by the time its alarm comes
+     * starts quietly. A late alarm still tells the user while there is time.
+     */
+    private const val PHASE_ALERT_LEFT_MS = 30 * 1000L
 
     /** Extras on the app's launch intent: start a session on this phone. */
     const val EXTRA_FOCUS_UNTIL = "focus_guard_focus_until"
@@ -113,7 +118,9 @@ object FocusController {
 
     /**
      * A round or a break began: Do Not Disturb follows, the session
-     * notification shows the new phase, and the user hears about it.
+     * notification shows the new phase, and the user hears and feels it:
+     * a notification plus a chime and vibration sent as an alarm, so neither
+     * Do Not Disturb nor the phone's notification settings can hide it.
      */
     @Synchronized
     fun phaseChanged(context: Context, done: () -> Unit = {}) {
@@ -130,35 +137,38 @@ object FocusController {
         }
         val phase = state.phaseAt(now)
         val quiet = state.quiet && !phase.onBreak
-        val alert = now - phase.startsAt < PHASE_ALERT_WITHIN_MS
+        val alert = phase.endsAt - now > PHASE_ALERT_LEFT_MS
         schedulePhase(context, state, phase)
         // The service redraws its notification for the new phase, and is
         // started again if Android stopped it.
         startService(context, state, retry = false)
-        if (!quiet || !alert) {
+        if (!alert) {
             applyQuiet(context, quiet)
-            if (alert) postPhase(context, phase)
             done()
             return
         }
-        // Do Not Disturb would silence "Back to focus", so it comes back on
-        // once that has sounded, if the session still wants it then.
+        // A break lifts Do Not Disturb before the note; a round turns it
+        // back on once the chime has played.
+        if (!quiet) applyQuiet(context, false)
         postPhase(context, phase)
+        Chime.phase(context, phase.onBreak, CHIME_MS)
         main.postDelayed({
-            synchronized(this) {
-                val current = FocusState.load(context)
-                if (current != null && !current.isOver() && !current.phaseAt().onBreak) {
-                    applyQuiet(context, current.quiet)
+            if (quiet) {
+                synchronized(this) {
+                    val current = FocusState.load(context)
+                    if (current != null && !current.isOver() && !current.phaseAt().onBreak) {
+                        applyQuiet(context, current.quiet)
+                    }
                 }
             }
             done()
-        }, QUIET_AFTER_ALERT_MS)
+        }, CHIME_MS + 500L)
     }
 
     /** The alarm for the next round or break, if one comes before the end. */
     private fun schedulePhase(context: Context, state: FocusState, phase: FocusState.Phase) {
         if (phase.endsAt < state.endsAt) {
-            scheduleAlarm(context, ACTION_PHASE, phase.endsAt)
+            scheduleAlarm(context, ACTION_PHASE, phase.endsAt, clock = true)
         } else {
             cancelAlarm(context, ACTION_PHASE)
         }
@@ -269,12 +279,19 @@ object FocusController {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    private fun scheduleAlarm(context: Context, action: String, at: Long) {
+    /**
+     * [clock] sets it as an alarm clock, which Android never delays to save
+     * battery, even with the phone asleep face down; the status bar shows
+     * the alarm icon while one is set.
+     */
+    private fun scheduleAlarm(context: Context, action: String, at: Long, clock: Boolean = false) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val intent = alarmIntent(context, action)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarms.canScheduleExactAlarms()) {
                 alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent)
+            } else if (clock) {
+                alarms.setAlarmClock(AlarmManager.AlarmClockInfo(at, openApp(context)), intent)
             } else {
                 alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent)
             }
@@ -306,9 +323,15 @@ object FocusController {
             NotificationChannel(ALERT_CHANNEL, "Focus alerts", NotificationManager.IMPORTANCE_HIGH)
                 .apply { description = "When your other device stops a strict session early" },
         )
+        nm.deleteNotificationChannel(OLD_PHASE_CHANNEL)
         nm.createNotificationChannel(
             NotificationChannel(PHASE_CHANNEL, "Focus breaks", NotificationManager.IMPORTANCE_HIGH)
-                .apply { description = "When a break starts and when it is time to focus again" },
+                .apply {
+                    description = "When a break starts and when it is time to focus again"
+                    setSound(null, null)
+                    enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                },
         )
     }
 
@@ -380,12 +403,28 @@ object FocusController {
             .build()
     }
 
+    /** A sample of how a break begins: the note, the chime and the buzz. */
+    fun testPhase(context: Context) {
+        val now = System.currentTimeMillis()
+        val phase = FocusState.Phase(
+            onBreak = true,
+            round = 1,
+            rounds = 2,
+            startsAt = now,
+            endsAt = now + 5 * 60 * 1000L,
+        )
+        postPhase(context, phase, test = true)
+        Chime.phase(context, onBreak = true, soundMs = CHIME_MS)
+    }
+
     /** "Break time" or "Back to focus", as a round or break begins. */
-    private fun postPhase(context: Context, phase: FocusState.Phase) {
+    private fun postPhase(context: Context, phase: FocusState.Phase, test: Boolean = false) {
         ensureChannels(context)
         val minutes = ((phase.endsAt - phase.startsAt + 30_000) / 60000).coerceAtLeast(1)
         val title = if (phase.onBreak) "Break time · $minutes min" else "Back to focus"
-        val text = if (phase.onBreak) {
+        val text = if (test) {
+            "This is how a break begins. Breaks between rounds start like this."
+        } else if (phase.onBreak) {
             "Round ${phase.round} of ${phase.rounds} done. Next round at ${clock(context, phase.endsAt)}."
         } else {
             "Round ${phase.round} of ${phase.rounds}, until ${clock(context, phase.endsAt)}."
@@ -394,7 +433,9 @@ object FocusController {
             .setSmallIcon(R.drawable.focus_guard_stat)
             .setContentTitle(title)
             .setContentText(text)
-            .setCategory(Notification.CATEGORY_REMINDER)
+            // Shown through the session's own Do Not Disturb, like an alarm.
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setTimeoutAfter((phase.endsAt - System.currentTimeMillis()).coerceAtLeast(10_000L))
             .setContentIntent(openApp(context))

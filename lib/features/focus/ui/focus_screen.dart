@@ -11,6 +11,7 @@ import '../../../core/ui/formatters.dart';
 import '../../../core/ui/minutes_dialog.dart';
 import '../../../desktop/desktop_window.dart';
 import '../../../desktop/mini_timer.dart';
+import '../../alerts/application/alert_providers.dart';
 import '../../reminders/application/reminder_providers.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../subjects/domain/subject.dart';
@@ -704,7 +705,11 @@ class _StartForm extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Gap.m),
-          _RoundsPicker(prefs: prefs, onChanged: save),
+          _RoundsPicker(
+            prefs: prefs,
+            onChanged: save,
+            onTest: () => unawaited(_testBreak(context, ref)),
+          ),
           if (subjects.isNotEmpty) ...[
             const SizedBox(height: Gap.s),
             _SubjectChips(
@@ -826,12 +831,42 @@ class _StartForm extends ConsumerWidget {
   static int _more(int m) => m >= 10 ? (m ~/ 5 + 1) * 5 : m + 1;
 }
 
+/// Shows how a break begins on this device: on the phone a note with a
+/// chime and a buzz sent as an alarm, on the laptop a note that stays.
+Future<void> _testBreak(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final guard = ref.read(focusGuardProvider);
+    if (guard != null) {
+      await guard.testBreak();
+    } else {
+      await ref
+          .read(localNotificationsProvider)
+          ?.showFocusPhase(
+            title: 'Break time · 5 min',
+            body:
+                'This is how a break begins. Breaks between rounds start '
+                'like this.',
+          );
+    }
+  } on Object catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Could not test: $e')));
+  }
+}
+
 /// Rounds per session and the break between two.
 class _RoundsPicker extends StatelessWidget {
-  const _RoundsPicker({required this.prefs, required this.onChanged});
+  const _RoundsPicker({
+    required this.prefs,
+    required this.onChanged,
+    required this.onTest,
+  });
 
   final FocusPrefs prefs;
   final ValueChanged<FocusPrefs> onChanged;
+
+  /// Shows how a break begins, so the user can check they will notice it.
+  final VoidCallback onTest;
 
   static const _breaks = [5, 10, 15];
 
@@ -942,9 +977,21 @@ class _RoundsPicker extends StatelessWidget {
                         Text(
                           '$rounds rounds of ${prefs.minutes} min with '
                           '${prefs.breakMinutes} min breaks, until $end. '
-                          'Nothing is blocked during a break.',
+                          'Nothing is blocked during a break, and you are '
+                          'told as each one starts.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: TextButton.icon(
+                            onPressed: onTest,
+                            icon: const Icon(
+                              Icons.notifications_active_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Test break alert'),
                           ),
                         ),
                       ],

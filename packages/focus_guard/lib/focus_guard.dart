@@ -185,6 +185,10 @@ class FocusGuard {
   /// was built without Firebase or the phone has no Google Play services.
   Future<String?> pushToken() => _channel.invokeMethod<String>('pushToken');
 
+  /// A sample of how a break begins: the note, a chime on the alarm volume
+  /// and a buzz.
+  Future<void> testBreak() => _channel.invokeMethod<void>('testBreak');
+
   /// A short buzz, felt with the phone face down.
   Future<void> buzz() => _channel.invokeMethod<void>('buzz');
 
