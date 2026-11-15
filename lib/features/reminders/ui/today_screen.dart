@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/animated_sliver_list.dart';
+import '../../../core/motion/transitions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
@@ -102,9 +104,33 @@ class TodayScreen extends ConsumerWidget {
 
   List<Widget> _lists(BuildContext context, Agenda a, DateTime now) {
     final scheme = Theme.of(context).colorScheme;
-    if (a.today.isEmpty && a.overdue.isEmpty) {
-      return [
+    final open = a.today.where((i) => !i.isDone).toList();
+    final done = a.today.where((i) => i.isDone).toList();
+    // A tile on its way out of a list shows the reminder as it is now, so
+    // one that was ticked off closes up with its tick.
+    final latest = {
+      for (final i in a.overdue.followedBy(a.today)) i.occurrenceId: i,
+    };
+
+    // Every part is always there, shown or not, so each can animate in
+    // and out as the day's reminders change.
+    Widget header(String title, bool visible, {Color? color}) =>
         SliverToBoxAdapter(
+          child: Appear(
+            visible: visible,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Gap.s),
+              child: SectionHeader(title, color: color),
+            ),
+          ),
+        );
+    Widget list(List<AgendaItem> items) =>
+        _ItemList(items: items, latest: latest, now: now);
+
+    return [
+      SliverToBoxAdapter(
+        child: Appear(
+          visible: a.today.isEmpty && a.overdue.isEmpty,
           child: EmptyState(
             icon: Icons.wb_sunny_outlined,
             title: 'A clear day',
@@ -113,61 +139,39 @@ class TodayScreen extends ConsumerWidget {
                 : 'Nothing today. Your next reminder is ${formatDay(a.upcoming.first.date, a.todayDate).toLowerCase()}.',
           ),
         ),
-      ];
-    }
-
-    final open = a.today.where((i) => !i.isDone).toList();
-    final done = a.today.where((i) => i.isDone).toList();
-
-    return [
-      if (a.overdue.isNotEmpty) ...[
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Gap.s),
-            child: SectionHeader('OVERDUE', color: scheme.error),
-          ),
-        ),
-        _ItemList(items: a.overdue, now: now),
-      ],
-      if (open.isNotEmpty) ...[
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: Gap.s),
-            child: SectionHeader('TODAY'),
-          ),
-        ),
-        _ItemList(items: open, now: now),
-      ],
-      if (done.isNotEmpty) ...[
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: Gap.s),
-            child: SectionHeader('DONE'),
-          ),
-        ),
-        _ItemList(items: done, now: now),
-      ],
+      ),
+      header('OVERDUE', a.overdue.isNotEmpty, color: scheme.error),
+      list(a.overdue),
+      header('TODAY', open.isNotEmpty),
+      list(open),
+      header('DONE', done.isNotEmpty),
+      list(done),
     ];
   }
 }
 
 class _ItemList extends StatelessWidget {
-  const _ItemList({required this.items, required this.now});
+  const _ItemList({
+    required this.items,
+    required this.latest,
+    required this.now,
+  });
 
   final List<AgendaItem> items;
+
+  /// Every reminder on the page by its occurrence, as it is now.
+  final Map<String, AgendaItem> latest;
   final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: Gap.s),
-      sliver: SliverList.builder(
-        itemCount: items.length,
-        itemBuilder: (context, i) => ReminderTile(
-          key: ValueKey(items[i].occurrenceId),
-          item: items[i],
-          now: now,
-        ),
+      sliver: AnimatedSliverList<AgendaItem>(
+        items: items,
+        idOf: (item) => item.occurrenceId,
+        itemBuilder: (context, item) =>
+            ReminderTile(item: latest[item.occurrenceId] ?? item, now: now),
       ),
     );
   }

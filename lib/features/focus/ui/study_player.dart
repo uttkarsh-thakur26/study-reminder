@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/app_theme.dart';
 import '../application/focus_providers.dart';
 import '../data/youtube_titles.dart';
@@ -123,14 +124,14 @@ class _StudyPlayerScreenState extends ConsumerState<StudyPlayerScreen> {
         return;
       }
       final to = (top - extent).clamp(0.0, position.maxScrollExtent);
-      if (first) {
+      if (first || Motion.reduced(context)) {
         _listScroll.jumpTo(to);
       } else {
         unawaited(
           _listScroll.animateTo(
             to,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
+            duration: Motion.enter,
+            curve: Motion.arrive,
           ),
         );
       }

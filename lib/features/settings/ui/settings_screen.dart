@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/motion.dart';
+import '../../../core/motion/transitions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/system_accent.dart';
 import '../../../core/ui/empty_state.dart';
@@ -76,8 +78,9 @@ class SettingsScreen extends ConsumerWidget {
                             controller.setThemeMode(s.first),
                       ),
                     ),
-                    if (settings.themeMode != ThemeMode.light)
-                      SwitchListTile(
+                    Appear(
+                      visible: settings.themeMode != ThemeMode.light,
+                      child: SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Pure black'),
                         subtitle: const Text(
@@ -85,10 +88,9 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                         value: settings.pureBlack,
                         onChanged: controller.setPureBlack,
-                      )
-                    else
-                      const SizedBox(height: Gap.s),
-                    const SizedBox(height: Gap.s),
+                      ),
+                    ),
+                    const SizedBox(height: Gap.l),
                     Text('Accent colour', style: theme.textTheme.titleSmall),
                     const SizedBox(height: Gap.s),
                     Wrap(
@@ -107,7 +109,8 @@ class SettingsScreen extends ConsumerWidget {
                                 onTap: () => controller.setAccent(index),
                                 radius: 24,
                                 child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 150),
+                                  duration: Motion.of(context, Motion.fast),
+                                  curve: Motion.change,
                                   width: 38,
                                   height: 38,
                                   decoration: BoxDecoration(
@@ -140,6 +143,18 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                           ),
                       ],
+                    ),
+                    const SizedBox(height: Gap.s),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Reduce motion'),
+                      subtitle: const Text(
+                        'Changes show at once, with nothing sliding, '
+                        "fading or bouncing. Your device's own setting "
+                        'for this is followed too.',
+                      ),
+                      value: settings.reduceMotion,
+                      onChanged: controller.setReduceMotion,
                     ),
                   ],
                 ),

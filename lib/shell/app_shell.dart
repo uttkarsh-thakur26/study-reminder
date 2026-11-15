@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/motion/fade_through_stack.dart';
 import '../core/theme/app_theme.dart';
 import '../features/focus/ui/focus_screen.dart';
 import '../features/reminders/ui/reminder_editor.dart';
@@ -91,7 +92,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final scheme = Theme.of(context).colorScheme;
     // Keyed, so the pages keep their state when the layout changes with the
     // window's width (the small timer on Windows, say).
-    final body = IndexedStack(key: _pagesKey, index: _index, children: _pages);
+    final body = FadeThroughStack(
+      key: _pagesKey,
+      index: _index,
+      children: _pages,
+    );
 
     final shortcuts = <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):

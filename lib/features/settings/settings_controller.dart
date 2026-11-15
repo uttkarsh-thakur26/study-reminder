@@ -10,6 +10,7 @@ abstract final class SettingKeys {
   static const themeMode = 'theme_mode';
   static const accent = 'accent';
   static const pureBlack = 'pure_black';
+  static const reduceMotion = 'reduce_motion';
 }
 
 @immutable
@@ -18,6 +19,7 @@ class AppSettings {
     this.themeMode = ThemeMode.system,
     this.accentIndex = 0,
     this.pureBlack = false,
+    this.reduceMotion = false,
   });
 
   /// [accentIndex] for the device's own accent colour.
@@ -30,6 +32,10 @@ class AppSettings {
 
   /// A black background in the dark theme, for OLED screens.
   final bool pureBlack;
+
+  /// State changes land at once, with nothing moving. The device's own
+  /// setting for this is followed either way.
+  final bool reduceMotion;
 
   bool get usesSystemAccent => accentIndex == systemAccent;
 
@@ -45,20 +51,24 @@ class AppSettings {
     ThemeMode? themeMode,
     int? accentIndex,
     bool? pureBlack,
+    bool? reduceMotion,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     accentIndex: accentIndex ?? this.accentIndex,
     pureBlack: pureBlack ?? this.pureBlack,
+    reduceMotion: reduceMotion ?? this.reduceMotion,
   );
 
   static Future<AppSettings> load(AppDatabase db) async {
     final mode = await db.readSetting(SettingKeys.themeMode);
     final accent = await db.readSetting(SettingKeys.accent);
     final black = await db.readSetting(SettingKeys.pureBlack);
+    final still = await db.readSetting(SettingKeys.reduceMotion);
     return AppSettings(
       themeMode: ThemeMode.values.asNameMap()[mode] ?? ThemeMode.system,
       accentIndex: int.tryParse(accent ?? '') ?? 0,
       pureBlack: black == 'true',
+      reduceMotion: still == 'true',
     );
   }
 }
@@ -91,5 +101,10 @@ class SettingsController extends Notifier<AppSettings> {
   Future<void> setPureBlack(bool on) async {
     state = state.copyWith(pureBlack: on);
     await _db.writeSetting(SettingKeys.pureBlack, '$on');
+  }
+
+  Future<void> setReduceMotion(bool on) async {
+    state = state.copyWith(reduceMotion: on);
+    await _db.writeSetting(SettingKeys.reduceMotion, '$on');
   }
 }

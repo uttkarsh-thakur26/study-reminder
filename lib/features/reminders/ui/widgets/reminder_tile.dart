@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/motion/motion.dart';
+import '../../../../core/motion/transitions.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/ui/formatters.dart';
 import '../../application/reminder_providers.dart';
@@ -72,15 +74,19 @@ class ReminderTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      reminder.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                    AnimatedDefaultTextStyle(
+                      duration: Motion.of(context, Motion.exit),
+                      curve: Motion.change,
+                      style: theme.textTheme.titleMedium!.copyWith(
                         decoration: done ? TextDecoration.lineThrough : null,
                         color: done
                             ? scheme.onSurfaceVariant
                             : scheme.onSurface,
+                      ),
+                      child: Text(
+                        reminder.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (details.isNotEmpty) ...[
@@ -253,27 +259,36 @@ class _CheckCircle extends StatelessWidget {
       child: InkResponse(
         onTap: onTap,
         radius: 22,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          width: 26,
-          height: 26,
-          margin: const EdgeInsets.all(Gap.s),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: done ? color : Colors.transparent,
-            border: Border.all(color: color, width: 2),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            child: done
-                ? const Icon(
-                    Icons.check_rounded,
-                    key: ValueKey(true),
-                    size: 18,
-                    color: Colors.white,
-                  )
-                : const SizedBox.shrink(key: ValueKey(false)),
+        // Ticking a reminder off answers with a small bounce.
+        child: Pop(
+          trigger: done,
+          child: AnimatedContainer(
+            duration: Motion.of(context, Motion.exit),
+            curve: Motion.change,
+            width: 26,
+            height: 26,
+            margin: const EdgeInsets.all(Gap.s),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: done ? color : Colors.transparent,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: AnimatedSwitcher(
+              duration: Motion.of(context, Motion.fast),
+              switchInCurve: Motion.arrive,
+              transitionBuilder: (child, animation) => ScaleTransition(
+                scale: animation,
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+              child: done
+                  ? const Icon(
+                      Icons.check_rounded,
+                      key: ValueKey(true),
+                      size: 18,
+                      color: Colors.white,
+                    )
+                  : const SizedBox.shrink(key: ValueKey(false)),
+            ),
           ),
         ),
       ),

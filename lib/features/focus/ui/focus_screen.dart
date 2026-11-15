@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/motion.dart';
+import '../../../core/motion/transitions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
@@ -20,6 +21,7 @@ import '../application/focus_providers.dart';
 import '../domain/focus_plan.dart';
 import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
+import 'focus_ring.dart';
 import 'focus_setup.dart';
 import 'focus_time_sheet.dart';
 import 'study_videos_card.dart';
@@ -91,6 +93,10 @@ class SessionCard extends ConsumerStatefulWidget {
 class _SessionCardState extends ConsumerState<SessionCard> {
   Timer? _tick;
 
+  // What the parts that come and go last showed, for while they leave.
+  Widget? _other;
+  Set<DeviceKind> _elsewhere = const {};
+
   @override
   void initState() {
     super.initState();
@@ -143,24 +149,28 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     ];
     final mine = groups.where((g) => g.contains(here)).firstOrNull;
     final free = (paired ? DeviceKind.values.toSet() : {here}).difference(held);
+    // The other device's session, when it is not part of this one's.
+    final other = groups.where((g) => g != mine).firstOrNull;
+    if (other != null) {
+      _other = Padding(
+        padding: const EdgeInsets.only(bottom: Gap.m),
+        child: _RunningSession(
+          key: ValueKey('running ${other.map((k) => k.name).join()}'),
+          session: sessions.of(other.first),
+          on: other,
+          now: now,
+          compact: true,
+        ),
+      );
+    }
+    final elsewhere = mine != null && free.isNotEmpty;
+    if (elsewhere) _elsewhere = free;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final g in groups)
-          if (g != mine)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Gap.m),
-              child: _RunningSession(
-                key: ValueKey('running ${g.map((k) => k.name).join()}'),
-                session: sessions.of(g.first),
-                on: g,
-                now: now,
-                compact: true,
-              ),
-            ),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
+        Appear(visible: other != null, child: _other ?? const SizedBox()),
+        FadeThroughSwitcher(
           child: mine != null
               ? _RunningSession(
                   key: ValueKey('running ${mine.map((k) => k.name).join()}'),
@@ -174,10 +184,15 @@ class _SessionCardState extends ConsumerState<SessionCard> {
                   free: free,
                 ),
         ),
-        if (mine != null && free.isNotEmpty) ...[
-          const SizedBox(height: Gap.m),
-          _StartElsewhere(free: free),
-        ],
+        Appear(
+          visible: elsewhere,
+          child: _elsewhere.isEmpty
+              ? const SizedBox()
+              : Padding(
+                  padding: const EdgeInsets.only(top: Gap.m),
+                  child: _StartElsewhere(free: _elsewhere),
+                ),
+        ),
       ],
     );
   }
@@ -250,17 +265,13 @@ class _RunningSession extends ConsumerWidget {
         : phase.onBreak
         ? scheme.tertiary
         : scheme.primary;
-    Widget ring(double size, Widget child) => SizedBox.square(
-      dimension: size,
-      child: CustomPaint(
-        painter: _RingPainter(
-          progress: progress,
-          track: scheme.surfaceContainerHighest,
-          color: color,
-          stroke: size / 18,
-        ),
-        child: Center(child: child),
-      ),
+    Widget ring(double size, Widget child) => FocusRing(
+      size: size,
+      progress: progress,
+      track: scheme.surfaceContainerHighest,
+      color: color,
+      phase: (phase.round, phase.onBreak),
+      child: child,
     );
     final clock = _clock(left.isNegative ? Duration.zero : left);
     void changeTime() => showFocusTimeSheet(context, on: on, where: where);
@@ -385,7 +396,7 @@ class _RunningSession extends ConsumerWidget {
                       color: paused ? scheme.onSurfaceVariant : null,
                     ),
                   ),
-                  Text(
+                  _Changing(
                     paused
                         ? 'paused'
                         : !rounds
@@ -405,7 +416,7 @@ class _RunningSession extends ConsumerWidget {
               _RoundDots(phase: phase),
             ],
             const SizedBox(height: Gap.l),
-            Text(
+            _Changing(
               paused
                   ? 'Paused, ${_clock(session.pausedLeft)} left'
                   : !rounds || phase.isLastRound && !phase.onBreak
@@ -504,6 +515,25 @@ class _RunningSession extends ConsumerWidget {
   }
 }
 
+/// A line that says where the session stands. When that changes, the new
+/// line slides in as the old one slides out.
+class _Changing extends StatelessWidget {
+  const _Changing(this.text, {this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) => SlideSwitcher(
+    child: Text(
+      text,
+      key: ValueKey(text),
+      textAlign: TextAlign.center,
+      style: style,
+    ),
+  );
+}
+
 /// While this device focuses: a way to start the other one too.
 class _StartElsewhere extends ConsumerWidget {
   const _StartElsewhere({required this.free});
@@ -561,47 +591,6 @@ class _StartElsewhere extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _RingPainter extends CustomPainter {
-  _RingPainter({
-    required this.progress,
-    required this.track,
-    required this.color,
-    required this.stroke,
-  });
-
-  final double progress;
-  final Color track;
-  final Color color;
-  final double stroke;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final circle = rect.deflate(stroke / 2);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(circle, 0, 2 * pi, false, paint..color = track);
-    if (progress > 0) {
-      canvas.drawArc(
-        circle,
-        -pi / 2,
-        2 * pi * progress.clamp(0.0, 1.0),
-        false,
-        paint..color = color,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.progress != progress ||
-      old.track != track ||
-      old.color != color ||
-      old.stroke != stroke;
 }
 
 class _StartForm extends ConsumerWidget {
@@ -674,8 +663,8 @@ class _StartForm extends ConsumerWidget {
                     message: 'Type the minutes',
                     child: Column(
                       children: [
-                        Text(
-                          '$minutes',
+                        RollingNumber(
+                          minutes,
                           textAlign: TextAlign.center,
                           style: theme.textTheme.displayMedium?.copyWith(
                             fontWeight: FontWeight.w600,
@@ -948,8 +937,8 @@ class _RoundsPicker extends StatelessWidget {
               ),
               SizedBox(
                 width: 28,
-                child: Text(
-                  '$rounds',
+                child: RollingNumber(
+                  rounds,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -965,9 +954,7 @@ class _RoundsPicker extends StatelessWidget {
               ),
             ],
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topCenter,
+          SizeChange(
             child: rounds < 2
                 ? const SizedBox(width: double.infinity)
                 : Padding(
@@ -1241,7 +1228,8 @@ class _RoundDots extends StatelessWidget {
         children: [
           for (var i = 1; i <= phase.rounds; i++)
             AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
+              duration: Motion.of(context, Motion.enter),
+              curve: Motion.arrive,
               margin: const EdgeInsets.symmetric(horizontal: 3),
               width: i == phase.round && !phase.onBreak ? 22 : 8,
               height: 8,

@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/motion.dart';
+import '../../../core/motion/transitions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../reminders/domain/reminder.dart';
 import '../application/sync_providers.dart';
@@ -102,13 +104,14 @@ class _PairSheetState extends ConsumerState<PairSheet> {
             onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           const SizedBox(height: Gap.l),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 150),
-            alignment: Alignment.topCenter,
-            child: switch (_mode) {
-              _Mode.show => const _ShowCode(),
-              _Mode.enter => const _EnterCode(),
-            },
+          FadeThroughSwitcher(
+            child: KeyedSubtree(
+              key: ValueKey(_mode),
+              child: switch (_mode) {
+                _Mode.show => const _ShowCode(),
+                _Mode.enter => const _EnterCode(),
+              },
+            ),
           ),
         ],
       ),
@@ -236,7 +239,7 @@ class _ShowCodeState extends ConsumerState<_ShowCode> {
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
+          duration: Motion.of(context, Motion.exit),
           opacity: expired ? 0.2 : 1,
           child: Container(
             padding: const EdgeInsets.all(Gap.m),
