@@ -132,6 +132,11 @@ class _AnimatedSliverListState<T> extends State<AnimatedSliverList<T>>
   @override
   Widget build(BuildContext context) => SliverList.builder(
     itemCount: _entries.length,
+    // An item keeps its state as others join and leave around it.
+    findChildIndexCallback: (key) {
+      final i = _entries.indexWhere((e) => ValueKey(e.id) == key);
+      return i < 0 ? null : i;
+    },
     itemBuilder: (context, i) {
       final entry = _entries[i];
       return _ItemTransition(
