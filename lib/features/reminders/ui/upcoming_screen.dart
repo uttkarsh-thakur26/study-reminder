@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/animated_sliver_list.dart';
+import '../../../core/motion/motion.dart';
+import '../../../core/motion/transitions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/time/calendar_date.dart';
 import '../../../core/ui/empty_state.dart';
@@ -27,8 +30,8 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        duration: Motion.of(context, Motion.enter),
+        curve: Motion.arrive,
       );
     }
   }
@@ -50,7 +53,17 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
             message: '$e',
           ),
           data: (a) {
-            final days = [AgendaDay(a.todayDate, a.today), ...a.upcoming];
+            final items = {
+              a.todayDate: a.today,
+              for (final d in a.upcoming) d.date: d.items,
+            };
+            // Every day of the two weeks is always there, empty or not, so
+            // a day can open up and close as its reminders come and go.
+            final dates = {
+              for (var i = 0; i <= Agenda.horizonDays; i++)
+                a.todayDate.addDays(i),
+              ...items.keys,
+            }.toList()..sort();
             return CustomScrollView(
               slivers: [
                 SliverPadding(
@@ -71,32 +84,36 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
                   child: _WeekStrip(
                     today: a.todayDate,
                     counts: {
-                      for (final d in days)
-                        d.date: d.items.where((i) => !i.isDone).length,
+                      for (final MapEntry(key: date, value: list)
+                          in items.entries)
+                        date: list.where((i) => !i.isDone).length,
                     },
                     onTap: _jumpTo,
                   ),
                 ),
-                if (a.upcoming.isEmpty && a.today.isEmpty)
-                  const SliverToBoxAdapter(
-                    child: EmptyState(
+                SliverToBoxAdapter(
+                  child: Appear(
+                    visible: a.upcoming.isEmpty && a.today.isEmpty,
+                    child: const EmptyState(
                       icon: Icons.event_available_rounded,
                       title: 'Nothing coming up',
                       message: 'Reminders for the next two weeks show here.',
                     ),
                   ),
-                for (final day in days)
-                  if (day.items.isNotEmpty) ...[
-                    SliverToBoxAdapter(
-                      key: _dayKeys.putIfAbsent(day.date, GlobalKey.new),
+                ),
+                for (final date in dates) ...[
+                  SliverToBoxAdapter(
+                    key: _dayKeys.putIfAbsent(date, GlobalKey.new),
+                    child: Appear(
+                      visible: items[date]?.isNotEmpty ?? false,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: Gap.s),
                         child: SectionHeader(
-                          formatDay(day.date, a.todayDate).toUpperCase(),
+                          formatDay(date, a.todayDate).toUpperCase(),
                           // Today and Tomorrow also get the date itself.
-                          trailing: a.todayDate.daysUntil(day.date) <= 1
+                          trailing: a.todayDate.daysUntil(date) <= 1
                               ? Text(
-                                  '${weekdayShortNames[day.date.weekday - 1]}, ${DateFormat('d MMM').format(DateTime(day.date.year, day.date.month, day.date.day))}',
+                                  '${weekdayShortNames[date.weekday - 1]}, ${DateFormat('d MMM').format(DateTime(date.year, date.month, date.day))}',
                                   style: theme.textTheme.labelMedium?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
@@ -105,18 +122,18 @@ class _UpcomingScreenState extends ConsumerState<UpcomingScreen> {
                         ),
                       ),
                     ),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: Gap.s),
-                      sliver: SliverList.builder(
-                        itemCount: day.items.length,
-                        itemBuilder: (context, i) => ReminderTile(
-                          key: ValueKey(day.items[i].occurrenceId),
-                          item: day.items[i],
-                          now: now,
-                        ),
-                      ),
+                  ),
+                  SliverPadding(
+                    key: ValueKey(date),
+                    padding: const EdgeInsets.symmetric(horizontal: Gap.s),
+                    sliver: AnimatedSliverList<AgendaItem>(
+                      items: items[date] ?? const [],
+                      idOf: (item) => item.occurrenceId,
+                      itemBuilder: (context, item) =>
+                          ReminderTile(item: item, now: now),
                     ),
-                  ],
+                  ),
+                ],
                 const SliverToBoxAdapter(child: SizedBox(height: 96)),
               ],
             );

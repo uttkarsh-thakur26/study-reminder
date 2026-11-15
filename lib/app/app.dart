@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/motion/motion.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/system_accent.dart';
 import '../desktop/desktop_integration.dart';
@@ -57,6 +58,8 @@ class _StudyReminderAppState extends ConsumerState<StudyReminderApp> {
         Brightness.dark,
         pureBlack: settings.pureBlack,
       ),
+      builder: (context, child) =>
+          ReduceMotion(reduce: settings.reduceMotion, child: child!),
       home: const SyncCoordinator(
         child: FocusCoordinator(
           child: AlertCoordinator(
