@@ -529,22 +529,27 @@ object FocusController {
     private fun postDone(context: Context, state: FocusState) {
         val minutes = (state.focusedMs() / 60000).coerceAtLeast(1)
         if (System.currentTimeMillis() - state.endsAt > RING_LATE_MS) {
-            postFinishedNote(context, minutes, silent = false)
+            postFinishedNote(context, minutes)
         } else {
             ring(context, minutes)
         }
     }
 
     /** A sample of how a session ends. */
-    fun testDone(context: Context) = ring(context, 0L)
+    fun testDone(context: Context) {
+        ring(context, 0L)
+    }
 
     /**
      * "Focus time is finished", ringing like an alarm clock: the alarm sound
      * on the alarm volume, over and over, with vibration, until the user
      * stops it, opens it, swipes it away or pulls the notifications down.
      * Android plays it, so it rings on with the app closed. Left alone it
-     * stops after [RING_MS] and a quiet note takes its place.
+     * stops after [RING_MS] and a quiet note takes its place: by a timer
+     * while the app's process lives, and by an alarm set as an alarm clock,
+     * which Android does not delay with the phone asleep, when it does not.
      */
+    @Synchronized
     private fun ring(context: Context, minutes: Long) {
         ensureChannels(context)
         val nm = notifications(context)
@@ -583,15 +588,31 @@ object FocusController {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarms.canScheduleExactAlarms()) {
                 alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
             } else {
-                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
+                alarms.setAlarmClock(AlarmManager.AlarmClockInfo(at, openApp(context)), end)
             }
         } catch (e: SecurityException) {
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
         }
+        val app = context.applicationContext
+        val mine = ++ringCount
+        main.postDelayed({
+            synchronized(this) {
+                // Only for this ring, not one that began since.
+                if (mine == ringCount) {
+                    ringEnded(app, minutes)
+                    cancelAlarm(app, ACTION_RING_END)
+                }
+            }
+        }, RING_MS)
     }
 
+    /** Counts the alarms rung, so a timer stops only the one it was set for. */
+    private var ringCount = 0
+
     /** The user answered the alarm, or a new session began: it stops. */
+    @Synchronized
     fun stopRing(context: Context) {
+        ringCount++
         notifications(context).cancel(DONE_NOTIFICATION)
         cancelAlarm(context, ACTION_RING_END)
     }
@@ -600,6 +621,7 @@ object FocusController {
      * The alarm rang for [RING_MS] with no answer: it stops, and a quiet
      * note stays to say the session ended.
      */
+    @Synchronized
     fun ringEnded(context: Context, minutes: Long) {
         val nm = notifications(context)
         val ringing = try {
@@ -609,12 +631,13 @@ object FocusController {
         }
         if (!ringing) return
         nm.cancel(DONE_NOTIFICATION)
-        postFinishedNote(context, minutes, silent = true)
+        postFinishedNote(context, minutes)
     }
 
-    private fun postFinishedNote(context: Context, minutes: Long, silent: Boolean) {
+    /** "Focus time is finished" without a sound: after the alarm, or late. */
+    private fun postFinishedNote(context: Context, minutes: Long) {
         ensureChannels(context)
-        val builder = Notification.Builder(context, DONE_CHANNEL)
+        val notification = Notification.Builder(context, DONE_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
             .setContentTitle("Focus time is finished")
             .setContentText(
@@ -622,13 +645,12 @@ object FocusController {
             )
             .setAutoCancel(true)
             .setContentIntent(openApp(context))
-        // In a group that alerts through its summary only, and has none:
-        // posted without a sound, right after the alarm.
-        if (silent) {
-            builder.setGroup("focus_guard_finished")
-                .setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
-        }
-        notifications(context).notify(FINISHED_NOTIFICATION, builder.build())
+            // In a group that alerts through its summary only, and has
+            // none: posted without a sound.
+            .setGroup("focus_guard_finished")
+            .setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
+            .build()
+        notifications(context).notify(FINISHED_NOTIFICATION, notification)
     }
 
     /**

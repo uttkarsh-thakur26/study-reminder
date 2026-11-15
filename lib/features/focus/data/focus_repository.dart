@@ -44,7 +44,8 @@ class FocusRepository {
 
   /// Starts a session of [length] from [now] on each of [on] that has none
   /// running, so one that began meanwhile (on the other device, say) is
-  /// kept. Devices started together get the same session. With [work] and
+  /// kept. A strict session that is paused is kept as well: it goes on by
+  /// being resumed, not by being replaced. Devices started together get the same session. With [work] and
   /// [rest] it runs in rounds with breaks between them, see `FocusPlan`.
   Future<void> start({
     required Set<DeviceKind> on,
@@ -67,7 +68,7 @@ class FocusRepository {
       on,
       at: at,
       whole: true,
-      (kind, current) => current.runningAt(at)
+      (kind, current) => current.runningAt(at) || current.held
           ? null
           : FocusSession(
               active: true,

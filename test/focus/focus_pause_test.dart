@@ -107,6 +107,27 @@ void main() {
     expect(s.phone.focusedInAll, const Duration(minutes: 50));
   });
 
+  test('a start does not replace a strict session that is paused', () async {
+    await startRounds(strict: true);
+    await repo.pause(both, now: at(10));
+    final before = await repo.current();
+    await repo.startWith(
+      const FocusPrefs(),
+      on: both,
+      startedBy: 'Pixel',
+      now: at(12),
+    );
+    final after = await repo.current();
+    for (final kind in both) {
+      expect(after.of(kind).held, isTrue);
+      expect(after.of(kind).strict, isTrue);
+      expect(after.of(kind).startedAt, t0);
+      expect(after.of(kind).pausedAt, at(10));
+      expect(after.of(kind).version, before.of(kind).version);
+    }
+    expect(await studied(), hasLength(1));
+  });
+
   test('a strict session paused in a break blocks until resumed', () async {
     await startRounds(strict: true);
     expect((await repo.current()).phone.onBreakAt(at(27)), isTrue);

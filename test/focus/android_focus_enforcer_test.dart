@@ -70,11 +70,12 @@ void main() {
   });
 
   test('a strict session that is paused still goes to the phone', () async {
+    final startedAt = now;
     final pausedAt = now.add(const Duration(minutes: 5));
     FocusSession paused({required bool strict, FocusTarget? target}) =>
         FocusSession(
-          startedAt: now,
-          endsAt: now.add(const Duration(minutes: 25)),
+          startedAt: startedAt,
+          endsAt: startedAt.add(const Duration(minutes: 25)),
           target: target ?? FocusTarget.phone,
           strict: strict,
           pausedAt: pausedAt,

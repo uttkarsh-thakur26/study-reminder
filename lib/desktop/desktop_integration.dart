@@ -164,9 +164,7 @@ Future<bool> mayQuitDuringFocus(
   if (!session.strict || !(held || session.runningAt(now))) return true;
   await showFullWindow(ref.read(miniTimerProvider.notifier));
   if (!context.mounted) return false;
-  // Where it would end if it carried on now.
-  final end = held ? now.add(session.pausedLeft) : session.endsAt!;
-  final until = formatTime(context, end.toLocal());
+  final until = formatTime(context, session.endsAt!.toLocal());
   final verb = action[0].toUpperCase() + action.substring(1);
   final quit = await showDialog<bool>(
     context: context,
@@ -195,7 +193,9 @@ Future<bool> mayQuitDuringFocus(
   await ref.read(syncServiceProvider)?.tellOthers({
     'kind': 'left',
     'device': ref.read(deviceNameProvider),
-    'endsAt': end.millisecondsSinceEpoch,
+    // Paused, it has its time left from whenever it carries on: from now.
+    'endsAt': (held ? DateTime.now().add(session.pausedLeft) : session.endsAt!)
+        .millisecondsSinceEpoch,
   });
   return true;
 }

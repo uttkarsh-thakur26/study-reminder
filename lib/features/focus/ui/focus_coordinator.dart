@@ -16,19 +16,31 @@ import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import 'study_player.dart';
 
-/// Whether [session], which ran here as [before] when last looked at, has
-/// run to its end since, and not long ago: the moment to ring. False when
-/// it was stopped, paused or replaced instead.
-bool focusRanOut({
+/// How a session that ran out is told to the user.
+enum FocusEndNote {
+  /// At its end: the alarm.
+  ring,
+
+  /// Found over some time after its end: a note without the alarm.
+  quiet,
+}
+
+/// What to tell the user when [session], which ran here as [before] when
+/// last looked at, has run to its end since: the alarm, or a quiet note when
+/// that was more than [within] ago (the laptop slept through it). Null when
+/// it still runs, or was stopped, paused or replaced instead.
+FocusEndNote? focusEndNote({
   required FocusSession? before,
   required FocusSession session,
   required DateTime now,
   Duration within = const Duration(minutes: 2),
-}) =>
-    before != null &&
-    before.startedAt == session.startedAt &&
-    session.ranOutAt(now) &&
-    now.difference(session.endsAt!) <= within;
+}) {
+  if (before == null || before.startedAt != session.startedAt) return null;
+  if (!session.ranOutAt(now)) return null;
+  return now.difference(session.endsAt!) <= within
+      ? FocusEndNote.ring
+      : FocusEndNote.quiet;
+}
 
 /// Keeps this device following its focus session while the app runs:
 /// applies it whenever it or the block lists change (also when another
@@ -181,8 +193,8 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
 
   /// "Focus time is finished" on the laptop as its session runs out, as an
   /// alarm that rings until it is stopped. Not for one stopped or paused,
-  /// and not long after the end (the laptop slept through it). The phone
-  /// rings its own, even with the app closed.
+  /// and long after the end (the laptop slept through it) as a quiet note.
+  /// The phone rings its own, even with the app closed.
   void _noteEnd(FocusSession session) {
     final now = DateTime.now();
     final before = _running;
@@ -199,7 +211,8 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
       }
       return;
     }
-    if (!focusRanOut(before: before, session: session, now: now)) return;
+    final note = focusEndNote(before: before, session: session, now: now);
+    if (note == null) return;
     final minutes = session.focusedInAll.inMinutes;
     notifications
         ?.showFocusDone(
@@ -207,6 +220,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
           body:
               '${minutes < 1 ? 1 : minutes} '
               '${minutes > 1 ? 'minutes' : 'minute'} of focus. Nice work.',
+          ring: note == FocusEndNote.ring,
         )
         .catchError((Object e) => debugPrint('focus: end alarm failed: $e'));
   }

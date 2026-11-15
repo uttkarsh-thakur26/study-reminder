@@ -16,37 +16,46 @@ void main() {
 
   test('a session that runs out rings, at its end', () {
     final s = running();
-    expect(focusRanOut(before: s, session: s, now: at(24, 59)), isFalse);
-    expect(focusRanOut(before: s, session: s, now: at(25)), isTrue);
-    expect(focusRanOut(before: s, session: s, now: at(26, 30)), isTrue);
+    expect(focusEndNote(before: s, session: s, now: at(24, 59)), isNull);
+    expect(focusEndNote(before: s, session: s, now: at(25)), FocusEndNote.ring);
+    expect(
+      focusEndNote(before: s, session: s, now: at(26, 30)),
+      FocusEndNote.ring,
+    );
   });
 
-  test('not long after the end, when the laptop slept through it', () {
+  test('long after the end it is a quiet note: the laptop slept', () {
     final s = running();
-    expect(focusRanOut(before: s, session: s, now: at(28)), isFalse);
+    expect(
+      focusEndNote(before: s, session: s, now: at(28)),
+      FocusEndNote.quiet,
+    );
   });
 
   test('not when it was stopped or paused', () {
     final s = running();
-    expect(focusRanOut(before: s, session: s.ended(), now: at(25)), isFalse);
+    expect(focusEndNote(before: s, session: s.ended(), now: at(25)), isNull);
     expect(
-      focusRanOut(before: s, session: s.pausedAtTime(at(10)), now: at(25)),
-      isFalse,
+      focusEndNote(before: s, session: s.pausedAtTime(at(10)), now: at(25)),
+      isNull,
     );
   });
 
   test('not for a session that was not running here before', () {
     final s = running();
-    expect(focusRanOut(before: null, session: s, now: at(25)), isFalse);
+    expect(focusEndNote(before: null, session: s, now: at(25)), isNull);
     final other = running(from: at(-60), minutes: 30);
-    expect(focusRanOut(before: other, session: s, now: at(25)), isFalse);
+    expect(focusEndNote(before: other, session: s, now: at(25)), isNull);
   });
 
   test('time added moves the alarm to the new end', () {
     final s = running();
     final longer = s.copyWith(endsAt: at(35));
-    expect(focusRanOut(before: s, session: longer, now: at(25)), isFalse);
-    expect(focusRanOut(before: longer, session: longer, now: at(35)), isTrue);
+    expect(focusEndNote(before: s, session: longer, now: at(25)), isNull);
+    expect(
+      focusEndNote(before: longer, session: longer, now: at(35)),
+      FocusEndNote.ring,
+    );
   });
 
   test('the minutes of focus leave breaks out and count before a pause', () {
