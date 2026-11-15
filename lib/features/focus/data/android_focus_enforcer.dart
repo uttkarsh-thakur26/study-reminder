@@ -28,7 +28,10 @@ class AndroidFocusEnforcer implements FocusEnforcer {
       studyVideos: prefs.studyVideos.isNotEmpty,
     );
     if (session.version.isEmpty) return;
-    final runsHere = session.runsOn(DeviceKind.phone, _now());
+    // A strict session paused here goes to the phone as well: it keeps
+    // blocking, with its clock stopped.
+    final held = session.heldOn(DeviceKind.phone);
+    final runsHere = held || session.runsOn(DeviceKind.phone, _now());
     await _guard.apply(
       version: session.version,
       session: runsHere
@@ -45,6 +48,7 @@ class AndroidFocusEnforcer implements FocusEnforcer {
               workMinutes: session.workMinutes,
               breakMinutes: session.breakMinutes,
               doneMs: session.doneMs,
+              pausedAt: held ? session.pausedAt : null,
             )
           : null,
     );

@@ -135,6 +135,42 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('a strict session can be paused, but not stopped', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      FocusSessions(phone: running(DeviceKind.phone, strict: true)),
+    );
+    expect(find.text('Pause'), findsOneWidget);
+    expect(find.text('Stop'), findsNothing);
+    expect(find.textContaining('stays blocked'), findsOneWidget);
+    expect(find.textContaining('no pausing'), findsNothing);
+    await done(tester);
+  });
+
+  testWidgets('a strict session that is paused can only be resumed', (
+    tester,
+  ) async {
+    final at = DateTime.now().toUtc().subtract(const Duration(minutes: 1));
+    final paused = FocusSession(
+      startedAt: at.subtract(const Duration(minutes: 5)),
+      endsAt: at.add(const Duration(minutes: 20)),
+      target: FocusTarget.phone,
+      strict: true,
+      startedBy: 'Pixel',
+      pausedAt: at,
+    );
+    await pump(tester, FocusSessions(phone: paused));
+    expect(find.text('paused'), findsOneWidget);
+    expect(find.text('20:00'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('End'), findsNothing);
+    expect(find.textContaining('still blocked'), findsOneWidget);
+    expect(find.textContaining('nothing is blocked'), findsNothing);
+    await done(tester);
+  });
+
   testWidgets("the laptop's session can be paused from the phone", (
     tester,
   ) async {

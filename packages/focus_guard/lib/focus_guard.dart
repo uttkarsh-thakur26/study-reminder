@@ -17,6 +17,7 @@ class FocusGuardSession {
     this.workMinutes = 0,
     this.breakMinutes = 0,
     this.doneMs = 0,
+    this.pausedAt,
   });
 
   final DateTime startedAt;
@@ -44,6 +45,11 @@ class FocusGuardSession {
   /// For a session resumed after a pause: how far into its rounds it was.
   final int doneMs;
 
+  /// For a strict session that is paused: when. Its clock stands still and
+  /// it keeps blocking, with no end, until a resumed one replaces it. Null
+  /// for a session that runs.
+  final DateTime? pausedAt;
+
   Map<String, Object?> toMap() => {
     'startedAt': startedAt.millisecondsSinceEpoch,
     'endsAt': endsAt.millisecondsSinceEpoch,
@@ -57,6 +63,7 @@ class FocusGuardSession {
     'workMinutes': workMinutes,
     'breakMinutes': breakMinutes,
     'doneMs': doneMs,
+    'pausedAt': pausedAt?.millisecondsSinceEpoch,
   };
 
   @override
@@ -188,6 +195,9 @@ class FocusGuard {
   /// A sample of how a break begins: the note, a chime on the alarm volume
   /// and a buzz.
   Future<void> testBreak() => _channel.invokeMethod<void>('testBreak');
+
+  /// A sample of how a session ends: the alarm that rings until stopped.
+  Future<void> testDone() => _channel.invokeMethod<void>('testDone');
 
   /// A short buzz, felt with the phone face down.
   Future<void> buzz() => _channel.invokeMethod<void>('buzz');

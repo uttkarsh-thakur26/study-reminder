@@ -40,14 +40,3 @@ lib/
   shell/       navigation that adapts to phone and desktop
 test/          unit and widget tests
 ```
-
-## Roadmap
-
-| Milestone | Scope |
-| --- | --- |
-| M1 | Foundations: app shell, local database, design system |
-| M2 | Android reminders: repeats, exact alarms, snooze, permission setup |
-| M3 | Windows app: tray, start at login, notifications, shortcuts |
-| M4 | Sync and pairing: account, outbox, live feed, QR pairing |
-| M5 | Focus mode: Do Not Disturb, app and site blocking, remote switch |
-| M6 | Study tools and release: focus timer, stats, widget, themes, installers |
