@@ -179,6 +179,35 @@ class LocalNotificationsScheduler implements AlertScheduler {
         ),
       );
 
+  /// A focus session running out on the laptop. Shown as an alarm: Windows
+  /// loops its alarm sound and keeps the note on screen until the user
+  /// answers it, through Do not disturb as well. Without [ring] it is a
+  /// plain message, for a session found over some time after its end.
+  Future<void> showFocusDone({
+    required String title,
+    required String body,
+    bool ring = true,
+  }) => plugin.show(
+    id: focusDoneNotificationId,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      windows: ring
+          ? const WindowsNotificationDetails(
+              scenario: WindowsNotificationScenario.alarm,
+              // An alarm needs a button to ring and stay. It only closes
+              // the note: its text is not a reminder's payload.
+              actions: [
+                WindowsAction(content: 'Stop', arguments: 'focus_done'),
+              ],
+            )
+          : const WindowsNotificationDetails(),
+    ),
+  );
+
+  /// Stops the alarm of a session that ran out, when a new one begins.
+  Future<void> dismissFocusDone() => plugin.cancel(id: focusDoneNotificationId);
+
   /// Stops whatever is ringing for [payload] and clears it from the shade.
   Future<void> dismiss(AlertPayload payload) => plugin.cancel(
     id: payload.isTest
@@ -195,6 +224,7 @@ const updateNotificationId = 4;
 const updatePayload = 'app-update';
 
 const focusPhaseNotificationId = 3;
+const focusDoneNotificationId = 5;
 
 const _doneAction = AndroidNotificationAction(
   AlertActions.done,

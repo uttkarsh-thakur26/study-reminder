@@ -44,7 +44,8 @@ class FocusRepository {
 
   /// Starts a session of [length] from [now] on each of [on] that has none
   /// running, so one that began meanwhile (on the other device, say) is
-  /// kept. Devices started together get the same session. With [work] and
+  /// kept. A strict session that is paused is kept as well: it goes on by
+  /// being resumed, not by being replaced. Devices started together get the same session. With [work] and
   /// [rest] it runs in rounds with breaks between them, see `FocusPlan`.
   Future<void> start({
     required Set<DeviceKind> on,
@@ -67,7 +68,7 @@ class FocusRepository {
       on,
       at: at,
       whole: true,
-      (kind, current) => current.runningAt(at)
+      (kind, current) => current.runningAt(at) || current.held
           ? null
           : FocusSession(
               active: true,
@@ -106,18 +107,22 @@ class FocusRepository {
     now: now,
   );
 
-  /// Stops the sessions on [on], running or paused.
-  Future<void> stop(Set<DeviceKind> on, {DateTime? now}) =>
-      _update(on, at: (now ?? DateTime.now()).toUtc(), (_, s) => s.ended());
+  /// Stops the sessions on [on], running or paused. A strict one that is
+  /// paused stays: it ends by being resumed and running out.
+  Future<void> stop(Set<DeviceKind> on, {DateTime? now}) => _update(
+    on,
+    at: (now ?? DateTime.now()).toUtc(),
+    (_, s) => s.held ? null : s.ended(),
+  );
 
-  /// Pauses the sessions running on [on], strict ones aside: they stop, and
-  /// keep the time they had left for [resume].
+  /// Pauses the sessions running on [on]: they stop, and keep the time they
+  /// had left for [resume]. A strict one keeps blocking while it is paused.
   Future<void> pause(Set<DeviceKind> on, {DateTime? now}) {
     final at = _wholeMs(now);
     return _update(
       on,
       at: at,
-      (_, s) => s.runningAt(at) && !s.strict ? s.pausedAtTime(at) : null,
+      (_, s) => s.runningAt(at) ? s.pausedAtTime(at) : null,
     );
   }
 

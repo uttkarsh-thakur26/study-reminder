@@ -50,9 +50,16 @@ object FocusRemote {
     private fun sessionForPhone(context: Context, focus: JSONObject, now: Long): FocusState? {
         val endsAt = focus.optLong("ends_at", 0)
         val forPhone = focus.optString("target", "both") != "laptop"
-        if (!focus.optBoolean("active") || !forPhone || endsAt <= now) return null
+        if (!forPhone) return null
+        // A strict session that was paused keeps blocking here, with its
+        // clock stopped, until it is resumed.
+        val pausedAt = focus.optLong("paused_at", 0L)
+        val held = !focus.optBoolean("active") && focus.optBoolean("strict") &&
+            pausedAt > 0L && pausedAt < endsAt
+        val from = if (held) pausedAt else now
+        if (!held && (!focus.optBoolean("active") || endsAt <= now)) return null
         // Nothing the app can start runs this long; not worth locking the phone.
-        if (endsAt - now > LONGEST_MS) return null
+        if (endsAt - from > LONGEST_MS) return null
         val (packages, games) = FocusState.blocklist(context)
         return FocusState(
             startedAt = focus.optLong("started_at", now),
@@ -67,6 +74,7 @@ object FocusRemote {
             breakMs = focus.optLong("break_minutes", 0L).coerceIn(0L, 600L) * 60_000L,
             plannedRounds = focus.optInt("rounds", 1).coerceIn(1, 100),
             doneMs = focus.optLong("done_ms", 0L).coerceAtLeast(0L),
+            pausedAt = if (held) pausedAt else 0L,
         )
     }
 }

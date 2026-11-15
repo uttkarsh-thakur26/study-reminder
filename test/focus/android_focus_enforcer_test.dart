@@ -69,6 +69,39 @@ void main() {
     expect(lastApply()['session'], isNull, reason: 'ran out');
   });
 
+  test('a strict session that is paused still goes to the phone', () async {
+    final startedAt = now;
+    final pausedAt = now.add(const Duration(minutes: 5));
+    FocusSession paused({required bool strict, FocusTarget? target}) =>
+        FocusSession(
+          startedAt: startedAt,
+          endsAt: startedAt.add(const Duration(minutes: 25)),
+          target: target ?? FocusTarget.phone,
+          strict: strict,
+          pausedAt: pausedAt,
+          version: 'v${strict ? 5 : 6}${target?.name ?? ''}',
+        );
+    // Long after its planned end: paused, it has none.
+    now = now.add(const Duration(hours: 3));
+    await enforcer.apply(paused(strict: true), prefs);
+    final s = lastApply()['session']! as Map;
+    expect(s['pausedAt'], pausedAt.millisecondsSinceEpoch);
+    expect(s['strict'], isTrue);
+
+    await enforcer.apply(paused(strict: false), prefs);
+    expect(lastApply()['session'], isNull, reason: 'a plain pause unblocks');
+    await enforcer.apply(
+      paused(strict: true, target: FocusTarget.laptop),
+      prefs,
+    );
+    expect(lastApply()['session'], isNull, reason: "the laptop's session");
+  });
+
+  test('a running session has no pause for the phone', () async {
+    await enforcer.apply(session(version: 'v7'), prefs);
+    expect((lastApply()['session']! as Map)['pausedAt'], isNull);
+  });
+
   test('a session never saved here is left to the phone', () async {
     await enforcer.apply(FocusSession.idle, prefs);
     expect(calls.where((c) => c.method == 'apply'), isEmpty);

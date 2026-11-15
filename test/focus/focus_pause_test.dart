@@ -74,14 +74,96 @@ void main() {
     expect(second.focusedUntil(at(80)), const Duration(minutes: 40));
   });
 
-  test('a strict session cannot be paused or shortened', () async {
+  test('a strict session pauses its clock but keeps blocking', () async {
     await startRounds(strict: true);
-    await repo.pause(both, now: at(5));
-    expect((await repo.current()).phone.runningAt(at(6)), isTrue);
+    await repo.pause(both, now: at(10));
+    var s = await repo.current();
+    expect(s.phone.isPaused, isTrue);
+    expect(s.phone.held, isTrue);
+    expect(s.phone.pausedLeft, const Duration(minutes: 45));
+    // Paused for however long, it goes on blocking on both devices.
+    for (final m in [11, 300]) {
+      expect(s.phone.enforcesOn(DeviceKind.phone, at(m)), isTrue);
+      expect(s.laptop.enforcesOn(DeviceKind.laptop, at(m)), isTrue);
+    }
+    expect(s.phone.enforcesOn(DeviceKind.laptop, at(11)), isFalse);
+    expect((await studied()).single.phoneUntil, at(10));
+
+    // It cannot be ended while paused, only resumed.
+    await repo.stop(both, now: at(12));
+    s = await repo.current();
+    expect(s.phone.held, isTrue);
+    expect(s.laptop.held, isTrue);
+
+    // Resumed, the end moves on by the length of the pause.
+    await repo.resume(both, now: at(30));
+    s = await repo.current();
+    expect(s.phone.held, isFalse);
+    expect(s.phone.strict, isTrue);
+    expect(s.phone.runningAt(at(31)), isTrue);
+    expect(s.phone.endsAt, at(75));
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(31)), isTrue);
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(76)), isFalse);
+    expect(s.phone.focusedInAll, const Duration(minutes: 50));
+  });
+
+  test('a start does not replace a strict session that is paused', () async {
+    await startRounds(strict: true);
+    await repo.pause(both, now: at(10));
+    final before = await repo.current();
+    await repo.startWith(
+      const FocusPrefs(),
+      on: both,
+      startedBy: 'Pixel',
+      now: at(12),
+    );
+    final after = await repo.current();
+    for (final kind in both) {
+      expect(after.of(kind).held, isTrue);
+      expect(after.of(kind).strict, isTrue);
+      expect(after.of(kind).startedAt, t0);
+      expect(after.of(kind).pausedAt, at(10));
+      expect(after.of(kind).version, before.of(kind).version);
+    }
+    expect(await studied(), hasLength(1));
+  });
+
+  test('a strict session paused in a break blocks until resumed', () async {
+    await startRounds(strict: true);
+    expect((await repo.current()).phone.onBreakAt(at(27)), isTrue);
+    await repo.pause(both, now: at(27));
+    var s = await repo.current();
+    expect(s.phone.pausedPhase!.onBreak, isTrue);
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(28)), isTrue);
+    // The rest of the break comes back with the resume.
+    await repo.resume(both, now: at(40));
+    s = await repo.current();
+    expect(s.phone.onBreakAt(at(41)), isTrue);
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(41)), isFalse);
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(44)), isTrue);
+  });
+
+  test('a paused session that is not strict blocks nothing', () async {
+    await startRounds();
+    await repo.pause(both, now: at(10));
+    final s = await repo.current();
+    expect(s.phone.held, isFalse);
+    expect(s.phone.enforcesOn(DeviceKind.phone, at(11)), isFalse);
+  });
+
+  test('a strict session cannot be shortened', () async {
+    await startRounds(strict: true);
     await repo.extend(both, const Duration(minutes: -10), now: at(5));
     expect((await repo.current()).phone.endsAt, at(55));
     await repo.extend(both, const Duration(minutes: 5), now: at(5));
     expect((await repo.current()).phone.endsAt, at(60));
+    // Nor while it is paused.
+    await repo.pause(both, now: at(10));
+    await repo.extend(both, const Duration(minutes: -10), now: at(11));
+    expect(
+      (await repo.current()).phone.pausedLeft,
+      const Duration(minutes: 50),
+    );
   });
 
   test('time can be taken off, down to a minute left', () async {
