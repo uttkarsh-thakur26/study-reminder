@@ -59,12 +59,31 @@ void main() {
   });
 
   testWidgets('turning motion off stops a ring on its way', (tester) async {
-    await tester.pumpWidget(_ring(1));
+    // The same ring both times: only the setting above it changes.
+    const ring = FocusRing(
+      size: 200,
+      progress: 1,
+      color: Colors.indigo,
+      track: Colors.grey,
+      child: Text('24:59'),
+    );
+    Widget host({required bool reduce}) => MaterialApp(
+      home: Builder(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: reduce),
+          child: const Center(child: ring),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(host(reduce: false));
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.hasRunningAnimations, isTrue);
+    final state = tester.state(find.byType(FocusRing));
 
-    await tester.pumpWidget(_ring(1, reduce: true));
+    await tester.pumpWidget(host(reduce: true));
     await tester.pump();
+    expect(tester.state(find.byType(FocusRing)), same(state));
     expect(tester.hasRunningAnimations, isFalse);
   });
 
