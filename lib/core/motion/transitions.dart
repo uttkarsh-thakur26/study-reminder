@@ -91,18 +91,22 @@ class SlideSwitcher extends StatelessWidget {
       // and it has faded by half way, before the new one shows clearly.
       final incoming = child.key == this.child.key;
       final from = Offset(0, (up ? 1 : -1) * (incoming ? 0.5 : -0.5));
+      // Driven, not wrapped in a CurvedAnimation: this runs on every
+      // rebuild, and those would pile up on the animation.
       return FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: incoming ? const Interval(0.3, 1) : const Interval(0.5, 1),
+        opacity: animation.drive(
+          CurveTween(
+            curve: incoming ? const Interval(0.3, 1) : const Interval(0.5, 1),
+          ),
         ),
         child: SlideTransition(
-          position: Tween(begin: from, end: Offset.zero).animate(
-            CurvedAnimation(
-              parent: animation,
-              curve: incoming ? Motion.arrive : const Cubic(0, 0, 0.7, 1),
-            ),
-          ),
+          position: animation
+              .drive(
+                CurveTween(
+                  curve: incoming ? Motion.arrive : const Cubic(0, 0, 0.7, 1),
+                ),
+              )
+              .drive(Tween(begin: from, end: Offset.zero)),
           child: child,
         ),
       );

@@ -298,10 +298,11 @@ class _DayBar extends StatelessWidget {
               0.64 + 0.06 * index,
               curve: Motion.arrive,
             ),
-            builder: (context, height, _) => AnimatedContainer(
+            builder: (context, height, bar) =>
+                SizedBox(width: 22, height: height, child: bar),
+            // Only its colour changes on its own, as the goal is met.
+            child: AnimatedContainer(
               duration: Motion.of(context, Motion.enter),
-              width: 22,
-              height: height,
               decoration: BoxDecoration(
                 color: studied == Duration.zero
                     ? scheme.surfaceContainerHighest

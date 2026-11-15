@@ -63,12 +63,13 @@ class _FocusRingState extends State<FocusRing>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_shown) return;
-    _shown = true;
-    // The ring fills up to where the session is as it first shows.
     if (Motion.reduced(context)) {
+      // Also when motion is turned off while the ring is on its way.
+      _shown = true;
       _sweep.value = 1;
-    } else {
+    } else if (!_shown) {
+      // The ring fills up to where the session is as it first shows.
+      _shown = true;
       _sweep.forward();
     }
   }

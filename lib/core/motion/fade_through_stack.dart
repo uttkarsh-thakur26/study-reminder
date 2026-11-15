@@ -44,6 +44,12 @@ class _FadeThroughStackState extends State<FadeThroughStack>
   /// The page being left, while it is still fading out.
   int? _from;
 
+  /// How far in the page being left had come when it was left: all the
+  /// way, unless another change cut its arrival short.
+  double _fromIn = 1;
+
+  static double _scale(double shown) => 0.94 + 0.06 * shown;
+
   @override
   void didUpdateWidget(FadeThroughStack old) {
     super.didUpdateWidget(old);
@@ -51,8 +57,13 @@ class _FadeThroughStackState extends State<FadeThroughStack>
     if (Motion.reduced(context)) {
       _from = null;
       _controller.value = 1;
+    } else if (_controller.value < _handover) {
+      // A page is still on its way out, and the one asked for before has
+      // not shown yet: the newest takes its place when the old has gone.
     } else {
+      // The page being left goes from where it is, even part way in.
       _from = old.index;
+      _fromIn = _in.value;
       _controller.forward(from: 0);
     }
   }
@@ -79,8 +90,8 @@ class _FadeThroughStackState extends State<FadeThroughStack>
               // Until the old page is gone, the new one waits unseen.
               shown: i == leaving || (i == widget.index && leaving == null),
               current: i == widget.index,
-              opacity: i == leaving ? 1 - _out.value : _in.value,
-              scale: i == leaving ? 1 : 0.94 + 0.06 * _in.value,
+              opacity: i == leaving ? _fromIn * (1 - _out.value) : _in.value,
+              scale: i == leaving ? _scale(_fromIn) : _scale(_in.value),
               child: page,
             ),
         ],

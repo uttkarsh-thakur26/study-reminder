@@ -58,6 +58,16 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('turning motion off stops a ring on its way', (tester) async {
+    await tester.pumpWidget(_ring(1));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    await tester.pumpWidget(_ring(1, reduce: true));
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isFalse);
+  });
+
   testWidgets('nothing moves with reduced motion', (tester) async {
     await tester.pumpWidget(_ring(0.01, phase: 1, reduce: true));
     await tester.pump();

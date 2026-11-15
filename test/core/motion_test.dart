@@ -186,6 +186,57 @@ void main() {
       expect(find.text('first 0'), findsOneWidget);
     });
 
+    testWidgets('a change while one leaves waits for it, then shows', (
+      tester,
+    ) async {
+      Widget three(int index) => _host(
+        FadeThroughStack(
+          index: index,
+          children: const [
+            _Counter('first'),
+            _Counter('second'),
+            _Counter('third'),
+          ],
+        ),
+      );
+      await tester.pumpWidget(three(0));
+      await tester.pumpWidget(three(1));
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pumpWidget(three(2));
+      // The first is still the one leaving, and the second never shows.
+      expect(find.text('first 0'), findsOneWidget);
+      expect(find.text('second 0'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.text('first 0'), findsNothing);
+      expect(find.text('second 0'), findsNothing);
+      expect(find.text('third 0'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.text('third 0'), findsOneWidget);
+    });
+
+    testWidgets('a page left part way in leaves from where it was', (
+      tester,
+    ) async {
+      double opacity(String text) => tester
+          .widget<Opacity>(
+            find.ancestor(of: find.text(text), matching: find.byType(Opacity)),
+          )
+          .opacity;
+
+      await tester.pumpWidget(_pages(0));
+      await tester.pumpWidget(_pages(1));
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump(const Duration(milliseconds: 80));
+      final partWay = opacity('second 0');
+      expect(partWay, allOf(greaterThan(0), lessThan(1)));
+
+      await tester.pumpWidget(_pages(0));
+      expect(opacity('second 0'), partWay, reason: 'no jump to full');
+      await tester.pumpAndSettle();
+      expect(find.text('first 0'), findsOneWidget);
+      expect(find.text('second 0'), findsNothing);
+    });
+
     testWidgets('switch at once with reduced motion', (tester) async {
       await tester.pumpWidget(_pages(0, reduce: true));
       await tester.pumpWidget(_pages(1, reduce: true));
