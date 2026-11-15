@@ -190,11 +190,16 @@ Future<bool> mayQuitDuringFocus(
     ),
   );
   if (quit != true) return false;
+  // As it is now: it may have been resumed, paused or given more time from
+  // the phone while the question was up.
+  final latest = (await ref.read(focusRepositoryProvider).current()).laptop;
+  final at = DateTime.now();
+  if (!latest.strict || !(latest.held || latest.runningAt(at))) return true;
   await ref.read(syncServiceProvider)?.tellOthers({
     'kind': 'left',
     'device': ref.read(deviceNameProvider),
     // Paused, it has its time left from whenever it carries on: from now.
-    'endsAt': (held ? DateTime.now().add(session.pausedLeft) : session.endsAt!)
+    'endsAt': (latest.held ? at.add(latest.pausedLeft) : latest.endsAt!)
         .millisecondsSinceEpoch,
   });
   return true;

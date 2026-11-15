@@ -97,7 +97,16 @@ class FocusService : Service() {
     }
 
     private fun check() {
-        val s = state ?: return
+        var s = state ?: return
+        if (s.isOver()) {
+            // Paused or given more time a moment ago, and the news has not
+            // reached this service yet: the saved session is the one to keep.
+            val saved = FocusState.load(this)
+            if (saved != null && !saved.isOver()) {
+                state = saved
+                s = saved
+            }
+        }
         if (s.isOver()) {
             handler.removeCallbacks(tick)
             FocusController.finish(this, done = true)
