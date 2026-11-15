@@ -22,23 +22,19 @@ class FadeThroughSwitcher extends StatelessWidget {
   /// Whether to animate the room taken. Not needed where both are one size.
   final bool resize;
 
+  /// The share of the time the old content takes to leave.
+  static const _handover = 0.3;
+
   @override
   Widget build(BuildContext context) {
     final switcher = AnimatedSwitcher(
       duration: Motion.of(context, Motion.enter),
-      reverseDuration: Motion.of(context, Motion.fast),
-      switchInCurve: const Interval(0.3, 1, curve: Motion.arrive),
+      // The old is gone by the time the new starts to show.
+      reverseDuration: Motion.of(context, Motion.enter * _handover),
+      switchInCurve: const Interval(_handover, 1, curve: Motion.arrive),
       switchOutCurve: Motion.leave.flipped,
-      layoutBuilder: (current, previous) => Stack(
-        alignment: alignment,
-        clipBehavior: Clip.none,
-        children: [
-          // What leaves does not hold the old size open.
-          for (final child in previous)
-            Positioned(left: 0, right: 0, top: 0, child: child),
-          ?current,
-        ],
-      ),
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: alignment, children: [...previous, ?current]),
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
         child: ScaleTransition(
@@ -49,13 +45,31 @@ class FadeThroughSwitcher extends StatelessWidget {
       child: child,
     );
     if (!resize) return switcher;
-    return AnimatedSize(
-      duration: Motion.of(context, Motion.enter),
-      curve: Motion.change,
-      alignment: alignment,
-      child: switcher,
-    );
+    return SizeChange(alignment: alignment, child: switcher);
   }
+}
+
+/// Changes the room its [child] takes smoothly as the child changes size.
+class SizeChange extends StatelessWidget {
+  const SizeChange({
+    super.key,
+    required this.child,
+    this.alignment = Alignment.topCenter,
+  });
+
+  final Widget child;
+  final AlignmentGeometry alignment;
+
+  @override
+  Widget build(BuildContext context) => Motion.reduced(context)
+      // Left out whole: an AnimatedSize cannot take no time at all.
+      ? child
+      : AnimatedSize(
+          duration: Motion.enter,
+          curve: Motion.change,
+          alignment: alignment,
+          child: child,
+        );
 }
 
 /// A short text or icon that changes in place: the old slides out one way
@@ -72,16 +86,23 @@ class SlideSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
     duration: Motion.of(context, Motion.exit),
-    switchInCurve: Motion.arrive,
-    switchOutCurve: Motion.leave.flipped,
     transitionBuilder: (child, animation) {
-      // The one on its way out runs backwards, so it mirrors the way in.
+      // The one on its way out runs backwards, so it mirrors the way in,
+      // and it has faded by half way, before the new one shows clearly.
       final incoming = child.key == this.child.key;
-      final from = Offset(0, (up ? 1 : -1) * (incoming ? 0.4 : -0.4));
+      final from = Offset(0, (up ? 1 : -1) * (incoming ? 0.5 : -0.5));
       return FadeTransition(
-        opacity: animation,
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: incoming ? const Interval(0.3, 1) : const Interval(0.5, 1),
+        ),
         child: SlideTransition(
-          position: Tween(begin: from, end: Offset.zero).animate(animation),
+          position: Tween(begin: from, end: Offset.zero).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: incoming ? Motion.arrive : const Cubic(0, 0, 0.7, 1),
+            ),
+          ),
           child: child,
         ),
       );

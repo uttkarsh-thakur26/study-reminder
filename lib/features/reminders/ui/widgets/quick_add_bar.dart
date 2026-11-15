@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/providers.dart';
+import '../../../../core/motion/transitions.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/time/calendar_date.dart';
 import '../../../../core/ui/formatters.dart';
@@ -210,10 +211,7 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
             ),
           ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          alignment: Alignment.topCenter,
+        SizeChange(
           child: chips.isEmpty
               ? const SizedBox(width: double.infinity)
               : Padding(

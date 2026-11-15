@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app/providers.dart';
+import '../core/motion/motion.dart';
+import '../core/motion/transitions.dart';
 import '../core/theme/app_theme.dart';
 import '../features/focus/application/focus_providers.dart';
 import '../features/focus/domain/focus_session.dart';
@@ -145,7 +147,9 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
           padding: const EdgeInsets.fromLTRB(Gap.l, Gap.m, Gap.s, Gap.m),
           child: Row(
             children: [
-              Container(
+              AnimatedContainer(
+                duration: Motion.of(context, Motion.enter),
+                curve: Motion.change,
                 width: 6,
                 height: 64,
                 decoration: BoxDecoration(
@@ -166,12 +170,21 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    // A new round, a break or a pause slides its line in.
+                    ClipRect(
+                      child: SlideSwitcher(
+                        child: Align(
+                          key: ValueKey(label),
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],

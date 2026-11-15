@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/formatters.dart';
 import '../../reminders/application/reminder_providers.dart';
@@ -69,10 +72,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen> {
             child: Column(
               children: [
                 const Spacer(),
-                Icon(
-                  Icons.alarm_rounded,
-                  size: 48,
-                  color: scheme.onPrimaryContainer,
+                _Ringing(
+                  child: Icon(
+                    Icons.alarm_rounded,
+                    size: 48,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
                 const SizedBox(height: Gap.l),
                 Text(
@@ -142,4 +147,59 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen> {
       ),
     );
   }
+}
+
+/// Shakes the alarm's icon the way a ringing clock shakes: a short burst,
+/// a rest, and again, for as long as it rings. It holds still with reduced
+/// motion.
+class _Ringing extends StatefulWidget {
+  const _Ringing({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Ringing> createState() => _RingingState();
+}
+
+class _RingingState extends State<_Ringing>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (Motion.reduced(context)) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Four swings that die away over the first half, then stillness.
+  static double _angle(double t) {
+    if (t >= 0.5) return 0;
+    final burst = t / 0.5;
+    return 0.22 * sin(burst * 8 * pi) * (1 - burst);
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, child) => Transform.rotate(
+      angle: _angle(_controller.value),
+      alignment: Alignment.bottomCenter,
+      child: child,
+    ),
+    child: widget.child,
+  );
 }

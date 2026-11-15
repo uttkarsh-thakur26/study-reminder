@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/formatters.dart';
@@ -230,6 +231,7 @@ class _WeekBars extends StatelessWidget {
                         ? 0
                         : _barMax * stats.days[i].inSeconds / top.inSeconds,
                     today: today,
+                    index: i,
                   ),
                 ),
             ],
@@ -247,6 +249,7 @@ class _DayBar extends StatelessWidget {
     required this.goal,
     required this.height,
     required this.today,
+    required this.index,
   });
 
   final DateTime day;
@@ -254,6 +257,9 @@ class _DayBar extends StatelessWidget {
   final Duration goal;
   final double height;
   final DateTime today;
+
+  /// Its place in the week. The bars rise one after the other.
+  final int index;
 
   @override
   Widget build(BuildContext context) {
@@ -279,18 +285,31 @@ class _DayBar extends StatelessWidget {
                 ),
               ),
             ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            width: 22,
-            height: studied > Duration.zero ? height.clamp(4.0, 200.0) : 4,
-            decoration: BoxDecoration(
-              color: studied == Duration.zero
-                  ? scheme.surfaceContainerHighest
-                  : met
-                  ? scheme.primary
-                  : scheme.primary.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(6),
+          // The bar rises from the floor when the page first shows, and
+          // grows from where it is as time is added.
+          TweenAnimationBuilder<double>(
+            tween: Tween(
+              begin: 4,
+              end: studied > Duration.zero ? height.clamp(4.0, 200.0) : 4,
+            ),
+            duration: Motion.of(context, Motion.slow * 1.4),
+            curve: Interval(
+              0.06 * index,
+              0.64 + 0.06 * index,
+              curve: Motion.arrive,
+            ),
+            builder: (context, height, _) => AnimatedContainer(
+              duration: Motion.of(context, Motion.enter),
+              width: 22,
+              height: height,
+              decoration: BoxDecoration(
+                color: studied == Duration.zero
+                    ? scheme.surfaceContainerHighest
+                    : met
+                    ? scheme.primary
+                    : scheme.primary.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(6),
+              ),
             ),
           ),
           const SizedBox(height: Gap.xs),

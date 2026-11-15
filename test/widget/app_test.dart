@@ -8,6 +8,7 @@ import 'package:study_reminder/app/providers.dart';
 import 'package:study_reminder/core/db/app_database.dart';
 import 'package:study_reminder/core/sync/hlc.dart';
 import 'package:study_reminder/features/reminders/domain/occurrence.dart';
+import 'package:study_reminder/features/settings/settings_controller.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -140,6 +141,32 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.text('Accent colour'), findsOneWidget);
+    await tearDownApp(tester);
+  });
+
+  testWidgets('pages fade through, and switch at once with Reduce motion', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(1280, 800));
+    await tester.tap(find.text('Settings'));
+    await tester.pump();
+    // The page being left is still the one showing.
+    expect(find.text('Accent colour'), findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.text('Accent colour'), findsOneWidget);
+
+    await tester.tap(find.text('Reduce motion'));
+    await tester.pumpAndSettle();
+    final saved = await real(
+      tester,
+      () => db.readSetting(SettingKeys.reduceMotion),
+    );
+    expect(saved, 'true');
+
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.text('Accent colour'), findsNothing);
+    expect(find.text('Start focus'), findsOneWidget);
     await tearDownApp(tester);
   });
 

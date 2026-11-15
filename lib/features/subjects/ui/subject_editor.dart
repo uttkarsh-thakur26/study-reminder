@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../reminders/application/reminder_providers.dart';
 import '../domain/subject.dart';
@@ -138,7 +139,8 @@ class _Swatch extends StatelessWidget {
         onTap: onTap,
         radius: 24,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: Motion.of(context, Motion.fast),
+          curve: Motion.change,
           width: 36,
           height: 36,
           decoration: BoxDecoration(
