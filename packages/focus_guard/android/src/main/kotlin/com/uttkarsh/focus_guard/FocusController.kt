@@ -9,9 +9,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import java.util.Date
 
@@ -20,12 +23,16 @@ import java.util.Date
  * service, the alarms that end the session and its rounds on time, and the
  * notifications. Every entry point (Dart, the alarms, the boot receiver)
  * goes through here. During a break between rounds nothing is blocked and
- * Do Not Disturb is off.
+ * Do Not Disturb is off. A strict session that is paused keeps blocking,
+ * with no alarms set, until the app resumes it. A session that runs out
+ * ends with an alarm that rings until it is stopped.
  */
 object FocusController {
     private const val TAG = "FocusGuard"
     private const val SESSION_CHANNEL = "focus_guard_session"
     private const val DONE_CHANNEL = "focus_guard_done"
+    /** Rings on the alarm volume until answered, like an alarm clock. */
+    private const val FINISHED_CHANNEL = "focus_guard_finished"
     private const val ALERT_CHANNEL = "focus_guard_alert"
     /** Silent: the chime plays on the alarm volume instead. */
     private const val PHASE_CHANNEL = "focus_guard_break"
@@ -35,6 +42,17 @@ object FocusController {
     private const val STOPPED_NOTIFICATION = 7303
     const val LEFT_NOTIFICATION = 7304
     private const val PHASE_NOTIFICATION = 7305
+    private const val FINISHED_NOTIFICATION = 7306
+
+    /** How long the alarm at the end of a session rings if left alone. */
+    private const val RING_MS = 60 * 1000L
+
+    /**
+     * A session found over this long after its end (the phone was off, say)
+     * ends with a quiet note, not the alarm.
+     */
+    private const val RING_LATE_MS = 2 * 60 * 1000L
+    const val EXTRA_MINUTES = "minutes"
 
     /** How long the chime plays as a break or round begins. */
     private const val CHIME_MS = 4000L
@@ -53,6 +71,8 @@ object FocusController {
     const val ACTION_END = "com.uttkarsh.focus_guard.END"
     const val ACTION_START = "com.uttkarsh.focus_guard.START"
     const val ACTION_PHASE = "com.uttkarsh.focus_guard.PHASE"
+    const val ACTION_RING_STOP = "com.uttkarsh.focus_guard.RING_STOP"
+    const val ACTION_RING_END = "com.uttkarsh.focus_guard.RING_END"
 
     private const val WIDGET_REFRESH = "com.uttkarsh.study_widget.REFRESH"
     private const val WIDGET_PROVIDER = "com.uttkarsh.study_widget.StudyWidgetProvider"
@@ -108,6 +128,19 @@ object FocusController {
             return
         }
         FocusState.save(context, state)
+        // The alarm of the session before this one has been heard.
+        stopRing(context)
+        if (state.held) {
+            // Paused: the clock stands still, so nothing is due. The service
+            // goes on blocking and shows that it is paused.
+            applyQuiet(context, state.quiet)
+            cancelAlarm(context, ACTION_END)
+            cancelAlarm(context, ACTION_PHASE)
+            notifications(context).cancel(PHASE_NOTIFICATION)
+            startService(context, state, retry = true)
+            tellWidget(context, 0L)
+            return
+        }
         val phase = state.phaseAt()
         applyQuiet(context, state.quiet && !phase.onBreak)
         scheduleAlarm(context, ACTION_END, state.endsAt)
@@ -125,7 +158,8 @@ object FocusController {
     @Synchronized
     fun phaseChanged(context: Context, done: () -> Unit = {}) {
         val state = FocusState.load(context)
-        if (state == null) {
+        // Paused meanwhile: an alarm left from before.
+        if (state == null || state.held) {
             done()
             return
         }
@@ -156,7 +190,7 @@ object FocusController {
             if (quiet) {
                 synchronized(this) {
                     val current = FocusState.load(context)
-                    if (current != null && !current.isOver() && !current.phaseAt().onBreak) {
+                    if (current != null && !current.isOver() && current.enforcesAt()) {
                         applyQuiet(context, current.quiet)
                     }
                 }
@@ -181,7 +215,10 @@ object FocusController {
         if (state.isOver()) finish(context, done = true) else start(context, state)
     }
 
-    /** Ends the session. [done] posts "Focus done", for a session that ran out. */
+    /**
+     * Ends the session. [done] is for a session that ran out: the alarm
+     * rings to say the focus time is finished.
+     */
     @Synchronized
     fun finish(context: Context, done: Boolean) {
         val state = FocusState.load(context)
@@ -273,6 +310,8 @@ object FocusController {
             when (action) {
                 ACTION_END -> 1
                 ACTION_START -> 2
+                ACTION_RING_STOP -> 6
+                ACTION_RING_END -> 7
                 else -> 5
             },
             Intent(context, FocusReceiver::class.java).setAction(action),
@@ -316,8 +355,24 @@ object FocusController {
                 .apply { description = "Shows while a focus session runs" },
         )
         nm.createNotificationChannel(
-            NotificationChannel(DONE_CHANNEL, "Focus finished", NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = "When a focus session ends" },
+            NotificationChannel(DONE_CHANNEL, "Focus finished, after the alarm", NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = "Left in place of the alarm once it has stopped ringing" },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(FINISHED_CHANNEL, "Focus finished alarm", NotificationManager.IMPORTANCE_HIGH)
+                .apply {
+                    description = "Rings when your focus time is finished, until you stop it"
+                    setSound(
+                        alarmSound(context),
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    )
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0L, 600L, 400L, 600L, 400L, 600L, 1200L)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                },
         )
         nm.createNotificationChannel(
             NotificationChannel(ALERT_CHANNEL, "Focus alerts", NotificationManager.IMPORTANCE_HIGH)
@@ -357,6 +412,7 @@ object FocusController {
      */
     fun sessionNotification(context: Context, state: FocusState): Notification {
         ensureChannels(context)
+        if (state.held) return heldNotification(context, state)
         val phase = state.phaseAt()
         val text = buildString {
             when {
@@ -392,11 +448,34 @@ object FocusController {
             .build()
     }
 
+    /** While a strict session is paused: no countdown, and how to go on. */
+    private fun heldNotification(context: Context, state: FocusState): Notification {
+        val left = ((state.heldLeftMs() + 59_999L) / 60000).coerceAtLeast(1)
+        return Notification.Builder(context, SESSION_CHANNEL)
+            .setSmallIcon(R.drawable.focus_guard_stat)
+            .setContentTitle(
+                if (state.blockApps) "Focus paused · distractions stay blocked" else "Focus paused",
+            )
+            .setContentText("$left min left. Open the app to resume.")
+            .setShowWhen(false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setContentIntent(openApp(context))
+            .build()
+    }
+
     private fun waitingNotification(context: Context, state: FocusState): Notification {
         ensureChannels(context)
         return Notification.Builder(context, SESSION_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
-            .setContentTitle("Focus is on until ${clock(context, state.endsAt)}")
+            .setContentTitle(
+                if (state.held) {
+                    "Focus is paused"
+                } else {
+                    "Focus is on until ${clock(context, state.endsAt)}"
+                },
+            )
             .setContentText("Tap to start blocking apps on this phone.")
             .setOngoing(true)
             .setContentIntent(openApp(context))
@@ -443,18 +522,125 @@ object FocusController {
         notifications(context).notify(PHASE_NOTIFICATION, notification)
     }
 
+    /**
+     * The session ran out. The alarm rings, unless that was a while ago:
+     * then a quiet note says so.
+     */
     private fun postDone(context: Context, state: FocusState) {
-        ensureChannels(context)
         val minutes = (state.focusedMs() / 60000).coerceAtLeast(1)
-        val notification = Notification.Builder(context, DONE_CHANNEL)
+        if (System.currentTimeMillis() - state.endsAt > RING_LATE_MS) {
+            postFinishedNote(context, minutes, silent = false)
+        } else {
+            ring(context, minutes)
+        }
+    }
+
+    /** A sample of how a session ends. */
+    fun testDone(context: Context) = ring(context, 0L)
+
+    /**
+     * "Focus time is finished", ringing like an alarm clock: the alarm sound
+     * on the alarm volume, over and over, with vibration, until the user
+     * stops it, opens it, swipes it away or pulls the notifications down.
+     * Android plays it, so it rings on with the app closed. Left alone it
+     * stops after [RING_MS] and a quiet note takes its place.
+     */
+    private fun ring(context: Context, minutes: Long) {
+        ensureChannels(context)
+        val nm = notifications(context)
+        nm.cancel(FINISHED_NOTIFICATION)
+        val stop = alarmIntent(context, ACTION_RING_STOP)
+        val notification = Notification.Builder(context, FINISHED_CHANNEL)
             .setSmallIcon(R.drawable.focus_guard_stat)
-            .setContentTitle("Focus done")
-            .setContentText("$minutes minutes of focus. Nice work.")
+            .setContentTitle("Focus time is finished")
+            .setContentText(
+                if (minutes > 0L) {
+                    "$minutes minutes of focus. Nice work."
+                } else {
+                    "This is how a focus session ends. It rings until you stop it."
+                },
+            )
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(openApp(context))
+            .setDeleteIntent(stop)
+            .addAction(Notification.Action.Builder(null as Icon?, "Stop", stop).build())
             .build()
-        notifications(context).notify(DONE_NOTIFICATION, notification)
+        notification.flags = notification.flags or Notification.FLAG_INSISTENT
+        nm.notify(DONE_NOTIFICATION, notification)
+        val alarms = context.getSystemService(AlarmManager::class.java)
+        val end = PendingIntent.getBroadcast(
+            context,
+            7,
+            Intent(context, FocusReceiver::class.java)
+                .setAction(ACTION_RING_END)
+                .putExtra(EXTRA_MINUTES, minutes),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val at = System.currentTimeMillis() + RING_MS
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarms.canScheduleExactAlarms()) {
+                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
+            } else {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
+            }
+        } catch (e: SecurityException) {
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, end)
+        }
     }
+
+    /** The user answered the alarm, or a new session began: it stops. */
+    fun stopRing(context: Context) {
+        notifications(context).cancel(DONE_NOTIFICATION)
+        cancelAlarm(context, ACTION_RING_END)
+    }
+
+    /**
+     * The alarm rang for [RING_MS] with no answer: it stops, and a quiet
+     * note stays to say the session ended.
+     */
+    fun ringEnded(context: Context, minutes: Long) {
+        val nm = notifications(context)
+        val ringing = try {
+            nm.activeNotifications.any { it.id == DONE_NOTIFICATION }
+        } catch (e: RuntimeException) {
+            true
+        }
+        if (!ringing) return
+        nm.cancel(DONE_NOTIFICATION)
+        postFinishedNote(context, minutes, silent = true)
+    }
+
+    private fun postFinishedNote(context: Context, minutes: Long, silent: Boolean) {
+        ensureChannels(context)
+        val builder = Notification.Builder(context, DONE_CHANNEL)
+            .setSmallIcon(R.drawable.focus_guard_stat)
+            .setContentTitle("Focus time is finished")
+            .setContentText(
+                if (minutes > 0L) "$minutes minutes of focus. Nice work." else "The test alarm stopped by itself.",
+            )
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+        // In a group that alerts through its summary only, and has none:
+        // posted without a sound, right after the alarm.
+        if (silent) {
+            builder.setGroup("focus_guard_finished")
+                .setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
+        }
+        notifications(context).notify(FINISHED_NOTIFICATION, builder.build())
+    }
+
+    /**
+     * The alarm sound, as the setting that follows the user's choice. A
+     * phone with none set rings with its ringtone instead.
+     */
+    private fun alarmSound(context: Context) =
+        if (RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM) != null) {
+            Settings.System.DEFAULT_ALARM_ALERT_URI
+        } else {
+            Settings.System.DEFAULT_RINGTONE_URI
+        }
 
     /**
      * Tells the user that Focus mode quit on [device] while its strict

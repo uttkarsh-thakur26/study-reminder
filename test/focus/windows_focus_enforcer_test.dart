@@ -114,6 +114,36 @@ void main() {
   });
   tearDown(() => enforcer.dispose());
 
+  test('a strict session that is paused keeps blocking', () async {
+    final paused = FocusSession(
+      startedAt: now,
+      endsAt: now.add(const Duration(minutes: 25)),
+      target: FocusTarget.laptop,
+      strict: true,
+      pausedAt: now.add(const Duration(minutes: 5)),
+    );
+    // Well past its planned end: paused, it has none.
+    now = now.add(const Duration(hours: 2));
+    await enforcer.apply(paused, prefs);
+    expect(enforcer.watching, isTrue);
+    windows.front = const DesktopWindow(2, r'C:\Steam\steam.exe', 'Steam');
+    enforcer.check();
+    expect(windows.actions, ['close 2']);
+    expect(enforcer.watching, isTrue);
+
+    // A plain pause, or a strict one for the phone only, blocks nothing.
+    await enforcer.apply(
+      FocusSession(
+        startedAt: paused.startedAt,
+        endsAt: paused.endsAt,
+        target: FocusTarget.laptop,
+        pausedAt: paused.pausedAt,
+      ),
+      prefs,
+    );
+    expect(enforcer.watching, isFalse);
+  });
+
   test('closes a blocked tab and minimises a blocked program', () async {
     await enforcer.apply(session(), prefs);
     expect(enforcer.watching, isTrue);

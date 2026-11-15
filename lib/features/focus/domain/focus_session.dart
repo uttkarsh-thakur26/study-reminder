@@ -65,6 +65,7 @@ class FocusSession {
   final bool quiet;
 
   /// No stopping early, and blocked laptop apps are closed, not minimised.
+  /// It can be paused, but then keeps blocking: see [held].
   final bool strict;
 
   /// The name of the device it was started on.
@@ -118,6 +119,16 @@ class FocusSession {
   Duration get pausedLeft =>
       isPaused ? endsAt!.difference(pausedAt!) : Duration.zero;
 
+  /// A strict session, paused: its clock stands still, and what it blocks
+  /// stays blocked until it is resumed and runs to its end.
+  bool get held => isPaused && strict;
+
+  bool heldOn(DeviceKind kind) => held && target.includes(kind);
+
+  /// Ran to its end by [now], rather than stopped or paused before it.
+  bool ranOutAt(DateTime now) =>
+      active && endsAt != null && !now.isBefore(endsAt!);
+
   bool runningAt(DateTime now) =>
       active && endsAt != null && now.isBefore(endsAt!);
 
@@ -152,9 +163,19 @@ class FocusSession {
   bool onBreakAt(DateTime now) => phaseAt(now)?.onBreak ?? false;
 
   /// Whether [kind] should be blocking and quiet at [now]: the session runs
-  /// there and is not on a break.
+  /// there and is not on a break, or it is a strict one paused there.
   bool enforcesOn(DeviceKind kind, DateTime now) =>
-      runsOn(kind, now) && !onBreakAt(now);
+      heldOn(kind) || runsOn(kind, now) && !onBreakAt(now);
+
+  /// The working time of the whole session, breaks left out and a part
+  /// before a pause included. Only for a session with a start and an end.
+  Duration get focusedInAll => FocusPlan(
+    start: startedAt!.subtract(Duration(milliseconds: doneMs)),
+    end: endsAt!,
+    work: Duration(minutes: workMinutes),
+    rest: Duration(minutes: breakMinutes),
+    rounds: rounds,
+  ).focused;
 
   /// When the next round or break begins, or the session ends. Null when
   /// it is not running.

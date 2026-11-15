@@ -16,11 +16,25 @@ import '../domain/focus_prefs.dart';
 import '../domain/focus_session.dart';
 import 'study_player.dart';
 
+/// Whether [session], which ran here as [before] when last looked at, has
+/// run to its end since, and not long ago: the moment to ring. False when
+/// it was stopped, paused or replaced instead.
+bool focusRanOut({
+  required FocusSession? before,
+  required FocusSession session,
+  required DateTime now,
+  Duration within = const Duration(minutes: 2),
+}) =>
+    before != null &&
+    before.startedAt == session.startedAt &&
+    session.ranOutAt(now) &&
+    now.difference(session.endsAt!) <= within;
+
 /// Keeps this device following its focus session while the app runs:
 /// applies it whenever it or the block lists change (also when another
 /// device started it), again as each round or break begins (with a note on
-/// the laptop; the phone posts its own), when it ends and when the app
-/// comes back, and
+/// the laptop; the phone posts its own), when it ends (with an alarm on the
+/// laptop; the phone rings its own) and when the app comes back, and
 /// starts one when the phone is put down screen first, if the user turned
 /// that on, or when they asked for one from the note that the laptop quit a
 /// strict session.
@@ -46,6 +60,9 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
   /// The phase last applied and the start of its session, to tell the user
   /// when the next one begins.
   ({DateTime session, FocusPhase phase})? _phase;
+
+  /// The session running here when last applied, to ring when it runs out.
+  FocusSession? _running;
   bool _foreground = true;
   bool _askedAtStart = false;
   Future<void> _applying = Future.value();
@@ -106,6 +123,7 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
     if (session == null || prefs == null) return;
     _scheduleNext(session);
     _notePhase(session);
+    _noteEnd(session);
     _updateFlip();
     final enforcer = ref.read(focusEnforcerProvider);
     _applying = _applying.then((_) async {
@@ -159,6 +177,38 @@ class _FocusCoordinatorState extends ConsumerState<FocusCoordinator> {
               : 'Round ${phase.round} of ${phase.rounds}, until $at.',
         )
         .catchError((Object e) => debugPrint('focus: phase note failed: $e'));
+  }
+
+  /// "Focus time is finished" on the laptop as its session runs out, as an
+  /// alarm that rings until it is stopped. Not for one stopped or paused,
+  /// and not long after the end (the laptop slept through it). The phone
+  /// rings its own, even with the app closed.
+  void _noteEnd(FocusSession session) {
+    final now = DateTime.now();
+    final before = _running;
+    final runs = session.runsOn(ref.read(deviceKindProvider), now);
+    _running = runs ? session : null;
+    if (ref.read(focusGuardProvider) != null) return;
+    final notifications = ref.read(localNotificationsProvider);
+    if (runs) {
+      // A new session, or more time: the last one's alarm has been heard.
+      if (before == null || before.startedAt != session.startedAt) {
+        notifications?.dismissFocusDone().catchError(
+          (Object e) => debugPrint('focus: alarm not cleared: $e'),
+        );
+      }
+      return;
+    }
+    if (!focusRanOut(before: before, session: session, now: now)) return;
+    final minutes = session.focusedInAll.inMinutes;
+    notifications
+        ?.showFocusDone(
+          title: 'Focus time is finished',
+          body:
+              '${minutes < 1 ? 1 : minutes} '
+              '${minutes > 1 ? 'minutes' : 'minute'} of focus. Nice work.',
+        )
+        .catchError((Object e) => debugPrint('focus: end alarm failed: $e'));
   }
 
   /// Listens for the phone going face down only while that could start a

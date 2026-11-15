@@ -24,10 +24,16 @@ class BlockActivity : Activity() {
     private lateinit var detail: TextView
     private var endsAt = 0L
     private var breakNext = false
+    private var paused = false
 
     private val tick = object : Runnable {
         override fun run() {
-            if (System.currentTimeMillis() >= endsAt || !FocusController.isRunning(this@BlockActivity)) {
+            val state = FocusState.load(this@BlockActivity)
+            // Gone too when the session was paused or resumed meanwhile: the
+            // session service covers the app again, with the right words.
+            if (state == null || state.isOver() || state.held != paused ||
+                (!paused && System.currentTimeMillis() >= endsAt)
+            ) {
                 finish()
                 return
             }
@@ -74,6 +80,7 @@ class BlockActivity : Activity() {
     private fun bind(intent: Intent) {
         endsAt = intent.getLongExtra(EXTRA_ENDS_AT, 0)
         breakNext = intent.getBooleanExtra(EXTRA_BREAK_NEXT, false)
+        paused = intent.getBooleanExtra(EXTRA_PAUSED, false)
         val app = intent.getStringExtra(EXTRA_APP) ?: "This app"
         heading.text = "$app is blocked"
         detail.text = detailText()
@@ -82,6 +89,10 @@ class BlockActivity : Activity() {
     }
 
     private fun detailText(): String {
+        if (paused) {
+            return "Your strict focus session is paused, and this stays blocked until the " +
+                "session ends. Resume it in Study Reminder to finish it."
+        }
         val left = ((endsAt - System.currentTimeMillis()) / 60000 + 1).coerceAtLeast(1)
         val at = android.text.format.DateFormat.getTimeFormat(this).format(Date(endsAt))
         if (breakNext) return "Your break starts at $at ($left min left). Stay with it until then."
@@ -181,6 +192,7 @@ class BlockActivity : Activity() {
         const val EXTRA_ENDS_AT = "endsAt"
         const val EXTRA_BREAK_NEXT = "breakNext"
         const val EXTRA_STRICT = "strict"
+        const val EXTRA_PAUSED = "paused"
         const val EXTRA_PACKAGE = "package"
 
         /** The app's page to open, given to Dart once. */

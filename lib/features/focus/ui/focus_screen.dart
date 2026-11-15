@@ -38,7 +38,8 @@ class FocusScreen extends ConsumerWidget {
     final hasGuard = ref.watch(focusGuardProvider) != null;
     final hasWindows = ref.watch(desktopWindowsProvider) != null;
     final here = sessions.of(ref.watch(deviceKindProvider));
-    final strictHere = here.strict && here.runningAt(DateTime.now());
+    final strictHere =
+        here.strict && (here.runningAt(DateTime.now()) || here.held);
 
     return SafeArea(
       bottom: false,
@@ -219,6 +220,8 @@ class _RunningSession extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final paused = session.isPaused;
+    // A strict one keeps blocking while it is paused, and cannot be ended.
+    final held = session.held;
     final phase =
         session.pausedPhase ??
         session.phaseAt(now) ??
@@ -307,7 +310,10 @@ class _RunningSession extends ConsumerWidget {
                         if (rounds) 'round ${phase.round} of ${phase.rounds}',
                         if (subject != null) subject.name,
                         if (!paused) 'until $until',
-                        if (session.strict) 'strict',
+                        if (held)
+                          'strict, still blocking'
+                        else if (session.strict)
+                          'strict',
                       ].join(' · '),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
@@ -323,7 +329,7 @@ class _RunningSession extends ConsumerWidget {
                   icon: const Icon(Icons.play_arrow_rounded),
                   tooltip: 'Resume on $where',
                 )
-              else if (!session.strict)
+              else
                 IconButton(
                   onPressed: () => repo.pause(on),
                   icon: const Icon(Icons.pause_rounded),
@@ -345,7 +351,7 @@ class _RunningSession extends ConsumerWidget {
                       title: Text('Change subject'),
                     ),
                   ),
-                  if (!session.strict || paused)
+                  if (!session.strict)
                     PopupMenuItem(
                       value: () => repo.stop(on),
                       child: ListTile(
@@ -413,7 +419,9 @@ class _RunningSession extends ConsumerWidget {
             Text(
               [
                 'On $where',
-                if (paused)
+                if (held)
+                  'still blocked until you resume and finish'
+                else if (paused)
                   'nothing is blocked until you resume'
                 else ...[
                   if (session.startedBy.isNotEmpty)
@@ -440,7 +448,7 @@ class _RunningSession extends ConsumerWidget {
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text('Resume'),
                   )
-                else if (!session.strict)
+                else
                   FilledButton.tonalIcon(
                     onPressed: () => repo.pause(on),
                     icon: const Icon(Icons.pause_rounded),
@@ -451,7 +459,7 @@ class _RunningSession extends ConsumerWidget {
                   icon: const Icon(Icons.more_time_rounded),
                   label: const Text('Time'),
                 ),
-                if (!session.strict || paused)
+                if (!session.strict)
                   OutlinedButton.icon(
                     onPressed: () => repo.stop(on),
                     icon: const Icon(Icons.stop_rounded),
@@ -466,10 +474,16 @@ class _RunningSession extends ConsumerWidget {
                   ),
               ],
             ),
-            if (session.strict && !paused) ...[
+            if (session.strict) ...[
               const SizedBox(height: Gap.s),
               Text(
-                'Strict session: it runs to the end, with no pausing.',
+                held
+                    ? 'Strict session: the clock is stopped, and what it '
+                          'blocks stays blocked. Resume and finish it to '
+                          'unblock.'
+                    : 'Strict session: it runs to the end. Pausing stops the '
+                          'clock, but what it blocks stays blocked.',
+                textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
@@ -772,7 +786,8 @@ class _StartForm extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             title: const Text('Strict'),
             subtitle: const Text(
-              'No stopping early, and blocked programs close',
+              'No stopping early, blocked programs close, and a pause keeps '
+              'blocking',
             ),
             value: prefs.strict,
             onChanged: (v) => save(prefs.copyWith(strict: v)),
@@ -819,6 +834,14 @@ class _StartForm extends ConsumerWidget {
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Start focus'),
           ),
+          if (on.contains(here))
+            Align(
+              child: TextButton.icon(
+                onPressed: () => unawaited(_testDone(context, ref)),
+                icon: const Icon(Icons.alarm_rounded, size: 18),
+                label: const Text('Test the finish alarm'),
+              ),
+            ),
         ],
       ),
     );
@@ -847,6 +870,29 @@ Future<void> _testBreak(BuildContext context, WidgetRef ref) async {
             body:
                 'This is how a break begins. Breaks between rounds start '
                 'like this.',
+          );
+    }
+  } on Object catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Could not test: $e')));
+  }
+}
+
+/// Rings the alarm that says a session is finished, as it will on this
+/// device, until the user stops it.
+Future<void> _testDone(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final guard = ref.read(focusGuardProvider);
+    if (guard != null) {
+      await guard.testDone();
+    } else {
+      await ref
+          .read(localNotificationsProvider)
+          ?.showFocusDone(
+            title: 'Focus time is finished',
+            body:
+                'This is how a focus session ends. It rings until you '
+                'stop it.',
           );
     }
   } on Object catch (e) {

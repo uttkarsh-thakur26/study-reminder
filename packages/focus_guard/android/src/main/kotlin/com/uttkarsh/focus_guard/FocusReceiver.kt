@@ -6,15 +6,16 @@ import android.content.Intent
 
 /**
  * The end-of-session alarm, the alarm between rounds and breaks, the retry
- * alarm, and restoring after a reboot.
+ * alarm, stopping the alarm that rings as a session ends, and restoring
+ * after a reboot.
  */
 class FocusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             FocusController.ACTION_END -> {
                 val state = FocusState.load(context) ?: return
-                // An alarm left from before the session was extended.
-                if (state.endsAt > System.currentTimeMillis() + 1000) return
+                // An alarm left from before the session was extended or paused.
+                if (state.held || state.endsAt > System.currentTimeMillis() + 1000) return
                 FocusController.finish(context, done = true)
             }
             FocusController.ACTION_PHASE -> {
@@ -22,6 +23,9 @@ class FocusReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 FocusController.phaseChanged(context) { pending.finish() }
             }
+            FocusController.ACTION_RING_STOP -> FocusController.stopRing(context)
+            FocusController.ACTION_RING_END ->
+                FocusController.ringEnded(context, intent.getLongExtra(FocusController.EXTRA_MINUTES, 0L))
             FocusController.ACTION_START -> {
                 val state = FocusState.load(context) ?: return
                 if (state.isOver()) {

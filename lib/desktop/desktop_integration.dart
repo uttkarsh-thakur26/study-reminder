@@ -158,10 +158,15 @@ Future<bool> mayQuitDuringFocus(
   String action = 'quit',
 }) async {
   final session = (await ref.read(focusRepositoryProvider).current()).laptop;
-  if (!session.strict || !session.runningAt(DateTime.now())) return true;
+  final now = DateTime.now();
+  // Paused, a strict session still blocks.
+  final held = session.held;
+  if (!session.strict || !(held || session.runningAt(now))) return true;
   await showFullWindow(ref.read(miniTimerProvider.notifier));
   if (!context.mounted) return false;
-  final until = formatTime(context, session.endsAt!.toLocal());
+  // Where it would end if it carried on now.
+  final end = held ? now.add(session.pausedLeft) : session.endsAt!;
+  final until = formatTime(context, end.toLocal());
   final verb = action[0].toUpperCase() + action.substring(1);
   final quit = await showDialog<bool>(
     context: context,
@@ -169,7 +174,9 @@ Future<bool> mayQuitDuringFocus(
       icon: const Icon(Icons.timer_rounded),
       title: const Text('Strict focus is on'),
       content: Text(
-        'It runs until $until. If you $action, this laptop stops blocking '
+        '${held ? 'It is paused, with '
+                  '${session.pausedLeft.inMinutes + 1} min left' : 'It runs until $until'}. '
+        'If you $action, this laptop stops blocking '
         'distractions and your phone is told.',
       ),
       actions: [
@@ -188,7 +195,7 @@ Future<bool> mayQuitDuringFocus(
   await ref.read(syncServiceProvider)?.tellOthers({
     'kind': 'left',
     'device': ref.read(deviceNameProvider),
-    'endsAt': session.endsAt!.millisecondsSinceEpoch,
+    'endsAt': end.millisecondsSinceEpoch,
   });
   return true;
 }

@@ -161,6 +161,10 @@ class FocusGuardPlugin :
                 FocusController.testPhase(context)
                 result.success(null)
             }
+            "testDone" -> {
+                FocusController.testDone(context)
+                result.success(null)
+            }
             "buzz" -> {
                 buzz()
                 result.success(null)
@@ -194,6 +198,7 @@ class FocusGuardPlugin :
         breakMs = ((m["breakMinutes"] as? Number)?.toLong() ?: 0L) * 60_000L,
         plannedRounds = ((m["rounds"] as? Number)?.toInt() ?: 1).coerceIn(1, 100),
         doneMs = ((m["doneMs"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
+        pausedAt = ((m["pausedAt"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
     )
 
     /** This phone's Firebase token, or null when there is none to be had. */

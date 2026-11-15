@@ -118,7 +118,9 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
             ? phase.endsAt.difference(session.pausedAt!)
             : session.pausedLeft,
       );
-      label = phase.rounds > 1
+      label = session.held
+          ? 'Paused · still blocking'
+          : phase.rounds > 1
           ? 'Paused · round ${phase.round} of ${phase.rounds}'
           : 'Paused';
     } else {
@@ -191,18 +193,13 @@ class _MiniTimerViewState extends ConsumerState<MiniTimerView> {
                       icon: const Icon(Icons.play_arrow_rounded, size: 20),
                       tooltip: 'Resume',
                     )
-                  else if (phase != null && !session.strict)
+                  else if (phase != null)
                     IconButton(
                       onPressed: () => repo.pause(on),
                       icon: const Icon(Icons.pause_rounded, size: 20),
-                      tooltip: 'Pause',
-                    )
-                  else if (phase != null)
-                    IconButton(
-                      onPressed: () =>
-                          repo.extend(on, const Duration(minutes: 5)),
-                      icon: const Icon(Icons.more_time_rounded, size: 20),
-                      tooltip: '5 minutes more',
+                      tooltip: session.strict
+                          ? 'Pause the clock (still blocking)'
+                          : 'Pause',
                     ),
                 ],
               ),

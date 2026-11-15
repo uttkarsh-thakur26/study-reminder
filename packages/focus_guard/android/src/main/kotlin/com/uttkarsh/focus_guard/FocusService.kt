@@ -34,7 +34,7 @@ class FocusService : Service() {
     private var wasOnBreak = false
     private val media by lazy {
         MediaGuard(this, handler) { app ->
-            state?.let { it.blockApps && !it.phaseAt().onBreak && isBlocked(it, app) } == true
+            state?.let { it.blockApps && it.enforcesAt() && isBlocked(it, app) } == true
         }
     }
 
@@ -106,8 +106,9 @@ class FocusService : Service() {
         }
         if (!s.blockApps) return
         // Nothing is blocked during a break. Once it ends, whatever blocked
-        // app is playing is paused again.
-        val onBreak = s.phaseAt().onBreak
+        // app is playing is paused again. A strict session that is paused
+        // keeps blocking, in a break too.
+        val onBreak = !s.enforcesAt()
         if (onBreak != wasOnBreak) {
             wasOnBreak = onBreak
             if (!onBreak) media.recheck()
@@ -139,7 +140,8 @@ class FocusService : Service() {
                 .putExtra(BlockActivity.EXTRA_PACKAGE, app)
                 .putExtra(BlockActivity.EXTRA_ENDS_AT, phase(s).endsAt)
                 .putExtra(BlockActivity.EXTRA_BREAK_NEXT, phase(s).round < phase(s).rounds)
-                .putExtra(BlockActivity.EXTRA_STRICT, s.strict),
+                .putExtra(BlockActivity.EXTRA_STRICT, s.strict)
+                .putExtra(BlockActivity.EXTRA_PAUSED, s.held),
         )
     }
 

@@ -23,8 +23,27 @@ data class FocusState(
     val plannedRounds: Int = 1,
     /** For a session resumed after a pause, how far into its plan it was. */
     val doneMs: Long = 0L,
+    /**
+     * When a strict session was paused; 0 while it runs. Paused, its clock
+     * stands still at this moment and it keeps blocking, with no end, until
+     * the app resumes it as a new session.
+     */
+    val pausedAt: Long = 0L,
 ) {
-    fun isOver(now: Long = System.currentTimeMillis()) = now >= endsAt
+    /** A strict session, paused: still blocking, and never over by itself. */
+    val held: Boolean
+        get() = pausedAt > 0L
+
+    fun isOver(now: Long = System.currentTimeMillis()) = !held && now >= endsAt
+
+    /**
+     * Whether blocked apps are kept closed and the phone quiet at [now]: in
+     * a round, not a break, and all the while a strict session is paused.
+     */
+    fun enforcesAt(now: Long = System.currentTimeMillis()) = held || !phaseAt(now).onBreak
+
+    /** The time a paused session has left. */
+    fun heldLeftMs(): Long = (endsAt - pausedAt).coerceAtLeast(0L)
 
     /** Where the session is at a moment. [round] counts from 1. */
     data class Phase(
@@ -49,7 +68,9 @@ data class FocusState(
     private val planStart: Long
         get() = startedAt - doneMs
 
-    fun phaseAt(now: Long = System.currentTimeMillis()): Phase {
+    fun phaseAt(at: Long = System.currentTimeMillis()): Phase {
+        // Paused, it stays in the round or break it was in.
+        val now = if (held) pausedAt else at
         val n = rounds()
         val start = planStart
         if (n == 1) return Phase(false, 1, 1, start, endsAt)
@@ -101,6 +122,7 @@ data class FocusState(
                 breakMs = p.getLong("breakMs", 0L),
                 plannedRounds = p.getInt("rounds", 1),
                 doneMs = p.getLong("doneMs", 0L),
+                pausedAt = p.getLong("pausedAt", 0L),
             )
         }
 
@@ -119,6 +141,7 @@ data class FocusState(
                 .putLong("breakMs", state.breakMs)
                 .putInt("rounds", state.plannedRounds)
                 .putLong("doneMs", state.doneMs)
+                .putLong("pausedAt", state.pausedAt)
                 .apply()
         }
 

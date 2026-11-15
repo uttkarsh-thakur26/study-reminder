@@ -10,6 +10,7 @@ import '../../../desktop/mini_timer.dart';
 import '../../alerts/application/alert_providers.dart';
 import '../../alerts/data/local_notifications.dart';
 import '../../focus/application/focus_providers.dart';
+import '../../focus/domain/focus_session.dart';
 import '../application/update_providers.dart';
 import 'update_dialog.dart';
 
@@ -125,7 +126,8 @@ class _UpdateCoordinatorState extends ConsumerState<UpdateCoordinator> {
     if (ref.read(miniTimerProvider)) return true;
     final sessions = await ref.read(focusRepositoryProvider).current();
     final now = DateTime.now();
-    return sessions.phone.runningAt(now) || sessions.laptop.runningAt(now);
+    bool on(FocusSession s) => s.runningAt(now) || s.held;
+    return on(sessions.phone) || on(sessions.laptop);
   }
 
   @override
